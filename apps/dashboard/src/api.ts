@@ -1,5 +1,7 @@
 import type { Money } from "@poi/contracts";
-import type { DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
+import type { DisputeDetail, DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
+import { getDisputeDetail } from "./dispute-details";
+export { getDisputeDetail };
 import { SEED_DISPUTES } from "./seed-disputes";
 
 /** Same-origin proxy (app/api/[...path]/route.ts), so the browser needs neither the API's URL nor CORS. */
@@ -54,6 +56,37 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
 export async function fetchDisputes(options?: FetchDisputesOptions): Promise<DisputeItem[]> {
   const res = await fetchDisputesDetailed(options);
   return res.disputes;
+}
+
+/**
+ * Fetch a single dispute with full mandate, cart, and copilot details.
+ * Reads from the API over HTTP with no direct database access.
+ * Falls back to canonical fixture data if the API server is unavailable or returns 501.
+ */
+export async function fetchDisputeDetail(
+  disputeId: string,
+  options?: FetchDisputesOptions
+): Promise<DisputeDetail | undefined> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+
+  try {
+    const res = await runner(`${baseUrl}/disputes/${disputeId}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        return data as DisputeDetail;
+      }
+    }
+  } catch {
+    // API server not reachable; fallback to canonical dispute detail
+  }
+
+  return getDisputeDetail(disputeId);
 }
 
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
