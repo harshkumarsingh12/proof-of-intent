@@ -1,0 +1,82 @@
+# Local and server run. Defaults need no credentials: PAYPAL_MODE=mock, AI_MODE=replay.
+#   cp .env.example .env && docker compose up --build
+# On the team server, also start the HTTPS proxy:
+#   docker compose --profile server up -d --build
+# Spec: docs/specs/0008-hosting-and-deploy.md
+
+x-app: &app
+  env_file: .env
+  restart: unless-stopped
+  networks: [poi]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: poi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-poi}
+      POSTGRES_DB: poi
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poi -d poi"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [poi]
+
+  api:
+    <<: *app
+    build: { context: ., args: { APP: api } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
+    environment: { PORT: "3000" }
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz || exit 1"]
+      interval: 10s
+      retries: 5
+
+  worker:
+    <<: *app
+    build: { context: ., args: { APP: worker } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-worker:${IMAGE_TAG:-local}
+    depends_on: { postgres: { condition: service_healthy } }
+
+  buyer:
+    <<: *app
+    build: { context: ., args: { APP: buyer } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-buyer:${IMAGE_TAG:-local}
+    ports: ["127.0.0.1:3001:3001"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/healthz || exit 1"]
+      interval: 10s
+      retries: 5
+
+  dashboard:
+    <<: *app
+    build: { context: ., args: { APP: dashboard } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-dashboard:${IMAGE_TAG:-local}
+    ports: ["127.0.0.1:3002:3002"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/healthz || exit 1"]
+      interval: 10s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [server]
+    env_file: .env
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api, buyer, dashboard]
+    restart: unless-stopped
+    networks: [poi]
+
+volumes:
+  pgdata:
+  caddy_data:
+
+networks:
+  poi:

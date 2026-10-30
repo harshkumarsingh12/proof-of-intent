@@ -1,0 +1,13 @@
+# Public HTTPS on the team server (automatic Let's Encrypt). Hostnames come from .env.
+# If the server is behind NAT, skip Caddy and point a Cloudflare Tunnel at the same three ports.
+{$API_HOST} {
+	reverse_proxy api:3000
+}
+
+{$SHOP_HOST} {
+	reverse_proxy buyer:3001
+}
+
+{$OPS_HOST} {
+	reverse_proxy dashboard:3002
+}
