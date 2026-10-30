@@ -1,0 +1,35 @@
+{
+  "name": "proof-of-intent",
+  "private": true,
+  "description": "Verify an AI agent's purchase against the user's signed intent before capture, and use that record to defend or fairly concede PayPal disputes.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:ci": "vitest run --reporter=default --reporter=json --outputFile.json=reports/vitest.json",
+    "build": "pnpm -r --if-present build",
+    "ledger": "node scripts/ledger.mjs reports/vitest.json",
+    "format": "prettier --write .",
+    "keys:gen": "tsx scripts/keys/gen-merchant-key.ts",
+    "dev:api": "pnpm --filter @poi/api dev",
+    "dev:buyer": "pnpm --filter @poi/buyer dev",
+    "dev:dashboard": "pnpm --filter @poi/dashboard dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/node": "^20.17.0",
+    "eslint": "^9.14.0",
+    "jose": "^5.9.6",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^3.0.0"
+  }
+}
