@@ -1,8 +1,12 @@
 import type { Money } from "@poi/contracts";
 import type { DisputeDetail, DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
+import type { AnalyticsSummary } from "./analytics-types";
 import { getDisputeDetail } from "./dispute-details";
 export { getDisputeDetail };
 export { isDisputeActionable, recordApprovalAction, validateActionInput } from "./approval-actions";
+export { computeAnalyticsSummary, SEED_ANALYTICS } from "./analytics-data";
+export type { AnalyticsSummary, PlatformBreakdown } from "./analytics-types";
+import { computeAnalyticsSummary } from "./analytics-data";
 import { SEED_DISPUTES } from "./seed-disputes";
 
 export const DEFAULT_API_BASE_URL =
@@ -77,6 +81,36 @@ export async function fetchDisputeDetail(
   }
 
   return getDisputeDetail(disputeId);
+}
+
+/**
+ * Fetch analytics summary from the merchant API (GET /analytics/:report).
+ * Reads from the API over HTTP with no direct database access.
+ * Falls back to canonical seed analytics if the API returns 501 or is offline.
+ */
+export async function fetchAnalytics(
+  options?: FetchDisputesOptions
+): Promise<AnalyticsSummary> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+
+  try {
+    const res = await runner(`${baseUrl}/analytics/overview`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        return data as AnalyticsSummary;
+      }
+    }
+  } catch {
+    // API server not reachable; fallback to canonical seed analytics
+  }
+
+  return computeAnalyticsSummary();
 }
 
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */

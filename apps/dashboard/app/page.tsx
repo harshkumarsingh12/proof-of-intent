@@ -17,7 +17,12 @@ const pages: PageItem[] = [
     href: "/disputes",
     badge: "Ready",
   },
-  { name: "Analytics", desc: "Disputes by class, overreach rate by agent platform, defended vs conceded" },
+  {
+    name: "Analytics",
+    desc: "Disputes by class, overreach rate by agent platform, defended vs conceded",
+    href: "/analytics",
+    badge: "Ready",
+  },
 ];
 
 export default function Home() {
@@ -83,7 +88,7 @@ export default function Home() {
                   border: "1px solid #2ea043",
                 }}
               >
-                Open Queue →
+                {href === "/analytics" ? "Open Analytics →" : "Open Queue →"}
               </Link>
             ) : (
               <span style={{ fontSize: 12, color: "#484f58" }}>In progress</span>
