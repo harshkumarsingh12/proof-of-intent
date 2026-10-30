@@ -70,6 +70,31 @@ export interface EvidenceDraftInfo {
   generatedAt: string;
 }
 
+export type OperatorActionType =
+  | "SUBMIT_EVIDENCE"
+  | "ACCEPT_CLAIM"
+  | "REJECT_RECOMMENDATION"
+  | "DISPUTE_RECEIVED"
+  | "CLASSIFICATION_COMPLETED";
+
+export interface AuditLogEntry {
+  id: string;
+  disputeId: string;
+  who: string;
+  what: OperatorActionType | string;
+  when: string;
+  notes: string;
+  metadata?: {
+    actionUrl?: string;
+    previousStatus?: DisputeStatus;
+    newStatus?: DisputeStatus;
+    refundAmount?: Money;
+    attestationHash?: string;
+    overrideDecision?: "defend" | "concede";
+    agentPlatform?: string;
+  };
+}
+
 export interface DisputeDetail extends DisputeItem {
   shopperIntentText: string;
   mandateId: string;
@@ -96,4 +121,5 @@ export interface DisputeDetail extends DisputeItem {
   constraintChecks: ConstraintCheck[];
   classificationInfo: DisputeClassificationInfo;
   evidenceDraftInfo?: EvidenceDraftInfo;
+  auditLog: AuditLogEntry[];
 }

@@ -2,6 +2,7 @@ import type { Money } from "@poi/contracts";
 import type { DisputeDetail, DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
 import { getDisputeDetail } from "./dispute-details";
 export { getDisputeDetail };
+export { isDisputeActionable, recordApprovalAction, validateActionInput } from "./approval-actions";
 import { SEED_DISPUTES } from "./seed-disputes";
 
 export const DEFAULT_API_BASE_URL =

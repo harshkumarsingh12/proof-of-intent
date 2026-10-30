@@ -114,6 +114,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
         reasons: [],
         evidencePlan: [],
       },
+      auditLog: [],
     };
 
     // Successful API fetch

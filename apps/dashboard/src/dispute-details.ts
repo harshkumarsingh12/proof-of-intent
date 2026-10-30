@@ -128,6 +128,25 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
         pdfFilename: "evidence-PP-D-1001.pdf",
         generatedAt: "2026-11-02T08:35:00Z",
       },
+      auditLog: [
+        {
+          id: "audit-1001-1",
+          disputeId: "PP-D-1001",
+          who: "system:webhook",
+          what: "DISPUTE_RECEIVED",
+          when: "2026-11-02T08:30:00Z",
+          notes: "Verified PayPal dispute webhook received for order ord_0192f3a0_1001.",
+        },
+        {
+          id: "audit-1001-2",
+          disputeId: "PP-D-1001",
+          who: "copilot:pipeline",
+          what: "CLASSIFICATION_COMPLETED",
+          when: "2026-11-02T08:31:00Z",
+          notes: "Replayed policy engine: class MANDATE_COMPLIANT, recommended PROVIDE_EVIDENCE.",
+          metadata: { attestationHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+        },
+      ],
     };
   }
 
@@ -220,6 +239,24 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
         evidencePlan: ["Concession recommended; initiate automated refund claim acceptance"],
       },
       evidenceDraftInfo: undefined,
+      auditLog: [
+        {
+          id: "audit-1002-1",
+          disputeId: "PP-D-1002",
+          who: "system:webhook",
+          what: "DISPUTE_RECEIVED",
+          when: "2026-11-02T09:15:00Z",
+          notes: "Verified PayPal dispute webhook received for order ord_0192f3a0_1002.",
+        },
+        {
+          id: "audit-1002-2",
+          disputeId: "PP-D-1002",
+          who: "copilot:pipeline",
+          what: "CLASSIFICATION_COMPLETED",
+          when: "2026-11-02T09:16:00Z",
+          notes: "Replayed policy engine: class AGENT_OVERREACH (AMOUNT_EXCEEDS_MAX, ATTRIBUTE_MISMATCH). Concession recommended.",
+        },
+      ],
     };
   }
 
@@ -246,6 +283,8 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
       explanation: "Merchant is allowlisted.",
     },
   ];
+
+  const isResolved = base.status === "RESOLVED";
 
   return {
     ...base,
@@ -296,5 +335,36 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
             generatedAt: base.createdAt,
           }
         : undefined,
+    auditLog: [
+      {
+        id: `audit-${base.id}-1`,
+        disputeId: base.id,
+        who: "system:webhook",
+        what: "DISPUTE_RECEIVED",
+        when: base.createdAt,
+        notes: `Dispute event ingested from PayPal for order ${base.orderId}.`,
+      },
+      {
+        id: `audit-${base.id}-2`,
+        disputeId: base.id,
+        who: isResolved ? "operator:hoursgotviral-dev" : "copilot:pipeline",
+        what: isResolved
+          ? base.decision === "defend"
+            ? "SUBMIT_EVIDENCE"
+            : "ACCEPT_CLAIM"
+          : "CLASSIFICATION_COMPLETED",
+        when: isResolved ? base.sellerResponseDueDate : base.createdAt,
+        notes: isResolved
+          ? `Dispute resolved by human operator (${base.decision === "defend" ? "evidence submitted" : "claim accepted"}).`
+          : `Copilot evaluated dispute as ${base.disputeClass}; recommended action: ${base.decision.toUpperCase()}.`,
+        metadata: isResolved
+          ? {
+              previousStatus: "ACTION_REQUIRED",
+              newStatus: "RESOLVED",
+              refundAmount: base.decision === "concede" ? base.amount : undefined,
+            }
+          : undefined,
+      },
+    ],
   };
 }
