@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
 import { calculateAge, calculateSla, fetchDisputes, filterDisputes, formatMoney, sortDisputes } from "../../src/api";
 
@@ -289,7 +290,12 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                   >
                     {/* Dispute & Order ID */}
                     <td style={tdStyle}>
-                      <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#58a6ff" }}>{item.id}</div>
+                      <Link
+                        href={`/disputes/${item.id}`}
+                        style={{ fontFamily: "monospace", fontWeight: 600, color: "#58a6ff", textDecoration: "none" }}
+                      >
+                        {item.id}
+                      </Link>
                       <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>{item.orderId}</div>
                     </td>
 
@@ -351,16 +357,16 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
                     {/* Action */}
                     <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedDispute(item);
+                      <Link
+                        href={`/disputes/${item.id}`}
+                        style={{
+                          ...inspectBtnStyle,
+                          textDecoration: "none",
+                          display: "inline-block",
                         }}
-                        style={inspectBtnStyle}
                       >
-                        Inspect
-                      </button>
+                        View Details →
+                      </Link>
                     </td>
                   </tr>
                 );
