@@ -32,3 +32,6 @@ export async function recommend(_disputeId: string): Promise<Recommendation> {
 export async function buildEvidencePackage(_disputeId: string): Promise<{ pdf: Uint8Array; bundleJson: string }> {
   throw new NotImplementedError("evidence package", OWNER, SPEC);
 }
+
+export * from "./decision";
+
