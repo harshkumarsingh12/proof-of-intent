@@ -41,3 +41,59 @@ export interface DisputeSorting {
   field: SortField;
   direction: SortDirection;
 }
+
+export interface ConstraintCheck {
+  id: string;
+  name: string;
+  mandateRule: string;
+  cartActual: string;
+  status: "PASS" | "FAIL";
+  reasonCode?: ReasonCode | string;
+  explanation: string;
+}
+
+export interface DisputeClassificationInfo {
+  disputeClass: DisputeClass;
+  confidence: number;
+  recommendedAction: "PROVIDE_EVIDENCE" | "ACCEPT_CLAIM" | "MAKE_OFFER" | "STANDARD_EVIDENCE";
+  reasons: Array<{ text: string; cites: string[] }>;
+  evidencePlan: string[];
+}
+
+export interface EvidenceDraftInfo {
+  coverNote: string;
+  attestationSections: Array<{ heading: string; body: string }>;
+  buyerMessage: string;
+  attestationHash: string;
+  customId: string;
+  pdfFilename: string;
+  generatedAt: string;
+}
+
+export interface DisputeDetail extends DisputeItem {
+  shopperIntentText: string;
+  mandateId: string;
+  mandateNonce: string;
+  mandateIssuer: string;
+  mandateCreatedAt: string;
+  mandateExpiry: string;
+  cartLines: Array<{
+    sku: string;
+    title: string;
+    color?: string;
+    category?: string;
+    unitPrice: Money;
+    quantity: number;
+  }>;
+  cartTotal: Money;
+  cartMerchantName: string;
+  constraints: {
+    amountMax: Money;
+    merchantAllowlist: string[];
+    attributes: Record<string, string>;
+    quantityMax: { perLine: number; perOrder: number };
+  };
+  constraintChecks: ConstraintCheck[];
+  classificationInfo: DisputeClassificationInfo;
+  evidenceDraftInfo?: EvidenceDraftInfo;
+}
