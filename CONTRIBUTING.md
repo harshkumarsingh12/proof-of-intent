@@ -77,10 +77,12 @@ git switch main && git pull
 git switch -c feat/policy-budget-cap      # feat/ fix/ docs/ chore/ test/ refactor/ ci/
 ```
 
-- **Never push to `main`.** It is protected for everyone, including the repo owner. Even a one-line fix is a PR.
+- **Never push to `main`.** It is protected. Even a one-line fix is a PR.
 - **One PR, one concern.** A PR that touches four areas is four PRs.
 - **CI must be green** (`ci` and `hygiene`) and the branch up to date with `main`.
-- **One approval to merge.** Any teammate can approve. Don't wait on one person; ask in the chat.
+- **One approval to merge.** Any teammate can approve, then the author merges. Don't wait on one person; ask in the chat.
+- **Admin override.** Harsh (repo admin) can merge without an approval when something is urgent, such as a broken
+  `main` or a demo-day fix. It's for emergencies, not routine work; still open the PR so the change is reviewed afterwards.
 - **Squash merge.** The PR title becomes the commit message, so it must be a Conventional Commit:
   `feat(policy): count prior captures against budget_cap`. Lowercase subject, no trailing period.
 - **Rebase when you drift:** `git pull --rebase origin main`.
