@@ -1,0 +1,14 @@
+{
+  "name": "@poi/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@poi/contracts": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@poi/ledger": "workspace:*"
+  }
+}

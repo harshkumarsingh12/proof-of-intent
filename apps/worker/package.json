@@ -1,0 +1,21 @@
+{
+  "name": "@poi/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@poi/ai": "workspace:*",
+    "@poi/contracts": "workspace:*",
+    "@poi/db": "workspace:*",
+    "@poi/paypal": "workspace:*",
+    "@poi/policy-engine": "workspace:*",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@poi/ledger": "workspace:*"
+  }
+}
