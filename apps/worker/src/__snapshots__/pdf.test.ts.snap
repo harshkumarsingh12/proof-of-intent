@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`evidence PDF generation > matches the deterministic snapshot of the rendered evidence text 1`] = `
+"================================================================================
+                  PROOF OF INTENT: DISPUTE ATTESTATION RECORD                   
+================================================================================
+
+1. DISPUTE SUMMARY
+------------------
+Dispute ID:               PP-D-778899
+PayPal Order ID:          ord_compliant_001
+PayPal custom_id:         poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831
+Dispute Status:           WAITING_FOR_SELLER_RESPONSE
+Dispute Reason:           MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED
+Disputed Amount:          USD 74.00
+Response Due Date:        2026-11-10T12:00:00Z
+
+2. SIGNED INTENT MANDATE (SHOPPER WORDS & CONSTRAINTS)
+------------------------------------------------------
+Shopper Description:      "Find me a grey running jacket under $80, ship to my home address."
+Intent Mandate ID:        0192f3a0-0000-7000-8000-000000000001
+Mandate Hash (SHA-256):   82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d
+Registered Key ID:        shopper-key-1
+Intent Expiry:            2026-11-08T00:00:00Z
+
+3. CART VS MANDATE COMPARISON
+-----------------------------
+Merchant:                 Trailhead Outfitters (merchant-trailhead)
+Cart Total:               USD 74.00
+Cart Lines Purchased:
+  - [JKT-GRY-M] Stride Running Jacket x1 @ USD 74.00 (category=running-jacket, color=grey)
+Evaluated Constraint Checks:
+  - [PASS] amount_max: limit USD 80.00 | actual: USD 74.00
+  - [PASS] merchant_allowlist: limit merchant-trailhead | actual: merchant-trailhead
+  - [PASS] attributes.category: limit running-jacket | actual: running-jacket
+  - [PASS] attributes.color: limit grey | actual: grey
+
+4. VERIFICATION RESULT & CRYPTOGRAPHIC ATTESTATION
+-------------------------------------------------
+Shopper JWS Signature:    VALID (ES256, key: shopper-key-1)
+Computed Mandate Hash:    82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d
+Order Pointer Match:      VERIFIED MATCH
+Policy Engine Outcome:    APPROVE
+Reason Codes:             NONE (COMPLIANT)
+
+5. AUDIT TIMELINE
+-----------------
+[2026-11-01T09:00:00Z] [shopper] Shopper signed Intent Mandate
+[2026-11-02T10:00:00Z] [policy-engine] Policy engine verified cart against constraints
+[2026-11-02T10:00:00Z] [api] PayPal order captured with mandate pointer in custom_id
+[2026-11-04T12:00:00Z] [webhook] Dispute received via PayPal webhook
+[2026-11-04T12:01:00Z] [worker] Copilot classified MANDATE_COMPLIANT and drafted evidence PDF
+
+6. COPILOT COVER NOTE
+---------------------
+Customer purchase was verified against signed intent mandate prior to capture. Items strictly match instructions."
+`;
