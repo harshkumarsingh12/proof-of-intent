@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Project document (the arbiter)
+    url: https://github.com/harshkumarsingh12/proof-of-intent/blob/main/docs/PROJECT.md
+    about: Scope, journeys, plan, gates and risks.
+  - name: Specs
+    url: https://github.com/harshkumarsingh12/proof-of-intent/tree/main/docs/specs
+    about: Read the spec before filing a bug about behaviour.

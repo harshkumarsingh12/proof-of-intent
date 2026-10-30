@@ -1,0 +1,36 @@
+name: Task
+description: A piece of planned work with a clear "done when"
+labels: ["type:feat"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [payments, mandates, copilot, dashboard, ai, infra, demo]
+    validations:
+      required: true
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Milestone
+      options: ["M0 Foundations (Oct 31)", "M1 Slice on sandbox (Nov 3)", "M2 Dispute cycle (Nov 6)", "M3 Feature freeze (Nov 8)", "M4 Submission (Nov 11)"]
+    validations:
+      required: true
+  - type: input
+    id: spec
+    attributes:
+      label: Spec
+      placeholder: docs/specs/0004-paypal-integration.md
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Testable. "Works" is not testable. Copy it from the spec's acceptance criteria where possible.
+    validations:
+      required: true

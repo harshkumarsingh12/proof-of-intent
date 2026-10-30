@@ -1,0 +1,30 @@
+name: Bug
+description: Something does not behave as the spec says
+labels: ["type:bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [payments, mandates, copilot, dashboard, ai, infra, demo]
+    validations:
+      required: true
+  - type: textarea
+    id: happens
+    attributes:
+      label: What happens
+    validations:
+      required: true
+  - type: textarea
+    id: should
+    attributes:
+      label: What should happen (cite the spec if you can)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Mode (mock/sandbox, replay/live), steps, request ids from the logs.
+    validations:
+      required: true

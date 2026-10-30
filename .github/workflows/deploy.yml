@@ -1,0 +1,90 @@
+name: deploy
+
+# Release a tag to the team server. Never runs on pull requests, so code from forks can't reach it.
+#   git tag v0.1.0-hackathon && git push origin v0.1.0-hackathon
+# Needs repository secrets: SERVER_HOST, SERVER_USER, SERVER_SSH_KEY (and optional SERVER_PORT, SERVER_DIR).
+# Spec: docs/specs/0008-hosting-and-deploy.md
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        app: [api, worker, buyer, dashboard]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: APP=${{ matrix.app }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/proof-of-intent-${{ matrix.app }}:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/proof-of-intent-${{ matrix.app }}:latest
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  server:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Check server secrets
+        id: check
+        env:
+          HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          if [ -z "$HOST" ]; then
+            echo "::warning::SERVER_HOST is not set; images are pushed but nothing is deployed."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Pull and restart on the server
+        if: steps.check.outputs.skip != 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            set -e
+            cd "${{ secrets.SERVER_DIR || '~/proof-of-intent' }}"
+            git fetch --tags && git checkout "${{ github.ref_name }}"
+            export IMAGE_TAG="${{ github.ref_name }}" GHCR_OWNER="${{ github.repository_owner }}"
+            docker compose --profile server pull
+            docker compose --profile server up -d
+            sleep 15
+            curl -fsS http://127.0.0.1:3000/healthz
+
+  release:
+    needs: server
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

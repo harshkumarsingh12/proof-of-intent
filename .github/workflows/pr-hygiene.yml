@@ -1,0 +1,57 @@
+name: pr-hygiene
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Squash merges use the PR title as the commit message, so the title is what gets linted.
+      - name: Conventional PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            test
+            chore
+            refactor
+            perf
+            ci
+          subjectPattern: ^[a-z].*[^.]$
+          subjectPatternError: "Start the subject in lowercase and drop the trailing period."
+          ignoreLabels: dependencies
+
+      - name: No secrets in the diff
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Spec-first: changing the shared contract or the API surface needs a spec link.
+      - name: Interface changes link a spec
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          changed=$(git diff --name-only "$BASE" "$HEAD" | grep -E '^(packages/contracts/src/|apps/api/src/routes/)' || true)
+          if [ -z "$changed" ]; then echo "No interface files changed."; exit 0; fi
+          echo "Interface files changed:"; echo "$changed"
+          if printf '%s' "$BODY" | grep -Eq 'docs/specs/[0-9]{4}'; then echo "Spec linked."; exit 0; fi
+          echo "::error::This PR changes packages/contracts or API routes. Link the spec it implements (docs/specs/NNNN-...) in the PR body."
+          exit 1

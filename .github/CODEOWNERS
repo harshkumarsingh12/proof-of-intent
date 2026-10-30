@@ -1,0 +1,54 @@
+# Review routing. The first matching line from the bottom wins.
+#
+#   Harsh Kumar Singh    @harshkumarsingh12  PayPal, API, DB, server, CI/CD, repo infra
+#   Sristee Shrivastava  @srshriv            mandates, crypto, policy engine, buyer app + agent, security
+#   Sikruti Mahapatra    @hoursgotviral-dev  dispute copilot worker, AG Studio dashboard
+#   Sumedha              @sumedhag28         AI jobs, evals, Studio agent, demo, video, Devpost
+#
+# CODEOWNERS ignores people who are not collaborators yet. Check with:
+#   gh api repos/harshkumarsingh12/proof-of-intent/collaborators --jq '.[].login'
+
+*                               @harshkumarsingh12
+
+# ── Repo infra and delivery ───────────────────────────────────────────
+/.github/                       @harshkumarsingh12
+/docker-compose.yml             @harshkumarsingh12
+/Dockerfile                     @harshkumarsingh12
+/Caddyfile                      @harshkumarsingh12
+/scripts/                       @harshkumarsingh12
+
+# ── Payments and platform ─────────────────────────────────────────────
+/packages/paypal/               @harshkumarsingh12
+/packages/db/                   @harshkumarsingh12
+/apps/api/                      @harshkumarsingh12 @srshriv
+
+# ── Mandates and buyer side ───────────────────────────────────────────
+/packages/mandates/             @srshriv
+/packages/policy-engine/        @srshriv
+/apps/buyer/                    @srshriv
+/SECURITY.md                    @srshriv
+
+# The frozen contract: both the contracts owner and the API owner review every change.
+/packages/contracts/            @srshriv @harshkumarsingh12
+
+# ── Copilot and dashboard ─────────────────────────────────────────────
+/apps/worker/                   @hoursgotviral-dev
+/apps/dashboard/                @hoursgotviral-dev
+
+# ── AI and story ──────────────────────────────────────────────────────
+/packages/ai/                   @sumedhag28
+/apps/dashboard/src/studio-agent.ts @sumedhag28 @hoursgotviral-dev
+/docs/DEMO.md                   @sumedhag28
+/docs/evals/                    @sumedhag28
+/README.md                      @sumedhag28 @harshkumarsingh12
+
+# ── Specs: the owner of each area reviews its spec ───────────────────
+/docs/specs/0001-*              @srshriv
+/docs/specs/0002-*              @srshriv
+/docs/specs/0003-*              @harshkumarsingh12 @srshriv
+/docs/specs/0004-*              @harshkumarsingh12
+/docs/specs/0005-*              @hoursgotviral-dev
+/docs/specs/0006-*              @sumedhag28
+/docs/specs/0007-*              @hoursgotviral-dev
+/docs/specs/0008-*              @harshkumarsingh12
+/docs/specs/0009-*              @sumedhag28

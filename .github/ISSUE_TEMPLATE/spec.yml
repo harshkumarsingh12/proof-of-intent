@@ -1,0 +1,25 @@
+name: Spec proposal
+description: Propose a new spec or a change to an Accepted one, before writing the code
+labels: ["type:spec"]
+body:
+  - type: markdown
+    attributes:
+      value: Copy docs/specs/TEMPLATE.md into a new file docs/specs/NNNN-name.md and open a PR with status Proposed. Use this issue to track the discussion.
+  - type: input
+    id: spec
+    attributes:
+      label: Spec file
+      placeholder: docs/specs/0010-make-offer-flow.md
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why now
+    validations:
+      required: true
+  - type: textarea
+    id: interfaces
+    attributes:
+      label: Interfaces it changes
+      description: Types in packages/contracts, API routes, job payloads, events.
