@@ -1,11 +1,12 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ledger } from "@poi/ledger";
 import { tools } from "./studio-agent";
 import { widgets } from "./widgets";
 
-describe("dashboard (unbuilt)", () => {
-  ledger("M2", "hoursgotviral-dev", "MandateDiffWidget is registered with an AI description", () => {
+describe("dashboard", () => {
+  it("[M2 @hoursgotviral-dev] MandateDiffWidget is registered with an AI description", () => {
     const diff = widgets.find((w) => w.id === "mandate-diff");
+    expect(diff).toBeDefined();
     expect(diff?.aiDescription.length).toBeGreaterThan(20);
   });
 
