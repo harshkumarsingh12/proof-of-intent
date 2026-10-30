@@ -1,0 +1,15 @@
+{
+  "name": "@poi/mandates",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@poi/contracts": "workspace:*",
+    "canonicalize": "^2.0.0",
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "@poi/ledger": "workspace:*"
+  }
+}
