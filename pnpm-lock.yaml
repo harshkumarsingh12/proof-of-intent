@@ -125,6 +125,9 @@ importers:
       '@poi/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@poi/mandates':
+        specifier: workspace:*
+        version: link:../../packages/mandates
       '@poi/paypal':
         specifier: workspace:*
         version: link:../../packages/paypal
