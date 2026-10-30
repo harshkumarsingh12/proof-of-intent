@@ -29,6 +29,6 @@ export async function recommend(_disputeId: string): Promise<Recommendation> {
   throw new NotImplementedError("dispute recommendation", OWNER, SPEC);
 }
 
-export async function buildEvidencePackage(_disputeId: string): Promise<{ pdf: Uint8Array; bundleJson: string }> {
-  throw new NotImplementedError("evidence package", OWNER, SPEC);
-}
+export { buildEvidencePackage, type EvidencePackageResult } from "./evidence";
+export * from "./evidence";
+
