@@ -30,6 +30,13 @@ describe("dispute copilot classification", () => {
     expect(rec.reasons).toEqual([]);
   });
 
+  test("a dispute with stored J1 mismatch is INTENT_MISREAD → accept", async () => {
+    const rec = await recommend("fixture-partial");
+    expect(rec.class).toBe("INTENT_MISREAD");
+    expect(rec.action).toBe("ACCEPT_CLAIM");
+    expect(rec.reasons).toContain("SEMANTIC_MISMATCH");
+  });
+
   test("stores recommendations and writes audit log entries", async () => {
     const auditLog: AuditEntry[] = [];
     const db = {

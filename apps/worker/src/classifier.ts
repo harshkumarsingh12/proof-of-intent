@@ -1,10 +1,11 @@
-import { classifyDispute, parseAiMode, type AiMode } from "@poi/ai";
+import { classifyDispute, parseAiMode, semanticFit, type AiMode } from "@poi/ai";
 import {
   DisputeClass,
   NotImplementedError,
   type CartMandate,
   type IntentMandate,
   type ReasonCode,
+  type Verdict,
 } from "@poi/contracts";
 import { compliantCart, greyJacketIntent, NOW, overreachingCart, partialCart } from "@poi/contracts/fixtures";
 import { customId, mandateHash } from "@poi/mandates";
@@ -24,6 +25,11 @@ export interface OrderRecord {
   intent?: IntentMandate;
   cart?: CartMandate;
   ledger?: MandateLedger;
+  checkoutVerdict?: Verdict;
+  j1Outcome?: {
+    fit?: "match" | "partial" | "mismatch";
+    reasons?: ReasonCode[];
+  };
 }
 
 export interface DisputeDataLoader {
@@ -135,6 +141,10 @@ export class DefaultFixtureLoader implements DisputeDataLoader {
         customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
         intent: greyJacketIntent,
         cart: partialCart,
+        j1Outcome: {
+          fit: "partial",
+          reasons: ["SEMANTIC_MISMATCH"],
+        },
       },
     ],
   ]);
@@ -194,7 +204,41 @@ export async function runDisputeClassifier(
     };
   }
 
-  // 4. Try J2 classification job from @poi/ai if implemented
+  // 4. Replay J1 or load stored J1 outcome from checkout
+  const storedJ1Mismatch =
+    order.j1Outcome?.fit === "mismatch" ||
+    order.j1Outcome?.fit === "partial" ||
+    order.j1Outcome?.reasons?.includes("SEMANTIC_MISMATCH") ||
+    order.checkoutVerdict?.reasons?.includes("SEMANTIC_MISMATCH") ||
+    order.checkoutVerdict?.reasons?.includes("SEMANTIC_UNCERTAIN");
+
+  if (storedJ1Mismatch) {
+    return {
+      disputeId: dispute.disputeId,
+      class: "INTENT_MISREAD",
+      action: "ACCEPT_CLAIM",
+      reasons: ["SEMANTIC_MISMATCH"],
+    };
+  }
+
+  try {
+    const j1 = await semanticFit(order.intent.natural_language_description, order.cart, mode);
+    if (j1.fit === "mismatch" || j1.fit === "partial") {
+      return {
+        disputeId: dispute.disputeId,
+        class: "INTENT_MISREAD",
+        action: "ACCEPT_CLAIM",
+        reasons: ["SEMANTIC_MISMATCH"],
+      };
+    }
+  } catch (err) {
+    if (!(err instanceof NotImplementedError)) {
+      throw err;
+    }
+    // TODO: Replay J1 with the policy engine / semantic fit when J1 is implemented (spec: docs/specs/0006-ai-jobs.md, owner: @sumedhag28)
+  }
+
+  // 5. Try J2 classification job from @poi/ai if implemented
   try {
     const j2 = await classifyDispute({ dispute, order, intent: order.intent, cart: order.cart }, mode);
     return {
@@ -208,18 +252,6 @@ export async function runDisputeClassifier(
     if (!(err instanceof NotImplementedError)) {
       throw err;
     }
-  }
-
-  const isPartial = order.cart.contents.lines.some(
-    (l) => l.sku.includes("SHL") || l.title.toLowerCase().includes("shell"),
-  );
-  if (isPartial) {
-    return {
-      disputeId: dispute.disputeId,
-      class: "INTENT_MISREAD",
-      action: "ACCEPT_CLAIM",
-      reasons: ["SEMANTIC_MISMATCH"],
-    };
   }
 
   return {
