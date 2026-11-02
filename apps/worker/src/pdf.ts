@@ -35,13 +35,13 @@ export interface ConstraintCheck {
 
 export interface EvidencePdfData {
   summary: DisputeSummary;
-  intent: IntentMandate;
-  intentHash: string;
-  cart: CartMandate;
-  constraints: ConstraintCheck[];
-  verification: VerificationResult;
-  timeline: TimelineEntry[];
-  coverNote?: string;
+  intent?: IntentMandate | null;
+  intentHash?: string | null;
+  cart?: CartMandate | null;
+  constraints?: ConstraintCheck[];
+  verification?: VerificationResult;
+  timeline?: TimelineEntry[];
+  coverNote?: string | null;
 }
 
 export function escapePdfText(text: string): string {
@@ -99,12 +99,12 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
 
   lines.push("1. DISPUTE SUMMARY");
   lines.push("------------------");
-  lines.push(`Dispute ID:               ${data.summary.disputeId}`);
-  lines.push(`PayPal Order ID:          ${data.summary.orderId}`);
-  lines.push(`PayPal custom_id:         ${data.summary.customId}`);
-  lines.push(`Dispute Status:           ${data.summary.status}`);
-  lines.push(`Dispute Reason:           ${data.summary.reason}`);
-  lines.push(`Disputed Amount:          ${data.summary.amount}`);
+  lines.push(`Dispute ID:               ${data.summary.disputeId ?? "not available"}`);
+  lines.push(`PayPal Order ID:          ${data.summary.orderId ?? "not available"}`);
+  lines.push(`PayPal custom_id:         ${data.summary.customId ?? "not available"}`);
+  lines.push(`Dispute Status:           ${data.summary.status ?? "not available"}`);
+  lines.push(`Dispute Reason:           ${data.summary.reason ?? "not available"}`);
+  lines.push(`Disputed Amount:          ${data.summary.amount ?? "not available"}`);
   if (data.summary.responseDueDate) {
     lines.push(`Response Due Date:        ${data.summary.responseDueDate}`);
   }
@@ -112,45 +112,67 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
 
   lines.push("2. SIGNED INTENT MANDATE (SHOPPER WORDS & CONSTRAINTS)");
   lines.push("------------------------------------------------------");
-  lines.push(`Shopper Description:      "${data.intent.natural_language_description}"`);
-  lines.push(`Intent Mandate ID:        ${data.intent.mandate_id}`);
-  lines.push(`Mandate Hash (SHA-256):   ${data.intentHash}`);
-  lines.push(`Registered Key ID:        ${data.intent.issuer}`);
-  lines.push(`Intent Expiry:            ${data.intent.intent_expiry}`);
+  lines.push(`Shopper Description:      "${data.intent?.natural_language_description ?? "not available"}"`);
+  lines.push(`Intent Mandate ID:        ${data.intent?.mandate_id ?? "not available"}`);
+  lines.push(`Mandate Hash (SHA-256):   ${data.intentHash ?? "not available"}`);
+  lines.push(`Registered Key ID:        ${data.intent?.issuer ?? "not available"}`);
+  lines.push(`Intent Expiry:            ${data.intent?.intent_expiry ?? "not available"}`);
   lines.push("");
 
   lines.push("3. CART VS MANDATE COMPARISON");
   lines.push("-----------------------------");
-  lines.push(`Merchant:                 ${data.cart.contents.merchant_name} (${data.cart.contents.merchant_id})`);
-  lines.push(`Cart Total:               ${data.cart.contents.total.currency} ${(data.cart.contents.total.value / 100).toFixed(2)}`);
-  lines.push("Cart Lines Purchased:");
-  for (const item of data.cart.contents.lines) {
-    const attrs = Object.entries(item.attributes)
-      .map(([k, v]) => `${k}=${v}`)
-      .join(", ");
-    lines.push(`  - [${item.sku}] ${item.title} x${item.quantity} @ ${item.unit_price.currency} ${(item.unit_price.value / 100).toFixed(2)} (${attrs})`);
+  if (data.cart) {
+    lines.push(`Merchant:                 ${data.cart.contents.merchant_name} (${data.cart.contents.merchant_id})`);
+    lines.push(`Cart Total:               ${data.cart.contents.total.currency} ${(data.cart.contents.total.value / 100).toFixed(2)}`);
+    lines.push("Cart Lines Purchased:");
+    for (const item of data.cart.contents.lines) {
+      const attrs = Object.entries(item.attributes)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ");
+      lines.push(`  - [${item.sku}] ${item.title} x${item.quantity} @ ${item.unit_price.currency} ${(item.unit_price.value / 100).toFixed(2)} (${attrs})`);
+    }
+  } else {
+    lines.push("Merchant:                 not available");
+    lines.push("Cart Total:               not available");
+    lines.push("Cart Lines Purchased:");
+    lines.push("  - not available");
   }
+
   lines.push("Evaluated Constraint Checks:");
-  for (const c of data.constraints) {
-    const status = c.passed ? "PASS" : "FAIL";
-    lines.push(`  - [${status}] ${c.name}: limit ${c.rule} | actual: ${c.actual}`);
+  if (data.constraints && data.constraints.length > 0) {
+    for (const c of data.constraints) {
+      const status = c.passed ? "PASS" : "FAIL";
+      lines.push(`  - [${status}] ${c.name}: limit ${c.rule} | actual: ${c.actual}`);
+    }
+  } else {
+    lines.push("  - [not available] Constraints: not available");
   }
   lines.push("");
 
   lines.push("4. VERIFICATION RESULT & CRYPTOGRAPHIC ATTESTATION");
   lines.push("-------------------------------------------------");
-  lines.push(`Shopper JWS Signature:    ${data.verification.signatureValid ? "VALID" : "INVALID"} (${data.verification.algorithm}, key: ${data.verification.keyId})`);
-  lines.push(`Computed Mandate Hash:    ${data.verification.computedHash}`);
-  lines.push(`Order Pointer Match:      ${data.verification.customIdMatches ? "VERIFIED MATCH" : "MISMATCH"}`);
-  lines.push(`Policy Engine Outcome:    ${data.verification.verdictOutcome}`);
-  lines.push(`Reason Codes:             ${data.verification.reasons.length > 0 ? data.verification.reasons.join(", ") : "NONE (COMPLIANT)"}`);
+  const sigValidStr = data.verification ? (data.verification.signatureValid ? "VALID" : "INVALID") : "not available";
+  const algStr = data.verification?.algorithm ?? "not available";
+  const keyStr = data.verification?.keyId ?? "not available";
+  lines.push(`Shopper JWS Signature:    ${sigValidStr} (${algStr}, key: ${keyStr})`);
+  lines.push(`Computed Mandate Hash:    ${data.verification?.computedHash ?? "not available"}`);
+  lines.push(`Order Pointer Match:      ${data.verification ? (data.verification.customIdMatches ? "VERIFIED MATCH" : "MISMATCH") : "not available"}`);
+  lines.push(`Policy Engine Outcome:    ${data.verification?.verdictOutcome ?? "not available"}`);
+  const reasonsStr = data.verification?.reasons && data.verification.reasons.length > 0
+    ? data.verification.reasons.join(", ")
+    : "NONE (COMPLIANT)";
+  lines.push(`Reason Codes:             ${reasonsStr}`);
   lines.push("");
 
   lines.push("5. AUDIT TIMELINE");
   lines.push("-----------------");
-  for (const t of data.timeline) {
-    const actorStr = t.actor ? ` [${t.actor}]` : "";
-    lines.push(`[${t.timestamp}]${actorStr} ${t.event}`);
+  if (data.timeline && data.timeline.length > 0) {
+    for (const t of data.timeline) {
+      const actorStr = t.actor && t.actor !== "not available" ? ` [${t.actor}]` : "";
+      lines.push(`[${t.timestamp}]${actorStr} ${t.event}`);
+    }
+  } else {
+    lines.push("[not available] not available");
   }
 
   if (data.coverNote) {
