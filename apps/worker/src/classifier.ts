@@ -8,7 +8,7 @@ import {
 } from "@poi/contracts";
 import { compliantCart, greyJacketIntent, NOW, overreachingCart, partialCart } from "@poi/contracts/fixtures";
 import { customId, mandateHash } from "@poi/mandates";
-import { evaluate } from "@poi/policy-engine";
+import { evaluate, type MandateLedger } from "@poi/policy-engine";
 
 
 export interface DisputeRecord {
@@ -23,6 +23,7 @@ export interface OrderRecord {
   customId?: string;
   intent?: IntentMandate;
   cart?: CartMandate;
+  ledger?: MandateLedger;
 }
 
 export interface DisputeDataLoader {
@@ -153,10 +154,12 @@ export async function runDisputeClassifier(
   options: {
     now?: string;
     mode?: AiMode;
+    ledger?: MandateLedger;
   } = {},
 ): Promise<Recommendation> {
   const now = options.now ?? NOW;
   const mode = options.mode ?? parseAiMode(process.env.AI_MODE);
+  const ledger = options.ledger ?? order?.ledger;
 
   // 1. Check custom_id pointer and mandate presence
   const pointer = parseCustomId(order?.customId);
@@ -181,7 +184,7 @@ export async function runDisputeClassifier(
   }
 
   // 3. Replay hard rules
-  const evalResult = evaluate({ intent: order.intent, cart: order.cart, now });
+  const evalResult = evaluate({ intent: order.intent, cart: order.cart, now, ledger });
   if (!evalResult.pass) {
     return {
       disputeId: dispute.disputeId,

@@ -7,6 +7,7 @@
  */
 import { NotImplementedError } from "@poi/contracts";
 import type { Db } from "@poi/db";
+import type { MandateLedger } from "@poi/policy-engine";
 import {
   DefaultFixtureLoader,
   InMemoryRecommendationStore,
@@ -34,6 +35,7 @@ export const recommendationStore = new InMemoryRecommendationStore();
 export interface RecommendOptions {
   loader?: DisputeDataLoader;
   now?: string;
+  ledger?: MandateLedger;
   db?: Pick<Db, "appendAudit">;
 }
 
