@@ -15,7 +15,6 @@
     "@poi/paypal": "workspace:*",
     "@poi/policy-engine": "workspace:*",
     "tsx": "^4.19.2"
-
   },
   "devDependencies": {
     "@poi/ledger": "workspace:*"
