@@ -1,5 +1,6 @@
-import { describe, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { ledger } from "@poi/ledger";
+
 import { buildEvidencePackage, recommend } from "./pipeline";
 
 describe("dispute copilot (unbuilt)", () => {
@@ -14,8 +15,9 @@ describe("dispute copilot (unbuilt)", () => {
     expect(rec.class).toBe("MANDATE_COMPLIANT");
   });
 
-  ledger("M2", "hoursgotviral-dev", "evidence package PDF carries the same hash as the PayPal custom_id", async () => {
+  test("evidence package PDF carries the same hash as the PayPal custom_id", async () => {
     const pkg = await buildEvidencePackage("fixture-compliant");
     expect(pkg.bundleJson).toContain("mandate_hash");
   });
 });
+
