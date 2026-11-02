@@ -33,5 +33,6 @@ export async function buildEvidencePackage(_disputeId: string): Promise<{ pdf: U
   throw new NotImplementedError("evidence package", OWNER, SPEC);
 }
 
+export * from "./intake";
 export * from "./decision";
 
