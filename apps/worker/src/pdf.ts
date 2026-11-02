@@ -48,6 +48,47 @@ export function escapePdfText(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
+export function wrapLine(line: string, maxChars = 80): string[] {
+  if (line.length <= maxChars) {
+    return [line];
+  }
+
+  const indentMatch = line.match(/^(\s+)/);
+  const indent = indentMatch ? indentMatch[1] : "";
+
+  const words = line.split(" ");
+  const wrapped: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    if (word.length > maxChars) {
+      if (current) {
+        wrapped.push(current);
+        current = "";
+      }
+      for (let i = 0; i < word.length; i += maxChars) {
+        wrapped.push(word.slice(i, i + maxChars));
+      }
+      continue;
+    }
+
+    if (!current) {
+      current = word;
+    } else if (current.length + 1 + word.length <= maxChars) {
+      current += " " + word;
+    } else {
+      wrapped.push(current);
+      current = indent ? `${indent}  ${word}` : word;
+    }
+  }
+
+  if (current) {
+    wrapped.push(current);
+  }
+
+  return wrapped.length > 0 ? wrapped : [line];
+}
+
 export function renderEvidencePdfText(data: EvidencePdfData): string {
   const lines: string[] = [];
 
@@ -124,7 +165,8 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
 
 export function generateEvidencePdf(data: EvidencePdfData): Uint8Array {
   const textContent = renderEvidencePdfText(data);
-  const textLines = textContent.split("\n");
+  const rawLines = textContent.split("\n");
+  const textLines = rawLines.flatMap((l) => wrapLine(l, 80));
 
   // Construct PDF stream layout commands
   const streamCommands: string[] = [

@@ -130,4 +130,17 @@ describe("evidence PDF generation", () => {
     const rendered = renderEvidencePdfText(sampleData);
     expect(rendered).toMatchSnapshot();
   });
+
+  it("wraps long lines so text does not run off the page", () => {
+    const longData: EvidencePdfData = {
+      ...sampleData,
+      coverNote:
+        "This is an extraordinarily long cover note written by the operator that definitely exceeds eighty characters and would otherwise run off the right edge of a standard letter page unless properly wrapped into multiple lines by the PDF generator.",
+    };
+    const pdfBytes = generateEvidencePdf(longData);
+    const text = new TextDecoder().decode(pdfBytes);
+    expect(text).toContain("ET");
+    const lines = text.split("\n").filter((l) => l.endsWith(") Tj"));
+    expect(lines.length).toBeGreaterThan(45);
+  });
 });
