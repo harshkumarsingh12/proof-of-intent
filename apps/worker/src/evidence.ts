@@ -4,18 +4,23 @@ import {
   type CartMandate,
   type IntentMandate,
   type Money,
+  type ReasonCode,
 } from "@poi/contracts";
-import { compliantCart, greyJacketIntent, NOW } from "@poi/contracts/fixtures";
-import type { Db } from "@poi/db";
+import type { AuditEntry, Db } from "@poi/db";
 import {
-  customId,
-  generateSigningKeyPair,
   mandateHash,
-  signMandate,
   verifyMandate,
   type KeyResolver,
-  type VerifyKey,
 } from "@poi/mandates";
+import { evaluate, type MandateLedger } from "@poi/policy-engine";
+import {
+  generateEvidencePdf,
+  type ConstraintCheck,
+  type DisputeSummary,
+  type EvidencePdfData,
+  type TimelineEntry,
+  type VerificationResult,
+} from "./pdf";
 
 export type EvidenceDraftStatus = "pending_human_approval" | "approved" | "rejected";
 
@@ -25,6 +30,68 @@ export interface CaptureRecord {
   capturedAt: string;
   amount: Money;
   customId: string;
+}
+
+export interface DisputeRecord {
+  disputeId: string;
+  orderId?: string;
+  status?: string;
+  reason?: string;
+  amount?: Money | string;
+  responseDueDate?: string;
+}
+
+export interface OrderRecord {
+  orderId: string;
+  customId?: string;
+  intent?: IntentMandate;
+  cart?: CartMandate;
+  signedIntentJws?: string;
+  capturedAt?: string;
+  captureRecord?: CaptureRecord;
+  ledger?: MandateLedger;
+}
+
+export interface EvidenceDataLoader {
+  loadDispute(disputeId: string): Promise<DisputeRecord | null>;
+  loadOrder(orderId: string): Promise<OrderRecord | null>;
+  loadCaptureRecord?(orderId: string): Promise<CaptureRecord | null>;
+}
+
+export class InMemoryEvidenceDataLoader implements EvidenceDataLoader {
+  private readonly disputes = new Map<string, DisputeRecord>();
+  private readonly orders = new Map<string, OrderRecord>();
+  private readonly captures = new Map<string, CaptureRecord>();
+
+  constructor(disputes: DisputeRecord[] = [], orders: OrderRecord[] = [], captures: CaptureRecord[] = []) {
+    for (const d of disputes) this.disputes.set(d.disputeId, d);
+    for (const o of orders) this.orders.set(o.orderId, o);
+    for (const c of captures) this.captures.set(c.orderId, c);
+  }
+
+  async loadDispute(disputeId: string): Promise<DisputeRecord | null> {
+    return this.disputes.get(disputeId) ?? null;
+  }
+
+  async loadOrder(orderId: string): Promise<OrderRecord | null> {
+    return this.orders.get(orderId) ?? null;
+  }
+
+  async loadCaptureRecord(orderId: string): Promise<CaptureRecord | null> {
+    return this.captures.get(orderId) ?? null;
+  }
+
+  setDispute(dispute: DisputeRecord): void {
+    this.disputes.set(dispute.disputeId, dispute);
+  }
+
+  setOrder(order: OrderRecord): void {
+    this.orders.set(order.orderId, order);
+  }
+
+  setCapture(capture: CaptureRecord): void {
+    this.captures.set(capture.orderId, capture);
+  }
 }
 
 export interface EvidenceDraftInput {
@@ -62,29 +129,65 @@ export class InMemoryEvidenceStore {
   }
 }
 
-export function createAttestationPdf(data: {
-  disputeId: string;
-  customId: string;
-  mandateHash: string;
-  intentDescription: string;
-  cartTotal: string;
-  draft: EvidenceDraft;
-}): Uint8Array {
-  // Minimal valid PDF structure embedding attestation hashes and cover note
-  const content = [
-    "%PDF-1.4",
-    "%POI-ATTESTATION",
-    `Dispute ID: ${data.disputeId}`,
-    `PayPal custom_id: ${data.customId}`,
-    `Mandate Hash: ${data.mandateHash}`,
-    `Shopper Stated Intent: ${data.intentDescription}`,
-    `Cart Total: ${data.cartTotal}`,
-    `Cover Note: ${data.draft.cover_note}`,
-    `Buyer Message: ${data.draft.buyer_message}`,
-    "%%EOF",
-  ].join("\n");
+export function buildConstraintChecks(
+  intent?: IntentMandate | null,
+  cart?: CartMandate | null,
+  reasons: ReasonCode[] = [],
+): ConstraintCheck[] {
+  if (!intent || !cart) {
+    return [];
+  }
 
-  return new TextEncoder().encode(content);
+  const checks: ConstraintCheck[] = [];
+  const constraints = intent.constraints;
+
+  if (constraints.amount_max) {
+    checks.push({
+      name: "amount_max",
+      rule: `${constraints.amount_max.currency} ${(constraints.amount_max.value / 100).toFixed(2)}`,
+      actual: `${cart.contents.total.currency} ${(cart.contents.total.value / 100).toFixed(2)}`,
+      passed: !reasons.includes("AMOUNT_EXCEEDS_MAX") && !reasons.includes("CURRENCY_MISMATCH"),
+    });
+  }
+
+  if (constraints.merchant_allowlist) {
+    checks.push({
+      name: "merchant_allowlist",
+      rule: constraints.merchant_allowlist.join(", "),
+      actual: cart.contents.merchant_id,
+      passed: !reasons.includes("MERCHANT_NOT_ALLOWED"),
+    });
+  }
+
+  if (constraints.attributes) {
+    for (const [key, val] of Object.entries(constraints.attributes)) {
+      const actualVal = cart.contents.lines.map((l) => l.attributes[key]).filter(Boolean).join(", ");
+      checks.push({
+        name: `attributes.${key}`,
+        rule: val,
+        actual: actualVal || "not available",
+        passed: !reasons.includes("ATTRIBUTE_MISMATCH"),
+      });
+    }
+  }
+
+  if (constraints.quantity_max) {
+    const totalQty = cart.contents.lines.reduce((sum, l) => sum + l.quantity, 0);
+    const ruleStr =
+      constraints.quantity_max.per_order !== undefined
+        ? `max ${constraints.quantity_max.per_order} per order`
+        : constraints.quantity_max.per_line !== undefined
+        ? `max ${constraints.quantity_max.per_line} per line`
+        : "not available";
+    checks.push({
+      name: "quantity_max",
+      rule: ruleStr,
+      actual: `${totalQty} items`,
+      passed: !reasons.includes("QUANTITY_EXCEEDS_MAX"),
+    });
+  }
+
+  return checks;
 }
 
 export function generateDefaultEvidenceDraft(
@@ -112,7 +215,7 @@ export function generateDefaultEvidenceDraft(
       },
       {
         heading: "Cryptographic Attestation & Order Pointer",
-        body: `PayPal custom_id: ${capture.customId}\nMandate Hash: ${intentHash}\nCaptured Amount: ${capture.amount.currency} ${capture.amount.value / 100}`,
+        body: `PayPal custom_id: ${capture.customId}\nMandate Hash: ${intentHash}\nCaptured Amount: ${capture.amount.currency} ${(capture.amount.value / 100).toFixed(2)}`,
       },
     ],
     buyer_message: `Hello, your order was fulfilled according to your signed shopping agent instructions (${intent.natural_language_description}). Please find the attestation record attached.`,
@@ -133,7 +236,7 @@ export async function draftEvidenceForDefend(
   const mode = options?.mode ?? parseAiMode(process.env.AI_MODE);
   const now = options?.now ? options.now() : new Date().toISOString();
 
-  // 1. Verify mandate signature with packages/mandates before including it
+  // 1. Verify mandate signature with packages/mandates against key resolver
   const verifyResult = await verifyMandate(input.signedIntentJws, input.keyResolver);
   if (!verifyResult.ok) {
     throw new Error(`Mandate signature verification failed: ${verifyResult.reason}`);
@@ -151,7 +254,7 @@ export async function draftEvidenceForDefend(
     throw new Error("Order custom_id does not match the verified mandate hash");
   }
 
-  // 2. Draft evidence using packages/ai or replay fallback
+  // 2. Draft evidence using packages/ai or fallback
   let draft: EvidenceDraft;
   try {
     draft = await draftEvidence(
@@ -170,7 +273,67 @@ export async function draftEvidenceForDefend(
     draft = generateDefaultEvidenceDraft(verifiedIntent, input.cart, input.captureRecord, hash);
   }
 
-  // 3. Assemble JSON bundle
+  // 3. Evaluate constraints using policy engine
+  const evalResult = evaluate({
+    intent: verifiedIntent,
+    cart: input.cart,
+    now: input.captureRecord.capturedAt || now,
+  });
+  const constraintChecks = buildConstraintChecks(verifiedIntent, input.cart, evalResult.reasons);
+
+  // 4. Assemble PDF data using deterministic PDF renderer
+  const summary: DisputeSummary = {
+    disputeId: input.disputeId,
+    orderId: input.captureRecord.orderId,
+    customId: input.captureRecord.customId,
+    status: "WAITING_FOR_SELLER_RESPONSE",
+    reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+    amount: `${input.captureRecord.amount.currency} ${(input.captureRecord.amount.value / 100).toFixed(2)}`,
+  };
+
+  const verification: VerificationResult = {
+    signatureValid: true,
+    keyId: verifyResult.kid,
+    algorithm: "ES256",
+    computedHash: hash,
+    customIdMatches: true,
+    verdictOutcome: evalResult.pass ? "APPROVE" : "REJECT",
+    reasons: evalResult.reasons,
+  };
+
+  const timeline: TimelineEntry[] = [
+    { timestamp: verifiedIntent.created_at || now, event: "Shopper signed Intent Mandate", actor: "shopper" },
+    {
+      timestamp: input.captureRecord.capturedAt || now,
+      event: "Policy engine verified cart against constraints",
+      actor: "policy-engine",
+    },
+    {
+      timestamp: input.captureRecord.capturedAt || now,
+      event: "PayPal order captured with mandate pointer in custom_id",
+      actor: "api",
+    },
+    {
+      timestamp: now,
+      event: "Copilot classified MANDATE_COMPLIANT and drafted evidence PDF",
+      actor: "worker",
+    },
+  ];
+
+  const pdfData: EvidencePdfData = {
+    summary,
+    intent: verifiedIntent,
+    intentHash: hash,
+    cart: input.cart,
+    constraints: constraintChecks,
+    verification,
+    timeline,
+    coverNote: draft.cover_note,
+  };
+
+  const pdf = generateEvidencePdf(pdfData);
+
+  // 5. Assemble JSON bundle
   const bundle = {
     dispute_id: input.disputeId,
     mandate_id: verifiedIntent.mandate_id,
@@ -181,19 +344,13 @@ export async function draftEvidenceForDefend(
     capture_record: input.captureRecord,
     verified_key_id: verifyResult.kid,
     verified_at: now,
+    policy_evaluation: {
+      outcome: evalResult.pass ? "APPROVE" : "REJECT",
+      reasons: evalResult.reasons,
+    },
     draft,
   };
   const bundleJson = JSON.stringify(bundle, null, 2);
-
-  // 4. Generate attestation PDF
-  const pdf = createAttestationPdf({
-    disputeId: input.disputeId,
-    customId: input.captureRecord.customId,
-    mandateHash: hash,
-    intentDescription: verifiedIntent.natural_language_description,
-    cartTotal: `${input.cart.contents.total.currency} ${input.cart.contents.total.value / 100}`,
-    draft,
-  });
 
   const result: EvidencePackageResult = {
     disputeId: input.disputeId,
@@ -206,7 +363,6 @@ export async function draftEvidenceForDefend(
     createdAt: now,
   };
 
-  // 5. Store draft as pending human approval (never submit directly to PayPal)
   if (options?.store) {
     await options.store.save(result);
   }
@@ -227,54 +383,226 @@ export async function draftEvidenceForDefend(
   return result;
 }
 
-// Global store and fixture generator for buildEvidencePackage
+// Global store and loader configuration for buildEvidencePackage
 export const defaultEvidenceStore = new InMemoryEvidenceStore();
 
-let cachedFixtureSetup: {
-  signedIntentJws: string;
-  resolveKey: KeyResolver;
-} | null = null;
+let defaultDataLoader: EvidenceDataLoader = new InMemoryEvidenceDataLoader();
+export function setDefaultEvidenceDataLoader(loader: EvidenceDataLoader): void {
+  defaultDataLoader = loader;
+}
+export function getDefaultEvidenceDataLoader(): EvidenceDataLoader {
+  return defaultDataLoader;
+}
 
-async function getFixtureSetup() {
-  if (!cachedFixtureSetup) {
-    const { privateKey, publicKey } = await generateSigningKeyPair();
-    const keyMap = new Map<string, VerifyKey>([["shopper-key-1", publicKey]]);
-    const signedIntentJws = await signMandate(greyJacketIntent, privateKey, "shopper-key-1");
-    cachedFixtureSetup = {
-      signedIntentJws,
-      resolveKey: async (kid: string) => keyMap.get(kid),
-    };
-  }
-  return cachedFixtureSetup;
+let defaultKeyResolver: KeyResolver = async () => undefined;
+export function setDefaultKeyResolver(resolver: KeyResolver): void {
+  defaultKeyResolver = resolver;
+}
+export function getDefaultKeyResolver(): KeyResolver {
+  return defaultKeyResolver;
+}
+
+export interface BuildEvidenceOptions extends EvidenceOptions {
+  loader?: EvidenceDataLoader;
+  keyResolver?: KeyResolver;
+  auditEntries?: AuditEntry[];
 }
 
 export async function buildEvidencePackage(
   disputeId: string,
-  options?: EvidenceOptions,
+  options?: BuildEvidenceOptions,
 ): Promise<{ pdf: Uint8Array; bundleJson: string }> {
-  const { signedIntentJws, resolveKey } = await getFixtureSetup();
-  const hash = mandateHash(greyJacketIntent);
-  const orderPointer = customId(greyJacketIntent.mandate_id, hash);
+  const loader = options?.loader ?? defaultDataLoader;
+  const keyResolver = options?.keyResolver ?? defaultKeyResolver;
+  const store = options?.store ?? defaultEvidenceStore;
+  const now = options?.now ? options.now() : new Date().toISOString();
 
-  const captureRecord: CaptureRecord = {
-    captureId: "cap_compliant_1",
-    orderId: "ord_compliant",
-    capturedAt: NOW,
-    amount: compliantCart.contents.total,
-    customId: orderPointer,
+  // 1. Load real dispute record by ID
+  const dispute = await loader.loadDispute(disputeId);
+  if (!dispute) {
+    throw new Error(`Dispute not found: ${disputeId}`);
+  }
+
+  // 2. Load order record by ID
+  const orderId = dispute.orderId;
+  if (!orderId) {
+    throw new Error(`Dispute has no associated order: ${disputeId}`);
+  }
+  const order = await loader.loadOrder(orderId);
+  if (!order) {
+    throw new Error(`Order not found: ${orderId}`);
+  }
+
+  // 3. Load capture record
+  const captureRecord: CaptureRecord =
+    (loader.loadCaptureRecord ? await loader.loadCaptureRecord(orderId) : null) ??
+    order.captureRecord ?? {
+      captureId: `cap_${orderId}`,
+      orderId,
+      capturedAt: order.capturedAt ?? now,
+      amount: order.cart?.contents.total ?? { value: 0, currency: "USD" },
+      customId: order.customId ?? "not available",
+    };
+
+  // 4. Verify stored checkout JWS against key registry
+  let verifiedIntent: IntentMandate | null = null;
+  let signatureValid = false;
+  let verifiedKid = "not available";
+  let hash = "not available";
+
+  if (order.signedIntentJws) {
+    const verifyResult = await verifyMandate(order.signedIntentJws, keyResolver);
+    if (verifyResult.ok) {
+      signatureValid = true;
+      verifiedIntent = verifyResult.payload as IntentMandate;
+      verifiedKid = verifyResult.kid;
+      hash = mandateHash(verifiedIntent);
+    }
+  }
+
+  if (!verifiedIntent && order.intent) {
+    verifiedIntent = order.intent;
+    hash = mandateHash(verifiedIntent);
+  }
+
+  // 5. Evaluate policy engine dynamically
+  let verdictOutcome = "not available";
+  let reasons: ReasonCode[] = [];
+  let constraintChecks: ConstraintCheck[] = [];
+
+  if (verifiedIntent && order.cart) {
+    const evalResult = evaluate({
+      intent: verifiedIntent,
+      cart: order.cart,
+      now: captureRecord.capturedAt || now,
+      ledger: order.ledger,
+    });
+    verdictOutcome = evalResult.pass ? "APPROVE" : "REJECT";
+    reasons = evalResult.reasons;
+    constraintChecks = buildConstraintChecks(verifiedIntent, order.cart, reasons);
+  }
+
+  // 6. Build timeline from audit log rows
+  const timeline: TimelineEntry[] = [];
+  if (options?.auditEntries && options.auditEntries.length > 0) {
+    for (const a of options.auditEntries) {
+      const anyA = a as { timestamp?: string; createdAt?: string; action?: string; event?: string };
+      timeline.push({
+        timestamp: anyA.timestamp ?? anyA.createdAt ?? "not available",
+        event: anyA.event ?? anyA.action ?? "not available",
+        actor: a.actor ?? "not available",
+      });
+    }
+  } else {
+    timeline.push({
+      timestamp: captureRecord.capturedAt || "not available",
+      event: "PayPal order captured with mandate pointer in custom_id",
+      actor: "api",
+    });
+  }
+
+  // 7. Draft evidence via AI / fallback
+  let draft: EvidenceDraft;
+  if (verifiedIntent && order.cart) {
+    try {
+      draft = await draftEvidence(
+        {
+          disputeId,
+          intent: verifiedIntent,
+          cart: order.cart,
+          captureRecord,
+        },
+        options?.mode ?? parseAiMode(process.env.AI_MODE),
+      );
+    } catch (err) {
+      if (!(err instanceof NotImplementedError)) {
+        throw err;
+      }
+      draft = generateDefaultEvidenceDraft(verifiedIntent, order.cart, captureRecord, hash);
+    }
+  } else {
+    draft = {
+      cover_note: "not available",
+      attestation_sections: [],
+      buyer_message: "not available",
+    };
+  }
+
+  // 8. Build DisputeSummary and EvidencePdfData
+  const summary: DisputeSummary = {
+    disputeId: dispute.disputeId ?? "not available",
+    orderId: order.orderId ?? "not available",
+    customId: captureRecord.customId ?? "not available",
+    status: dispute.status ?? "not available",
+    reason: dispute.reason ?? "not available",
+    amount:
+      typeof dispute.amount === "string"
+        ? dispute.amount
+        : dispute.amount
+        ? `${dispute.amount.currency} ${(dispute.amount.value / 100).toFixed(2)}`
+        : order.cart
+        ? `${order.cart.contents.total.currency} ${(order.cart.contents.total.value / 100).toFixed(2)}`
+        : "not available",
+    responseDueDate: dispute.responseDueDate,
   };
 
-  const store = options?.store ?? defaultEvidenceStore;
-  const result = await draftEvidenceForDefend(
-    {
-      disputeId,
-      signedIntentJws,
-      cart: compliantCart,
-      captureRecord,
-      keyResolver: resolveKey,
-    },
-    { ...options, store },
-  );
+  const verification: VerificationResult = {
+    signatureValid,
+    keyId: verifiedKid,
+    algorithm: "ES256",
+    computedHash: hash,
+    customIdMatches: captureRecord.customId.endsWith(hash.slice(0, 16)),
+    verdictOutcome,
+    reasons,
+  };
 
-  return { pdf: result.pdf, bundleJson: result.bundleJson };
+  const pdfData: EvidencePdfData = {
+    summary,
+    intent: verifiedIntent,
+    intentHash: hash,
+    cart: order.cart,
+    constraints: constraintChecks,
+    verification,
+    timeline,
+    coverNote: draft.cover_note,
+  };
+
+  const pdf = generateEvidencePdf(pdfData);
+
+  const bundle = {
+    dispute_id: disputeId,
+    order_id: order.orderId,
+    mandate_id: verifiedIntent?.mandate_id ?? "not available",
+    mandate_hash: hash,
+    custom_id: captureRecord.customId,
+    intent_mandate: verifiedIntent,
+    cart_mandate: order.cart,
+    capture_record: captureRecord,
+    verified_key_id: verifiedKid,
+    verified_at: now,
+    policy_evaluation: {
+      outcome: verdictOutcome,
+      reasons,
+    },
+    timeline,
+    draft,
+  };
+  const bundleJson = JSON.stringify(bundle, null, 2);
+
+  const result: EvidencePackageResult = {
+    disputeId,
+    status: "pending_human_approval",
+    draft,
+    bundleJson,
+    pdf,
+    mandateHash: hash,
+    customId: captureRecord.customId,
+    createdAt: now,
+  };
+
+  await store.save(result);
+
+  return { pdf, bundleJson };
 }
+
+export * from "./pdf";

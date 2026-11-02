@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { compliantCart, greyJacketIntent, NOW } from "@poi/contracts/fixtures";
 import type { AuditEntry } from "@poi/db";
 import {
@@ -11,7 +11,10 @@ import {
 import {
   buildEvidencePackage,
   draftEvidenceForDefend,
+  InMemoryEvidenceDataLoader,
   InMemoryEvidenceStore,
+  setDefaultEvidenceDataLoader,
+  setDefaultKeyResolver,
   type CaptureRecord,
   type EvidenceDraftInput,
 } from "./evidence";
@@ -36,6 +39,35 @@ describe("evidence drafting for defend disputes", () => {
 
     return { signedIntentJws, captureRecord, keyResolver, hash, orderPointer, privateKey };
   }
+
+  beforeAll(async () => {
+    const { signedIntentJws, captureRecord, keyResolver, orderPointer } = await setupKeysAndMandate();
+    const loader = new InMemoryEvidenceDataLoader(
+      [
+        {
+          disputeId: "fixture-compliant",
+          orderId: "ord_1001",
+          status: "WAITING_FOR_SELLER_RESPONSE",
+          reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+        },
+      ],
+      [
+        {
+          orderId: "ord_1001",
+          customId: orderPointer,
+          intent: greyJacketIntent,
+          cart: compliantCart,
+          signedIntentJws,
+          capturedAt: NOW,
+          captureRecord,
+        },
+      ],
+      [captureRecord],
+    );
+
+    setDefaultEvidenceDataLoader(loader);
+    setDefaultKeyResolver(keyResolver);
+  });
 
   it("verifies mandate signature and drafts evidence as pending human approval", async () => {
     const { signedIntentJws, captureRecord, keyResolver, hash, orderPointer } =
@@ -126,7 +158,7 @@ describe("evidence drafting for defend disputes", () => {
 
     const pdfText = new TextDecoder().decode(pkg.pdf);
     expect(pdfText).toContain("%PDF-1.4");
-    expect(pdfText).toContain("Mandate Hash:");
+    expect(pdfText).toContain("Mandate Hash");
     expect(pdfText).toContain("PayPal custom_id:");
   });
 });
