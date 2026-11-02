@@ -7,8 +7,7 @@ import {
   type ReasonCode,
   type Verdict,
 } from "@poi/contracts";
-import { compliantCart, greyJacketIntent, NOW, overreachingCart, partialCart } from "@poi/contracts/fixtures";
-import { customId, mandateHash } from "@poi/mandates";
+import { mandateHash } from "@poi/mandates";
 import { evaluate, type MandateLedger } from "@poi/policy-engine";
 
 
@@ -24,6 +23,7 @@ export interface OrderRecord {
   customId?: string;
   intent?: IntentMandate;
   cart?: CartMandate;
+  capturedAt?: string;
   ledger?: MandateLedger;
   checkoutVerdict?: Verdict;
   j1Outcome?: {
@@ -69,85 +69,14 @@ export class InMemoryRecommendationStore {
   }
 }
 
-export class DefaultFixtureLoader implements DisputeDataLoader {
-  private readonly disputes = new Map<string, DisputeRecord>([
-    [
-      "fixture-overreach",
-      {
-        disputeId: "fixture-overreach",
-        orderId: "ord_overreach",
-        status: "WAITING_FOR_SELLER_RESPONSE",
-        reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
-      },
-    ],
-    [
-      "fixture-compliant",
-      {
-        disputeId: "fixture-compliant",
-        orderId: "ord_compliant",
-        status: "WAITING_FOR_SELLER_RESPONSE",
-        reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
-      },
-    ],
-    [
-      "fixture-no-mandate",
-      {
-        disputeId: "fixture-no-mandate",
-        orderId: "ord_no_mandate",
-        status: "UNDER_REVIEW",
-        reason: "UNAUTHORISED",
-      },
-    ],
-    [
-      "fixture-partial",
-      {
-        disputeId: "fixture-partial",
-        orderId: "ord_partial",
-        status: "WAITING_FOR_SELLER_RESPONSE",
-        reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
-      },
-    ],
-  ]);
+export class InMemoryDisputeDataLoader implements DisputeDataLoader {
+  private readonly disputes = new Map<string, DisputeRecord>();
+  private readonly orders = new Map<string, OrderRecord>();
 
-  private readonly orders = new Map<string, OrderRecord>([
-    [
-      "ord_overreach",
-      {
-        orderId: "ord_overreach",
-        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
-        intent: greyJacketIntent,
-        cart: overreachingCart,
-      },
-    ],
-    [
-      "ord_compliant",
-      {
-        orderId: "ord_compliant",
-        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
-        intent: greyJacketIntent,
-        cart: compliantCart,
-      },
-    ],
-    [
-      "ord_no_mandate",
-      {
-        orderId: "ord_no_mandate",
-      },
-    ],
-    [
-      "ord_partial",
-      {
-        orderId: "ord_partial",
-        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
-        intent: greyJacketIntent,
-        cart: partialCart,
-        j1Outcome: {
-          fit: "partial",
-          reasons: ["SEMANTIC_MISMATCH"],
-        },
-      },
-    ],
-  ]);
+  constructor(disputes: DisputeRecord[] = [], orders: OrderRecord[] = []) {
+    for (const d of disputes) this.disputes.set(d.disputeId, d);
+    for (const o of orders) this.orders.set(o.orderId, o);
+  }
 
   async loadDispute(disputeId: string): Promise<DisputeRecord | null> {
     return this.disputes.get(disputeId) ?? null;
@@ -155,6 +84,14 @@ export class DefaultFixtureLoader implements DisputeDataLoader {
 
   async loadOrder(orderId: string): Promise<OrderRecord | null> {
     return this.orders.get(orderId) ?? null;
+  }
+
+  setDispute(dispute: DisputeRecord): void {
+    this.disputes.set(dispute.disputeId, dispute);
+  }
+
+  setOrder(order: OrderRecord): void {
+    this.orders.set(order.orderId, order);
   }
 }
 
@@ -167,7 +104,7 @@ export async function runDisputeClassifier(
     ledger?: MandateLedger;
   } = {},
 ): Promise<Recommendation> {
-  const now = options.now ?? NOW;
+  const now = options.now ?? order?.capturedAt ?? new Date().toISOString();
   const mode = options.mode ?? parseAiMode(process.env.AI_MODE);
   const ledger = options.ledger ?? order?.ledger;
 

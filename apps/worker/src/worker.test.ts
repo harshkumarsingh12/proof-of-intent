@@ -1,14 +1,113 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
+import { compliantCart, greyJacketIntent, NOW, overreachingCart, partialCart } from "@poi/contracts/fixtures";
 import type { AuditEntry } from "@poi/db";
 import { ledger } from "@poi/ledger";
+import { customId, mandateHash } from "@poi/mandates";
 import {
   buildEvidencePackage,
   recommend,
   recommendationStore,
+  setDefaultDisputeLoader,
   type DisputeDataLoader,
 } from "./pipeline";
+import type { DisputeRecord, OrderRecord } from "./classifier";
+
+class DefaultFixtureLoader implements DisputeDataLoader {
+  private readonly disputes = new Map<string, DisputeRecord>([
+    [
+      "fixture-overreach",
+      {
+        disputeId: "fixture-overreach",
+        orderId: "ord_overreach",
+        status: "WAITING_FOR_SELLER_RESPONSE",
+        reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+      },
+    ],
+    [
+      "fixture-compliant",
+      {
+        disputeId: "fixture-compliant",
+        orderId: "ord_compliant",
+        status: "WAITING_FOR_SELLER_RESPONSE",
+        reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+      },
+    ],
+    [
+      "fixture-no-mandate",
+      {
+        disputeId: "fixture-no-mandate",
+        orderId: "ord_no_mandate",
+        status: "UNDER_REVIEW",
+        reason: "UNAUTHORISED",
+      },
+    ],
+    [
+      "fixture-partial",
+      {
+        disputeId: "fixture-partial",
+        orderId: "ord_partial",
+        status: "WAITING_FOR_SELLER_RESPONSE",
+        reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+      },
+    ],
+  ]);
+
+  private readonly orders = new Map<string, OrderRecord>([
+    [
+      "ord_overreach",
+      {
+        orderId: "ord_overreach",
+        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
+        intent: greyJacketIntent,
+        cart: overreachingCart,
+        capturedAt: NOW,
+      },
+    ],
+    [
+      "ord_compliant",
+      {
+        orderId: "ord_compliant",
+        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
+        intent: greyJacketIntent,
+        cart: compliantCart,
+        capturedAt: NOW,
+      },
+    ],
+    [
+      "ord_no_mandate",
+      {
+        orderId: "ord_no_mandate",
+      },
+    ],
+    [
+      "ord_partial",
+      {
+        orderId: "ord_partial",
+        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
+        intent: greyJacketIntent,
+        cart: partialCart,
+        capturedAt: NOW,
+        j1Outcome: {
+          fit: "partial",
+          reasons: ["SEMANTIC_MISMATCH"],
+        },
+      },
+    ],
+  ]);
+
+  async loadDispute(disputeId: string): Promise<DisputeRecord | null> {
+    return this.disputes.get(disputeId) ?? null;
+  }
+
+  async loadOrder(orderId: string): Promise<OrderRecord | null> {
+    return this.orders.get(orderId) ?? null;
+  }
+}
 
 describe("dispute copilot classification", () => {
+  beforeEach(() => {
+    setDefaultDisputeLoader(new DefaultFixtureLoader());
+  });
   test("a dispute on the overreaching fixture order is AGENT_OVERREACH → accept", async () => {
     const rec = await recommend("fixture-overreach");
     expect(rec.class).toBe("AGENT_OVERREACH");
@@ -78,6 +177,27 @@ describe("dispute copilot classification", () => {
     expect(rec.class).toBe("AGENT_OVERREACH");
     expect(rec.action).toBe("ACCEPT_CLAIM");
     expect(rec.reasons).toContain("MANDATE_MISMATCH");
+  });
+
+  test("resolves now from the order capture time for freshness evaluation", async () => {
+    const expiredLoader: DisputeDataLoader = {
+      loadDispute: async () => ({
+        disputeId: "d-expired-capture",
+        orderId: "ord-expired-capture",
+      }),
+      loadOrder: async () => ({
+        orderId: "ord-expired-capture",
+        customId: customId(greyJacketIntent.mandate_id, mandateHash(greyJacketIntent)),
+        intent: greyJacketIntent,
+        cart: compliantCart,
+        capturedAt: "2099-01-01T00:00:00Z",
+      }),
+    };
+
+    const rec = await recommend("d-expired-capture", { loader: expiredLoader });
+    expect(rec.class).toBe("AGENT_OVERREACH");
+    expect(rec.action).toBe("ACCEPT_CLAIM");
+    expect(rec.reasons).toContain("MANDATE_EXPIRED");
   });
 });
 

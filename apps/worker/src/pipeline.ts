@@ -9,7 +9,7 @@ import { NotImplementedError } from "@poi/contracts";
 import type { Db } from "@poi/db";
 import type { MandateLedger } from "@poi/policy-engine";
 import {
-  DefaultFixtureLoader,
+  InMemoryDisputeDataLoader,
   InMemoryRecommendationStore,
   runDisputeClassifier,
   type DisputeDataLoader,
@@ -29,7 +29,16 @@ export type { Recommendation };
 const OWNER = "hoursgotviral-dev";
 const SPEC = "docs/specs/0005-dispute-copilot.md";
 
-const defaultLoader = new DefaultFixtureLoader();
+let defaultLoader: DisputeDataLoader = new InMemoryDisputeDataLoader();
+
+export function setDefaultDisputeLoader(loader: DisputeDataLoader): void {
+  defaultLoader = loader;
+}
+
+export function getDefaultDisputeLoader(): DisputeDataLoader {
+  return defaultLoader;
+}
+
 export const recommendationStore = new InMemoryRecommendationStore();
 
 export interface RecommendOptions {
