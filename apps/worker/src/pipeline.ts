@@ -34,4 +34,5 @@ export async function buildEvidencePackage(_disputeId: string): Promise<{ pdf: U
 }
 
 export * from "./intake";
+export * from "./decision";
 
