@@ -3,6 +3,7 @@ import {
   calculateAge,
   calculateSla,
   fetchDisputes,
+  fetchDisputesDetailed,
   filterDisputes,
   formatMoney,
   sortDisputes,
@@ -139,6 +140,10 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     expect(data).toHaveLength(1);
     expect(data[0]?.id).toBe("PP-D-API-1");
 
+    const detailedSuccess = await fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: mockFetchSuccess });
+    expect(detailedSuccess.isFallback).toBe(false);
+    expect(detailedSuccess.disputes).toHaveLength(1);
+
     // Mock 501 Not Implemented response -> falls back to seed data
     const mockFetch501 = (async () => ({
       ok: false,
@@ -149,6 +154,10 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     const fallbackData = await fetchDisputes({ apiBaseUrl: "http://example.test", fetchFn: mockFetch501 });
     expect(fallbackData).toEqual(SEED_DISPUTES);
 
+    const detailed501 = await fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: mockFetch501 });
+    expect(detailed501.isFallback).toBe(true);
+    expect(detailed501.disputes).toEqual(SEED_DISPUTES);
+
     // Mock network throw -> falls back to seed data
     const mockFetchError = (async () => {
       throw new Error("connection refused");
@@ -156,6 +165,10 @@ describe("dispute queue data & helpers (spec 0007)", () => {
 
     const networkFallbackData = await fetchDisputes({ apiBaseUrl: "http://example.test", fetchFn: mockFetchError });
     expect(networkFallbackData).toEqual(SEED_DISPUTES);
+
+    const detailedError = await fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: mockFetchError });
+    expect(detailedError.isFallback).toBe(true);
+    expect(detailedError.disputes).toEqual(SEED_DISPUTES);
   });
 
   it("contains 24 canonical seeded disputes with scripted disputes pinned on top per spec 0007", () => {

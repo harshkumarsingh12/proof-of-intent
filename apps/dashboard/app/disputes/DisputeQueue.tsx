@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
-import { calculateAge, calculateSla, fetchDisputes, filterDisputes, formatMoney, sortDisputes } from "../../src/api";
+import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatMoney, sortDisputes } from "../../src/api";
 
 export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: DisputeItem[] }) {
   const [disputes, setDisputes] = useState<DisputeItem[]>(initialDisputes);
   const [loading, setLoading] = useState(initialDisputes.length === 0);
+  const [isDemoData, setIsDemoData] = useState(false);
   const [selectedDispute, setSelectedDispute] = useState<DisputeItem | null>(null);
 
   // Filter state
@@ -26,8 +27,11 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await fetchDisputes();
-      setDisputes(data);
+      const res = await fetchDisputesDetailed();
+      setDisputes(res.disputes);
+      setIsDemoData(res.isFallback);
+    } catch {
+      setIsDemoData(true);
     } finally {
       setLoading(false);
     }
@@ -73,6 +77,41 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Fallback Demo Data Banner */}
+      {isDemoData && (
+        <div
+          data-testid="demo-data-banner"
+          style={{
+            background: "rgba(210, 153, 34, 0.15)",
+            border: "1px solid #d29922",
+            borderRadius: 8,
+            padding: "12px 16px",
+            color: "#e3b341",
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <span
+            style={{
+              padding: "2px 8px",
+              background: "#d29922",
+              color: "#0d1117",
+              fontWeight: 700,
+              borderRadius: 4,
+              fontSize: 11,
+              letterSpacing: "0.5px",
+            }}
+          >
+            DEMO DATA
+          </span>
+          <span>
+            API endpoint (<code>/disputes</code>) is unavailable or returned 501. Showing local demo disputes (canonical seed data).
+          </span>
+        </div>
+      )}
+
       {/* KPI / Summary Tiles */}
       <div
         style={{

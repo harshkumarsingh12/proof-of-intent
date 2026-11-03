@@ -12,14 +12,19 @@ export interface FetchDisputesOptions {
   fetchFn?: typeof fetch;
 }
 
+export interface FetchDisputesResponse {
+  disputes: DisputeItem[];
+  isFallback: boolean;
+}
+
 /**
  * Fetch disputes from the merchant API (docs/specs/0003, 0007).
  * Reads from the API over HTTP with no direct database access.
- * Falls back to canonical seed fixtures if the API server is unavailable or returns 501.
+ * Returns response metadata including whether data came from canonical seed fallback.
  */
-export async function fetchDisputes(
+export async function fetchDisputesDetailed(
   options?: FetchDisputesOptions
-): Promise<DisputeItem[]> {
+): Promise<FetchDisputesResponse> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
@@ -32,17 +37,29 @@ export async function fetchDisputes(
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        return data as DisputeItem[];
+        return { disputes: data as DisputeItem[], isFallback: false };
       }
       if (data && Array.isArray((data as { disputes: DisputeItem[] }).disputes)) {
-        return (data as { disputes: DisputeItem[] }).disputes;
+        return { disputes: (data as { disputes: DisputeItem[] }).disputes, isFallback: false };
       }
     }
   } catch {
     // API server not reachable in dev or standalone mode; fallback to canonical seed data
   }
 
-  return SEED_DISPUTES;
+  return { disputes: SEED_DISPUTES, isFallback: true };
+}
+
+/**
+ * Fetch disputes from the merchant API (docs/specs/0003, 0007).
+ * Reads from the API over HTTP with no direct database access.
+ * Falls back to canonical seed fixtures if the API server is unavailable or returns 501.
+ */
+export async function fetchDisputes(
+  options?: FetchDisputesOptions
+): Promise<DisputeItem[]> {
+  const res = await fetchDisputesDetailed(options);
+  return res.disputes;
 }
 
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
