@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
 import { calculateAge, calculateSla, fetchDisputes, filterDisputes, formatMoney, sortDisputes } from "../../src/api";
 
@@ -440,24 +441,25 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
               <button type="button" onClick={() => setSelectedDispute(null)} style={pillBtnStyle}>
                 Close
               </button>
-              {selectedDispute.decision === "defend" && (
-                <button
-                  type="button"
-                  style={{ ...pillBtnStyle, background: "#238636", color: "#fff", borderColor: "#2ea043" }}
-                  onClick={() => alert(`Submitting evidence package for ${selectedDispute.id}...`)}
-                >
-                  Submit Evidence
-                </button>
-              )}
-              {selectedDispute.decision === "concede" && (
-                <button
-                  type="button"
-                  style={{ ...pillBtnStyle, background: "#d97706", color: "#fff", borderColor: "#f59e0b" }}
-                  onClick={() => alert(`Accepting claim and refunding for ${selectedDispute.id}...`)}
-                >
-                  Accept Claim (Refund)
-                </button>
-              )}
+              <Link
+                href={`/disputes/${selectedDispute.id}`}
+                style={{
+                  ...pillBtnStyle,
+                  background: selectedDispute.decision === "defend" ? "#238636" : selectedDispute.decision === "concede" ? "#d97706" : "#1f6feb",
+                  color: "#fff",
+                  borderColor: selectedDispute.decision === "defend" ? "#2ea043" : selectedDispute.decision === "concede" ? "#f59e0b" : "#388bfd",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {selectedDispute.decision === "defend"
+                  ? "Open Review & Submit Evidence →"
+                  : selectedDispute.decision === "concede"
+                  ? "Open Review & Accept Claim →"
+                  : "View Dispute Details →"}
+              </Link>
             </div>
           </div>
         </div>
