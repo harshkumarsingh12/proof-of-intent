@@ -9,7 +9,7 @@ import {
   sortDisputes,
 } from "./api";
 import type { DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
-import { SEED_DISPUTES } from "./seed-disputes";
+import { generateSeedDisputes, SEED_DISPUTES } from "./seed-disputes";
 
 describe("dispute queue data & helpers (spec 0007)", () => {
   it("formats integer minor units as currency string", () => {
@@ -76,13 +76,17 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     expect(platformResults.every((d) => d.agentPlatform === "AutoGPT")).toBe(true);
   });
 
-  it("sorts disputes by response due date, amount, and age", () => {
+  it("sorts disputes while keeping the two scripted demo disputes pinned at the top", () => {
     // Sort by due date ascending (earliest response deadline first)
     const dueDateSort: DisputeSorting = { field: "dueDate", direction: "asc" };
     const byDueDate = sortDisputes(SEED_DISPUTES, dueDateSort);
-    for (let i = 0; i < byDueDate.length - 1; i++) {
-      const item1 = byDueDate[i];
-      const item2 = byDueDate[i + 1];
+    expect(byDueDate[0]?.id).toBe("PP-D-1001");
+    expect(byDueDate[1]?.id).toBe("PP-D-1002");
+
+    const nonPinnedByDueDate = byDueDate.slice(2);
+    for (let i = 0; i < nonPinnedByDueDate.length - 1; i++) {
+      const item1 = nonPinnedByDueDate[i];
+      const item2 = nonPinnedByDueDate[i + 1];
       expect(item1).toBeDefined();
       expect(item2).toBeDefined();
       const t1 = new Date(item1!.sellerResponseDueDate).getTime();
@@ -93,22 +97,45 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     // Sort by amount descending (highest disputed amount first)
     const amountDescSort: DisputeSorting = { field: "amount", direction: "desc" };
     const byAmountDesc = sortDisputes(SEED_DISPUTES, amountDescSort);
-    const desc0 = byAmountDesc[0];
-    const desc1 = byAmountDesc[1];
-    expect(desc0).toBeDefined();
-    expect(desc1).toBeDefined();
-    expect(desc0!.amount.value).toBeGreaterThanOrEqual(desc1!.amount.value);
-    expect(desc0!.amount.value).toBe(21000); // PP-D-1011 $210.00
+    expect(byAmountDesc[0]?.id).toBe("PP-D-1001");
+    expect(byAmountDesc[1]?.id).toBe("PP-D-1002");
+
+    const nonPinnedByAmountDesc = byAmountDesc.slice(2);
+    expect(nonPinnedByAmountDesc[0]?.amount.value).toBe(21000); // PP-D-1011 $210.00
+    for (let i = 0; i < nonPinnedByAmountDesc.length - 1; i++) {
+      expect(nonPinnedByAmountDesc[i]!.amount.value).toBeGreaterThanOrEqual(nonPinnedByAmountDesc[i + 1]!.amount.value);
+    }
 
     // Sort by amount ascending
     const amountAscSort: DisputeSorting = { field: "amount", direction: "asc" };
     const byAmountAsc = sortDisputes(SEED_DISPUTES, amountAscSort);
-    const asc0 = byAmountAsc[0];
-    const asc1 = byAmountAsc[1];
-    expect(asc0).toBeDefined();
-    expect(asc1).toBeDefined();
-    expect(asc0!.amount.value).toBeLessThanOrEqual(asc1!.amount.value);
-    expect(asc0!.amount.value).toBe(3900); // PP-D-1015 $39.00
+    expect(byAmountAsc[0]?.id).toBe("PP-D-1001");
+    expect(byAmountAsc[1]?.id).toBe("PP-D-1002");
+
+    const nonPinnedByAmountAsc = byAmountAsc.slice(2);
+    expect(nonPinnedByAmountAsc[0]?.amount.value).toBe(3900); // PP-D-1015 $39.00
+    for (let i = 0; i < nonPinnedByAmountAsc.length - 1; i++) {
+      expect(nonPinnedByAmountAsc[i]!.amount.value).toBeLessThanOrEqual(nonPinnedByAmountAsc[i + 1]!.amount.value);
+    }
+  });
+
+  it("generates seed due dates relative to current date or provided base time", () => {
+    const fixedBase = "2026-12-01T12:00:00Z";
+    const generated = generateSeedDisputes(fixedBase);
+    expect(generated).toHaveLength(24);
+
+    const baseMs = new Date(fixedBase).getTime();
+    const d1 = generated.find((d) => d.id === "PP-D-1001");
+    expect(d1).toBeDefined();
+    // Due 48h after base
+    const d1DueMs = new Date(d1!.sellerResponseDueDate).getTime();
+    expect(d1DueMs - baseMs).toBe(48 * 60 * 60 * 1000);
+
+    const urgentDispute = generated.find((d) => d.id === "PP-D-1006");
+    expect(urgentDispute).toBeDefined();
+    // Due 22h after base
+    const urgentDueMs = new Date(urgentDispute!.sellerResponseDueDate).getTime();
+    expect(urgentDueMs - baseMs).toBe(22 * 60 * 60 * 1000);
   });
 
   it("reads disputes from the api via HTTP and falls back on error", async () => {

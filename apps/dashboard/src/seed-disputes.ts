@@ -1,10 +1,11 @@
 import type { DisputeItem } from "./dispute-types";
 
-/**
- * Canonical demo & fallback dispute fixtures per docs/specs/0007-dashboard.md.
- * 24 disputes across four agent platforms, with the two scripted disputes pinned on top.
- */
-export const SEED_DISPUTES: DisputeItem[] = [
+interface SeedDisputeTemplate extends Omit<DisputeItem, "createdAt" | "sellerResponseDueDate"> {
+  createdOffsetHours: number;
+  dueOffsetHours: number;
+}
+
+const TEMPLATES: SeedDisputeTemplate[] = [
   // Pinned Scripted Dispute 1: Compliant order (Journey C) -> Defend
   {
     id: "PP-D-1001",
@@ -14,8 +15,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 7400, currency: "USD" },
-    createdAt: "2026-11-02T08:30:00Z",
-    sellerResponseDueDate: "2026-11-04T12:00:00Z",
+    createdOffsetHours: -4,
+    dueOffsetHours: 48,
     reasons: [],
     agentPlatform: "AutoGPT",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -31,8 +32,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 9500, currency: "USD" },
-    createdAt: "2026-11-02T09:15:00Z",
-    sellerResponseDueDate: "2026-11-04T14:30:00Z",
+    createdOffsetHours: -3,
+    dueOffsetHours: 50,
     reasons: ["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"],
     agentPlatform: "LangChain",
     buyerDisputeReason: "UNAUTHORISED",
@@ -48,8 +49,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 6500, currency: "USD" },
-    createdAt: "2026-11-02T10:00:00Z",
-    sellerResponseDueDate: "2026-11-04T18:00:00Z",
+    createdOffsetHours: -2,
+    dueOffsetHours: 54,
     reasons: [],
     agentPlatform: "CrewAI",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -64,8 +65,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 12500, currency: "USD" },
-    createdAt: "2026-11-02T11:20:00Z",
-    sellerResponseDueDate: "2026-11-05T09:00:00Z",
+    createdOffsetHours: -1,
+    dueOffsetHours: 69,
     reasons: ["QUANTITY_EXCEEDS_MAX", "AMOUNT_EXCEEDS_MAX"],
     agentPlatform: "OpenAI Swarm",
     buyerDisputeReason: "INCORRECT_AMOUNT",
@@ -80,8 +81,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 8900, currency: "USD" },
-    createdAt: "2026-11-01T14:10:00Z",
-    sellerResponseDueDate: "2026-11-06T12:00:00Z",
+    createdOffsetHours: -22,
+    dueOffsetHours: 96,
     reasons: [],
     agentPlatform: "AutoGPT",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
@@ -96,8 +97,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 14000, currency: "USD" },
-    createdAt: "2026-11-01T16:45:00Z",
-    sellerResponseDueDate: "2026-11-03T10:00:00Z", // Critical SLA < 24h
+    createdOffsetHours: -20,
+    dueOffsetHours: 22, // Critical SLA < 24h
     reasons: ["MERCHANT_NOT_ALLOWED"],
     agentPlatform: "LangChain",
     buyerDisputeReason: "UNAUTHORISED",
@@ -112,8 +113,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 4500, currency: "USD" },
-    createdAt: "2026-11-01T18:00:00Z",
-    sellerResponseDueDate: "2026-11-03T16:00:00Z", // Critical SLA < 30h
+    createdOffsetHours: -18,
+    dueOffsetHours: 28, // Critical SLA < 30h
     reasons: [],
     agentPlatform: "CrewAI",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -128,8 +129,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 7200, currency: "USD" },
-    createdAt: "2026-10-31T09:00:00Z",
-    sellerResponseDueDate: "2026-11-07T12:00:00Z",
+    createdOffsetHours: -51,
+    dueOffsetHours: 120,
     reasons: [],
     agentPlatform: "OpenAI Swarm",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
@@ -144,8 +145,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "INTENT_MISREAD",
     amount: { value: 8200, currency: "USD" },
-    createdAt: "2026-10-31T11:30:00Z",
-    sellerResponseDueDate: "2026-11-04T08:00:00Z",
+    createdOffsetHours: -49,
+    dueOffsetHours: 44, // Critical SLA < 48h
     reasons: ["SEMANTIC_MISMATCH"],
     agentPlatform: "AutoGPT",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -160,8 +161,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 5500, currency: "USD" },
-    createdAt: "2026-10-30T13:00:00Z",
-    sellerResponseDueDate: "2026-11-06T15:00:00Z",
+    createdOffsetHours: -71,
+    dueOffsetHours: 99,
     reasons: [],
     agentPlatform: "LangChain",
     buyerDisputeReason: "UNAUTHORISED",
@@ -176,8 +177,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 21000, currency: "USD" },
-    createdAt: "2026-10-30T15:20:00Z",
-    sellerResponseDueDate: "2026-11-03T18:00:00Z", // Critical SLA
+    createdOffsetHours: -69,
+    dueOffsetHours: 30, // Critical SLA < 48h
     reasons: ["BUDGET_EXCEEDED"],
     agentPlatform: "CrewAI",
     buyerDisputeReason: "INCORRECT_AMOUNT",
@@ -192,8 +193,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 7800, currency: "USD" },
-    createdAt: "2026-10-28T10:00:00Z",
-    sellerResponseDueDate: "2026-11-02T10:00:00Z",
+    createdOffsetHours: -122,
+    dueOffsetHours: -2,
     reasons: [],
     agentPlatform: "OpenAI Swarm",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -208,8 +209,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 11000, currency: "USD" },
-    createdAt: "2026-10-27T12:00:00Z",
-    sellerResponseDueDate: "2026-11-01T12:00:00Z",
+    createdOffsetHours: -144,
+    dueOffsetHours: -24,
     reasons: ["SKU_NOT_ALLOWED"],
     agentPlatform: "AutoGPT",
     buyerDisputeReason: "UNAUTHORISED",
@@ -224,8 +225,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 6800, currency: "USD" },
-    createdAt: "2026-10-31T09:30:00Z",
-    sellerResponseDueDate: "2026-11-04T16:00:00Z",
+    createdOffsetHours: -50,
+    dueOffsetHours: 52,
     reasons: [],
     agentPlatform: "LangChain",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
@@ -240,8 +241,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "standard",
     disputeClass: "NO_MANDATE",
     amount: { value: 3900, currency: "USD" },
-    createdAt: "2026-11-01T08:00:00Z",
-    sellerResponseDueDate: "2026-11-05T11:00:00Z",
+    createdOffsetHours: -28,
+    dueOffsetHours: 71,
     reasons: [],
     agentPlatform: "Direct Web",
     buyerDisputeReason: "UNAUTHORISED",
@@ -256,8 +257,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 9200, currency: "USD" },
-    createdAt: "2026-10-30T17:15:00Z",
-    sellerResponseDueDate: "2026-11-07T09:00:00Z",
+    createdOffsetHours: -43,
+    dueOffsetHours: 117,
     reasons: [],
     agentPlatform: "CrewAI",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -272,8 +273,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 16500, currency: "USD" },
-    createdAt: "2026-11-02T06:00:00Z",
-    sellerResponseDueDate: "2026-11-04T09:00:00Z",
+    createdOffsetHours: -6,
+    dueOffsetHours: 45, // Critical SLA < 48h
     reasons: ["ADDRESS_MISMATCH"],
     agentPlatform: "OpenAI Swarm",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
@@ -288,8 +289,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 4900, currency: "USD" },
-    createdAt: "2026-11-02T07:45:00Z",
-    sellerResponseDueDate: "2026-11-05T14:00:00Z",
+    createdOffsetHours: -4,
+    dueOffsetHours: 74,
     reasons: [],
     agentPlatform: "AutoGPT",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -304,8 +305,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 13500, currency: "USD" },
-    createdAt: "2026-10-29T11:00:00Z",
-    sellerResponseDueDate: "2026-11-08T10:00:00Z",
+    createdOffsetHours: -73,
+    dueOffsetHours: 142,
     reasons: [],
     agentPlatform: "LangChain",
     buyerDisputeReason: "UNAUTHORISED",
@@ -320,8 +321,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "INTENT_MISREAD",
     amount: { value: 8400, currency: "USD" },
-    createdAt: "2026-11-01T12:00:00Z",
-    sellerResponseDueDate: "2026-11-03T20:00:00Z", // Critical SLA
+    createdOffsetHours: -24,
+    dueOffsetHours: 32, // Critical SLA < 48h
     reasons: ["SEMANTIC_UNCERTAIN"],
     agentPlatform: "CrewAI",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -336,8 +337,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 5800, currency: "USD" },
-    createdAt: "2026-10-31T15:40:00Z",
-    sellerResponseDueDate: "2026-11-06T18:00:00Z",
+    createdOffsetHours: -44,
+    dueOffsetHours: 102,
     reasons: [],
     agentPlatform: "OpenAI Swarm",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
@@ -352,8 +353,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 7600, currency: "USD" },
-    createdAt: "2026-11-02T05:10:00Z",
-    sellerResponseDueDate: "2026-11-05T08:00:00Z",
+    createdOffsetHours: -7,
+    dueOffsetHours: 68,
     reasons: [],
     agentPlatform: "AutoGPT",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
@@ -368,8 +369,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "defend",
     disputeClass: "MANDATE_COMPLIANT",
     amount: { value: 8500, currency: "USD" },
-    createdAt: "2026-10-26T14:00:00Z",
-    sellerResponseDueDate: "2026-10-31T14:00:00Z",
+    createdOffsetHours: -166,
+    dueOffsetHours: -46,
     reasons: [],
     agentPlatform: "LangChain",
     buyerDisputeReason: "UNAUTHORISED",
@@ -384,8 +385,8 @@ export const SEED_DISPUTES: DisputeItem[] = [
     decision: "concede",
     disputeClass: "AGENT_OVERREACH",
     amount: { value: 17500, currency: "USD" },
-    createdAt: "2026-11-02T09:40:00Z",
-    sellerResponseDueDate: "2026-11-04T17:00:00Z",
+    createdOffsetHours: -2,
+    dueOffsetHours: 53,
     reasons: ["AMOUNT_EXCEEDS_MAX"],
     agentPlatform: "CrewAI",
     buyerDisputeReason: "INCORRECT_AMOUNT",
@@ -393,3 +394,27 @@ export const SEED_DISPUTES: DisputeItem[] = [
     evidenceDrafted: false,
   },
 ];
+
+/**
+ * Generates canonical demo disputes with due dates and creation times computed
+ * relative to the provided base time (or the current wall-clock time).
+ * This prevents static November due dates from prematurely showing "Expired".
+ */
+export function generateSeedDisputes(baseTimeInput?: string | Date): DisputeItem[] {
+  const baseMs = baseTimeInput ? new Date(baseTimeInput).getTime() : Date.now();
+  const hourMs = 60 * 60 * 1000;
+
+  return TEMPLATES.map((t) => {
+    const { createdOffsetHours, dueOffsetHours, ...rest } = t;
+    return {
+      ...rest,
+      createdAt: new Date(baseMs + createdOffsetHours * hourMs).toISOString(),
+      sellerResponseDueDate: new Date(baseMs + dueOffsetHours * hourMs).toISOString(),
+    };
+  });
+}
+
+/**
+ * Default canonical seed disputes computed relative to current time.
+ */
+export const SEED_DISPUTES: DisputeItem[] = generateSeedDisputes();

@@ -165,15 +165,38 @@ export function filterDisputes(
   });
 }
 
-/** Sorts disputes by response deadline (SLA), creation age, or amount. */
+export const PINNED_DISPUTE_IDS = ["PP-D-1001", "PP-D-1002"] as const;
+
+/** Sorts disputes by response deadline (SLA), creation age, or amount, keeping pinned demo disputes on top. */
 export function sortDisputes(
   disputes: DisputeItem[],
   sorting: DisputeSorting,
   _nowInput?: string | Date
 ): DisputeItem[] {
+  const pinnedRanks = new Map<string, number>([
+    ["PP-D-1001", 0],
+    ["PP-D-1002", 1],
+  ]);
+
   const result = [...disputes];
 
   result.sort((a, b) => {
+    const rankA = pinnedRanks.get(a.id);
+    const rankB = pinnedRanks.get(b.id);
+
+    // If both are pinned demo disputes, keep their relative pinned order
+    if (rankA !== undefined && rankB !== undefined) {
+      return rankA - rankB;
+    }
+    // Pinned dispute A always sorts before non-pinned dispute B
+    if (rankA !== undefined) {
+      return -1;
+    }
+    // Pinned dispute B always sorts before non-pinned dispute A
+    if (rankB !== undefined) {
+      return 1;
+    }
+
     let cmp = 0;
     if (sorting.field === "dueDate") {
       const timeA = new Date(a.sellerResponseDueDate).getTime();
