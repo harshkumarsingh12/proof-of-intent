@@ -8,13 +8,7 @@
 import { NotImplementedError } from "@poi/contracts";
 import type { Db } from "@poi/db";
 import type { MandateLedger } from "@poi/policy-engine";
-import {
-  InMemoryDisputeDataLoader,
-  InMemoryRecommendationStore,
-  runDisputeClassifier,
-  type DisputeDataLoader,
-  type Recommendation,
-} from "./classifier";
+import { runDisputeClassifier, type DisputeDataLoader, type Recommendation } from "./classifier";
 
 /** Job names agreed in the shared contracts (docs/specs/0003 §Jobs). */
 export const JOBS = {
@@ -29,38 +23,23 @@ export type { Recommendation };
 const OWNER = "hoursgotviral-dev";
 const SPEC = "docs/specs/0005-dispute-copilot.md";
 
-let defaultLoader: DisputeDataLoader = new InMemoryDisputeDataLoader();
-
-export function setDefaultDisputeLoader(loader: DisputeDataLoader): void {
-  defaultLoader = loader;
-}
-
-export function getDefaultDisputeLoader(): DisputeDataLoader {
-  return defaultLoader;
-}
-
-export const recommendationStore = new InMemoryRecommendationStore();
-
 export interface RecommendOptions {
-  loader?: DisputeDataLoader;
+  loader: DisputeDataLoader;
   now?: string;
   ledger?: MandateLedger;
   db?: Pick<Db, "appendAudit">;
 }
 
-export async function recommend(disputeId: string, options?: RecommendOptions): Promise<Recommendation> {
-  const loader = options?.loader ?? defaultLoader;
-  const dispute = await loader.loadDispute(disputeId);
+export async function recommend(disputeId: string, options: RecommendOptions): Promise<Recommendation> {
+  const dispute = await options.loader.loadDispute(disputeId);
   if (!dispute) {
     throw new Error(`Dispute not found: ${disputeId}`);
   }
 
-  const order = dispute.orderId ? await loader.loadOrder(dispute.orderId) : null;
+  const order = dispute.orderId ? await options.loader.loadOrder(dispute.orderId) : null;
   const rec = await runDisputeClassifier(dispute, order, options);
 
-  await recommendationStore.save(rec);
-
-  if (options?.db) {
+  if (options.db) {
     await options.db.appendAudit({
       actor: "worker:copilot",
       action: "dispute.classified",
@@ -72,11 +51,12 @@ export async function recommend(disputeId: string, options?: RecommendOptions): 
   return rec;
 }
 
-export async function buildEvidencePackage(_disputeId: string): Promise<{ pdf: Uint8Array; bundleJson: string }> {
+export async function buildEvidencePackage(
+  _disputeId: string,
+): Promise<{ pdf: Uint8Array; bundleJson: string }> {
   throw new NotImplementedError("evidence package", OWNER, SPEC);
 }
 
 export * from "./intake";
 export * from "./decision";
 export * from "./classifier";
-

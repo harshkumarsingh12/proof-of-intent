@@ -1,4 +1,4 @@
-import { classifyDispute, parseAiMode, semanticFit, type AiMode } from "@poi/ai";
+import { APPROVE_AT, parseAiMode, semanticFit, type AiMode } from "@poi/ai";
 import {
   DisputeClass,
   NotImplementedError,
@@ -9,7 +9,6 @@ import {
 } from "@poi/contracts";
 import { mandateHash } from "@poi/mandates";
 import { evaluate, type MandateLedger } from "@poi/policy-engine";
-
 
 export interface DisputeRecord {
   disputeId: string;
@@ -24,6 +23,7 @@ export interface OrderRecord {
   intent?: IntentMandate;
   cart?: CartMandate;
   capturedAt?: string;
+  /** Prior captures under this mandate, excluding this order: what checkout saw. */
   ledger?: MandateLedger;
   checkoutVerdict?: Verdict;
   j1Outcome?: {
@@ -53,22 +53,6 @@ export function parseCustomId(rawCustomId?: string): { mandateId: string; hashPr
   return { mandateId, hashPrefix };
 }
 
-export class InMemoryRecommendationStore {
-  private readonly recs = new Map<string, Recommendation>();
-
-  async save(rec: Recommendation): Promise<void> {
-    this.recs.set(rec.disputeId, rec);
-  }
-
-  async get(disputeId: string): Promise<Recommendation | null> {
-    return this.recs.get(disputeId) ?? null;
-  }
-
-  async list(): Promise<Recommendation[]> {
-    return Array.from(this.recs.values());
-  }
-}
-
 export class InMemoryDisputeDataLoader implements DisputeDataLoader {
   private readonly disputes = new Map<string, DisputeRecord>();
   private readonly orders = new Map<string, OrderRecord>();
@@ -85,116 +69,65 @@ export class InMemoryDisputeDataLoader implements DisputeDataLoader {
   async loadOrder(orderId: string): Promise<OrderRecord | null> {
     return this.orders.get(orderId) ?? null;
   }
-
-  setDispute(dispute: DisputeRecord): void {
-    this.disputes.set(dispute.disputeId, dispute);
-  }
-
-  setOrder(order: OrderRecord): void {
-    this.orders.set(order.orderId, order);
-  }
 }
 
+/**
+ * The deterministic tree from docs/specs/0005. The class never comes from a model: J2 only writes
+ * the explanation and evidence plan, so a dispute verdict can't contradict the checkout verdict.
+ */
 export async function runDisputeClassifier(
   dispute: DisputeRecord,
   order: OrderRecord | null,
-  options: {
-    now?: string;
-    mode?: AiMode;
-    ledger?: MandateLedger;
-  } = {},
+  options: { now?: string; mode?: AiMode; ledger?: MandateLedger } = {},
 ): Promise<Recommendation> {
-  const now = options.now ?? order?.capturedAt ?? new Date().toISOString();
-  const mode = options.mode ?? parseAiMode(process.env.AI_MODE);
-  const ledger = options.ledger ?? order?.ledger;
+  const result = (cls: DisputeClass, action: Recommendation["action"], reasons: ReasonCode[] = []) => ({
+    disputeId: dispute.disputeId,
+    class: cls,
+    action,
+    reasons,
+  });
 
-  // 1. Check custom_id pointer and mandate presence
+  // 1. No mandate on the order: standard PayPal path.
   const pointer = parseCustomId(order?.customId);
-  if (!order || !pointer || !order.intent || !order.cart) {
-    return {
-      disputeId: dispute.disputeId,
-      class: "NO_MANDATE",
-      action: "STANDARD_EVIDENCE",
-      reasons: [],
-    };
-  }
+  if (!order || !pointer || !order.intent || !order.cart) return result("NO_MANDATE", "STANDARD_EVIDENCE");
 
-  // 2. Verify custom_id pointer matches the intent mandate
+  // 2. The pointer on PayPal doesn't match our stored mandate. That's our record being inconsistent,
+  //    not the agent overreaching, so we can't defend with it: standard path, flagged.
   const expectedHash = mandateHash(order.intent);
   if (order.intent.mandate_id !== pointer.mandateId || pointer.hashPrefix !== expectedHash.slice(0, 16)) {
-    return {
-      disputeId: dispute.disputeId,
-      class: "AGENT_OVERREACH",
-      action: "ACCEPT_CLAIM",
-      reasons: ["MANDATE_MISMATCH"],
-    };
+    return result("NO_MANDATE", "STANDARD_EVIDENCE", ["MANDATE_MISMATCH"]);
   }
 
-  // 3. Replay hard rules
+  // 3. Replay hard rules at capture time, never at the wall clock.
+  const now = options.now ?? order.capturedAt;
+  if (!now)
+    throw new Error(`Order ${order.orderId} has a mandate but no capture time to replay the rules at`);
+  const ledger = options.ledger ?? order.ledger;
   const evalResult = evaluate({ intent: order.intent, cart: order.cart, now, ledger });
-  if (!evalResult.pass) {
-    return {
-      disputeId: dispute.disputeId,
-      class: "AGENT_OVERREACH",
-      action: "ACCEPT_CLAIM",
-      reasons: evalResult.reasons,
-    };
-  }
+  if (!evalResult.pass) return result("AGENT_OVERREACH", "ACCEPT_CLAIM", evalResult.reasons);
 
-  // 4. Replay J1 or load stored J1 outcome from checkout
-  const storedJ1Mismatch =
-    order.j1Outcome?.fit === "mismatch" ||
-    order.j1Outcome?.fit === "partial" ||
+  // 4. Semantic fit. A STEP_UP order only exists because the shopper approved this exact cart
+  //    (docs/specs/0003), so the semantic doubt was resolved by the shopper: defend.
+  if (order.checkoutVerdict?.outcome === "STEP_UP") return result("MANDATE_COMPLIANT", "PROVIDE_EVIDENCE");
+
+  const storedMisread =
+    (order.j1Outcome?.fit !== undefined && order.j1Outcome.fit !== "match") ||
     order.j1Outcome?.reasons?.includes("SEMANTIC_MISMATCH") ||
-    order.checkoutVerdict?.reasons?.includes("SEMANTIC_MISMATCH") ||
-    order.checkoutVerdict?.reasons?.includes("SEMANTIC_UNCERTAIN");
+    order.checkoutVerdict?.reasons?.some((r) => r === "SEMANTIC_MISMATCH" || r === "SEMANTIC_UNCERTAIN");
+  if (storedMisread) return result("INTENT_MISREAD", "ACCEPT_CLAIM", ["SEMANTIC_MISMATCH"]);
 
-  if (storedJ1Mismatch) {
-    return {
-      disputeId: dispute.disputeId,
-      class: "INTENT_MISREAD",
-      action: "ACCEPT_CLAIM",
-      reasons: ["SEMANTIC_MISMATCH"],
-    };
-  }
-
-  try {
-    const j1 = await semanticFit(order.intent.natural_language_description, order.cart, mode);
-    if (j1.fit === "mismatch" || j1.fit === "partial") {
-      return {
-        disputeId: dispute.disputeId,
-        class: "INTENT_MISREAD",
-        action: "ACCEPT_CLAIM",
-        reasons: ["SEMANTIC_MISMATCH"],
-      };
-    }
-  } catch (err) {
-    if (!(err instanceof NotImplementedError)) {
-      throw err;
-    }
-    // TODO: Replay J1 with the policy engine / semantic fit when J1 is implemented (spec: docs/specs/0006-ai-jobs.md, owner: @sumedhag28)
-  }
-
-  // 5. Try J2 classification job from @poi/ai if implemented
-  try {
-    const j2 = await classifyDispute({ dispute, order, intent: order.intent, cart: order.cart }, mode);
-    return {
-      disputeId: dispute.disputeId,
-      class: j2.class,
-      action: j2.recommended_action,
-      reasons: [],
-    };
-  } catch (err) {
-    // J2 in packages/ai is currently an unbuilt stub; fall back to deterministic classification tree
-    if (!(err instanceof NotImplementedError)) {
-      throw err;
+  if (!order.j1Outcome) {
+    try {
+      const mode = options.mode ?? parseAiMode(process.env.AI_MODE);
+      const j1 = await semanticFit(order.intent.natural_language_description, order.cart, mode);
+      if (j1.fit !== "match" || j1.confidence < APPROVE_AT) {
+        return result("INTENT_MISREAD", "ACCEPT_CLAIM", ["SEMANTIC_MISMATCH"]);
+      }
+    } catch (err) {
+      if (!(err instanceof NotImplementedError)) throw err;
+      // J1 is unbuilt (docs/specs/0006, @sumedhag28): the hard rules passed, so fall through to compliant.
     }
   }
 
-  return {
-    disputeId: dispute.disputeId,
-    class: "MANDATE_COMPLIANT",
-    action: "PROVIDE_EVIDENCE",
-    reasons: [],
-  };
+  return result("MANDATE_COMPLIANT", "PROVIDE_EVIDENCE");
 }
