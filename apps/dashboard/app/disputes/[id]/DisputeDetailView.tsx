@@ -94,36 +94,59 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
             <span style={{ fontSize: 16 }}>📜</span>
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f0f6fc" }}>Shopper Intent Mandate</h2>
           </div>
-          <span style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>ID: {dispute.mandateId}</span>
-        </div>
-
-        <blockquote
-          style={{
-            margin: 0,
-            padding: "14px 18px",
-            background: "#0d1117",
-            borderLeft: "4px solid #58a6ff",
-            borderRadius: "0 6px 6px 0",
-            fontSize: 15,
-            lineHeight: 1.5,
-            color: "#e6edf3",
-            fontStyle: "italic",
-          }}
-        >
-          &ldquo;{dispute.shopperIntentText}&rdquo;
-        </blockquote>
-
-        <div style={{ display: "flex", gap: 20, marginTop: 12, fontSize: 12, color: "#8b949e", flexWrap: "wrap" }}>
-          <span>
-            Issuer: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateIssuer}</span>
-          </span>
-          <span>
-            Nonce: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateNonce}</span>
-          </span>
-          <span>
-            Expiry: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateExpiry}</span>
+          <span style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>
+            {dispute.mandateId ? `ID: ${dispute.mandateId}` : "No Mandate"}
           </span>
         </div>
+
+        {dispute.shopperIntentText ? (
+          <blockquote
+            style={{
+              margin: 0,
+              padding: "14px 18px",
+              background: "#0d1117",
+              borderLeft: "4px solid #58a6ff",
+              borderRadius: "0 6px 6px 0",
+              fontSize: 15,
+              lineHeight: 1.5,
+              color: "#e6edf3",
+              fontStyle: "italic",
+            }}
+          >
+            &ldquo;{dispute.shopperIntentText}&rdquo;
+          </blockquote>
+        ) : (
+          <div
+            style={{
+              padding: "14px 18px",
+              background: "#0d1117",
+              borderRadius: 6,
+              color: "#8b949e",
+              fontStyle: "italic",
+              fontSize: 14,
+            }}
+          >
+            No verifiable shopper mandate recorded at checkout for this order.
+          </div>
+        )}
+
+        {dispute.mandateId ? (
+          <div style={{ display: "flex", gap: 20, marginTop: 12, fontSize: 12, color: "#8b949e", flexWrap: "wrap" }}>
+            <span>
+              Issuer: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateIssuer || "None"}</span>
+            </span>
+            <span>
+              Nonce: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateNonce || "None"}</span>
+            </span>
+            <span>
+              Expiry: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateExpiry || "None"}</span>
+            </span>
+          </div>
+        ) : (
+          <div style={{ marginTop: 10, fontSize: 12, color: "#8b949e" }}>
+            Order processed without customer-signed intent parameters. Standard seller defense evidence required.
+          </div>
+        )}
       </div>
 
       {/* Mandate Diff Widget: Cart vs Mandate Side by Side */}
@@ -238,47 +261,55 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
             </tr>
           </thead>
           <tbody>
-            {displayedChecks.map((check) => {
-              const isFail = check.status === "FAIL";
-              return (
-                <tr
-                  key={check.id}
-                  style={{
-                    borderBottom: "1px solid #21262d",
-                    background: isFail ? "rgba(248, 81, 73, 0.08)" : "transparent",
-                  }}
-                >
-                  <td style={{ ...tdStyle, fontWeight: 600, color: isFail ? "#f87171" : "#f0f6fc" }}>{check.name}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", color: "#c9d1d9" }}>{check.mandateRule}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", color: isFail ? "#f85149" : "#c9d1d9" }}>{check.cartActual}</td>
-                  <td style={tdStyle}>
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 4,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: isFail ? "rgba(248, 81, 73, 0.2)" : "rgba(16, 185, 129, 0.2)",
-                        color: isFail ? "#f85149" : "#34d399",
-                        border: isFail ? "1px solid rgba(248, 81, 73, 0.4)" : "1px solid rgba(16, 185, 129, 0.4)",
-                      }}
-                    >
-                      {check.status === "FAIL" ? "❌ FAIL" : "✅ PASS"}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    {check.reasonCode ? (
-                      <span style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
-                        {check.reasonCode}
+            {displayedChecks.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#8b949e", padding: 24 }}>
+                  No automated mandate constraint checks available for this transaction.
+                </td>
+              </tr>
+            ) : (
+              displayedChecks.map((check) => {
+                const isFail = check.status === "FAIL";
+                return (
+                  <tr
+                    key={check.id}
+                    style={{
+                      borderBottom: "1px solid #21262d",
+                      background: isFail ? "rgba(248, 81, 73, 0.08)" : "transparent",
+                    }}
+                  >
+                    <td style={{ ...tdStyle, fontWeight: 600, color: isFail ? "#f87171" : "#f0f6fc" }}>{check.name}</td>
+                    <td style={{ ...tdStyle, fontFamily: "monospace", color: "#c9d1d9" }}>{check.mandateRule}</td>
+                    <td style={{ ...tdStyle, fontFamily: "monospace", color: isFail ? "#f85149" : "#c9d1d9" }}>{check.cartActual}</td>
+                    <td style={tdStyle}>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: isFail ? "rgba(248, 81, 73, 0.2)" : "rgba(16, 185, 129, 0.2)",
+                          color: isFail ? "#f85149" : "#34d399",
+                          border: isFail ? "1px solid rgba(248, 81, 73, 0.4)" : "1px solid rgba(16, 185, 129, 0.4)",
+                        }}
+                      >
+                        {check.status === "FAIL" ? "❌ FAIL" : "✅ PASS"}
                       </span>
-                    ) : (
-                      <span style={{ color: "#484f58" }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ ...tdStyle, color: "#8b949e", fontSize: 12 }}>{check.explanation}</td>
-                </tr>
-              );
-            })}
+                    </td>
+                    <td style={tdStyle}>
+                      {check.reasonCode ? (
+                        <span style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
+                          {check.reasonCode}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#484f58" }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, color: "#8b949e", fontSize: 12 }}>{check.explanation}</td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
@@ -540,7 +571,9 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
 
               <div style={{ marginBottom: 14 }}>
                 <div style={{ color: "#8b949e" }}>[3] POLICY ENGINE EVALUATION</div>
-                <div>Checkout Verdict: APPROVE (all hard and semantic rules satisfied)</div>
+                <div>
+                  Checkout Verdict: {dispute.checkoutVerdict ?? (dispute.decision === "defend" ? "APPROVE" : "REJECT")}
+                </div>
                 <div>Dispute Classification: {dispute.disputeClass}</div>
                 <div>Hash: {dispute.evidenceDraftInfo?.attestationHash}</div>
                 <div>custom_id pointer: {dispute.evidenceDraftInfo?.customId}</div>

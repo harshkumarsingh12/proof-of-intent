@@ -1,5 +1,5 @@
 import { greyJacketIntent } from "@poi/contracts/fixtures";
-import type { DisputeDetail } from "./dispute-types";
+import type { ConstraintCheck, DisputeDetail } from "./dispute-types";
 import { SEED_DISPUTES } from "./seed-disputes";
 
 /**
@@ -13,6 +13,7 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
   if (base.id === "PP-D-1001") {
     return {
       ...base,
+      checkoutVerdict: "APPROVE",
       shopperIntentText: greyJacketIntent.natural_language_description,
       mandateId: greyJacketIntent.mandate_id,
       mandateNonce: greyJacketIntent.nonce,
@@ -114,7 +115,7 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
           },
           {
             heading: "3. Cryptographic Verification & Hashes",
-            body: "Attestation hash matches PayPal custom_id pointer (poi:0192f3a0...:e3b0c442). All Ed25519 signatures verified.",
+            body: "Attestation hash matches PayPal custom_id pointer (poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831). All ES256 signatures verified against the key registry.",
           },
           {
             heading: "4. Fulfillment & Tracking",
@@ -123,8 +124,8 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
         ],
         buyerMessage:
           "Your order for the Stride Running Jacket was fulfilled according to your signed mandate (max $80, grey running jacket). Delivery was confirmed by carrier tracking.",
-        attestationHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        customId: "poi:0192f3a0-0000-7000-8000-000000000001:e3b0c44298fc1c14",
+        attestationHash: "82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d",
+        customId: "poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831",
         pdfFilename: "evidence-PP-D-1001.pdf",
         generatedAt: "2026-11-02T08:35:00Z",
       },
@@ -135,6 +136,7 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
   if (base.id === "PP-D-1002") {
     return {
       ...base,
+      checkoutVerdict: "REJECT",
       shopperIntentText: greyJacketIntent.natural_language_description,
       mandateId: greyJacketIntent.mandate_id,
       mandateNonce: greyJacketIntent.nonce,
@@ -223,35 +225,151 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
     };
   }
 
-  // Fallback for remaining disputes
-  const hasViolations = base.decision === "concede";
-  const checks = [
-    {
+  // Special case: NO_MANDATE disputes (e.g. PP-D-1015) have no mandate, no passing checks, and STANDARD_EVIDENCE
+  if (base.disputeClass === "NO_MANDATE" || base.id === "PP-D-1015") {
+    return {
+      ...base,
+      shopperIntentText: undefined,
+      mandateId: undefined,
+      mandateNonce: undefined,
+      mandateIssuer: undefined,
+      mandateCreatedAt: undefined,
+      mandateExpiry: undefined,
+      checkoutVerdict: "NONE",
+      cartLines: [
+        {
+          sku: "ITEM-GENERIC-1",
+          title: "Standard Merchandise",
+          unitPrice: base.amount,
+          quantity: 1,
+        },
+      ],
+      cartTotal: base.amount,
+      cartMerchantName: "Trailhead Outfitters",
+      constraints: {
+        amountMax: { value: 0, currency: "USD" },
+        merchantAllowlist: [],
+        attributes: {},
+        quantityMax: { perLine: 1, perOrder: 1 },
+      },
+      constraintChecks: [], // No passing checks on unmandated order
+      classificationInfo: {
+        disputeClass: "NO_MANDATE",
+        confidence: 0.99,
+        recommendedAction: "STANDARD_EVIDENCE",
+        reasons: [
+          {
+            text: "No verifiable shopper mandate recorded at checkout for this order.",
+            cites: ["mandates.missing"],
+          },
+        ],
+        evidencePlan: ["Compile merchant standard evidence (receipt, proof of delivery)"],
+      },
+      evidenceDraftInfo: undefined,
+    };
+  }
+
+  // Fallback for remaining disputes: generate unique mandate ID and honest constraint checks
+  const suffix = base.id.replace(/^PP-D-/, "").padStart(12, "0");
+  const disputeMandateId = `0192f3a0-0000-7000-8000-${suffix}`;
+  const isIntentMisread = base.disputeClass === "INTENT_MISREAD";
+  const isAgentOverreach = base.disputeClass === "AGENT_OVERREACH";
+
+  const checks: ConstraintCheck[] = [];
+
+  if (isIntentMisread) {
+    // Intent misread: Budget passes honest evaluation; natural language interpretation failed
+    checks.push({
       id: "rule-amount",
       name: "Maximum Budget",
-      mandateRule: `≤ $${((base.amount.value + (hasViolations ? -2000 : 1000)) / 100).toFixed(2)}`,
+      mandateRule: `≤ $${((base.amount.value + 1000) / 100).toFixed(2)}`,
       cartActual: `$${(base.amount.value / 100).toFixed(2)}`,
-      status: (hasViolations ? "FAIL" : "PASS") as "PASS" | "FAIL",
-      reasonCode: hasViolations ? base.reasons[0] ?? "AMOUNT_EXCEEDS_MAX" : undefined,
-      explanation: hasViolations
-        ? "Cart amount exceeded the specified constraint limit."
-        : "Cart amount complies with the specified mandate limit.",
-    },
-    {
+      status: "PASS",
+      explanation: "Cart amount complies with authorized budget ceiling.",
+    });
+    checks.push({
+      id: "rule-intent-interpretation",
+      name: "Shopper Intent Semantic Match",
+      mandateRule: "Natural language query match",
+      cartActual: "Purchased item ambiguous or divergent",
+      status: "FAIL",
+      reasonCode: base.reasons[0] ?? "SEMANTIC_UNCERTAIN",
+      explanation: "Purchased item failed semantic verification against natural language shopper description.",
+    });
+    checks.push({
       id: "rule-merchant",
       name: "Merchant Allowlist",
       mandateRule: "Approved merchant only",
       cartActual: "Trailhead Outfitters",
-      status: "PASS" as const,
+      status: "PASS",
       explanation: "Merchant is allowlisted.",
-    },
-  ];
+    });
+  } else if (isAgentOverreach) {
+    const hasAmountViolation = base.reasons.includes("AMOUNT_EXCEEDS_MAX");
+    const hasAddressViolation = base.reasons.includes("ADDRESS_MISMATCH");
+
+    checks.push({
+      id: "rule-amount",
+      name: "Maximum Budget",
+      mandateRule: `≤ $${((base.amount.value + (hasAmountViolation ? -2000 : 1000)) / 100).toFixed(2)}`,
+      cartActual: `$${(base.amount.value / 100).toFixed(2)}`,
+      status: hasAmountViolation ? "FAIL" : "PASS",
+      reasonCode: hasAmountViolation ? "AMOUNT_EXCEEDS_MAX" : undefined,
+      explanation: hasAmountViolation
+        ? "Cart amount exceeded the specified constraint limit."
+        : "Cart amount complies with the specified mandate limit.",
+    });
+
+    if (hasAddressViolation) {
+      checks.push({
+        id: "rule-address",
+        name: "Shipping Address Allowlist",
+        mandateRule: "Approved shipping address hash",
+        cartActual: "Unverified alternate shipping destination",
+        status: "FAIL",
+        reasonCode: "ADDRESS_MISMATCH",
+        explanation: "Shipping destination deviated from mandate shipping address constraint.",
+      });
+    }
+
+    checks.push({
+      id: "rule-merchant",
+      name: "Merchant Allowlist",
+      mandateRule: "Approved merchant only",
+      cartActual: "Trailhead Outfitters",
+      status: "PASS",
+      explanation: "Merchant is allowlisted.",
+    });
+  } else {
+    // Compliant / defend disputes
+    checks.push({
+      id: "rule-amount",
+      name: "Maximum Budget",
+      mandateRule: `≤ $${((base.amount.value + 1000) / 100).toFixed(2)}`,
+      cartActual: `$${(base.amount.value / 100).toFixed(2)}`,
+      status: "PASS",
+      explanation: "Cart amount complies with the specified mandate limit.",
+    });
+    checks.push({
+      id: "rule-merchant",
+      name: "Merchant Allowlist",
+      mandateRule: "Approved merchant only",
+      cartActual: "Trailhead Outfitters",
+      status: "PASS",
+      explanation: "Merchant is allowlisted.",
+    });
+  }
+
+  // Deterministic 64-char hex hash from unique mandate ID (never empty string)
+  const pseudoHash = `${disputeMandateId.replace(/-/g, "")}abcdef0123456789fedcba9876543210`.slice(0, 64);
+  const checkoutVerdict = base.decision === "defend" ? "APPROVE" : "REJECT";
 
   return {
     ...base,
+    checkoutVerdict,
     shopperIntentText: `Automated shopper mandate for order ${base.orderId}. Handled by ${base.agentPlatform}.`,
-    mandateId: "0192f3a0-0000-7000-8000-000000000099",
-    mandateNonce: "n-canonical-fixture-nonce",
+    mandateId: disputeMandateId,
+    mandateNonce: `n-${suffix}`,
     mandateIssuer: "shopper-key-demo",
     mandateCreatedAt: base.createdAt,
     mandateExpiry: "2026-11-15T00:00:00Z",
@@ -266,7 +384,7 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
     cartTotal: base.amount,
     cartMerchantName: "Trailhead Outfitters",
     constraints: {
-      amountMax: { value: base.amount.value + (hasViolations ? -2000 : 1000), currency: "USD" },
+      amountMax: { value: base.amount.value + (base.decision === "concede" ? -2000 : 1000), currency: "USD" },
       merchantAllowlist: ["merchant-trailhead"],
       attributes: {},
       quantityMax: { perLine: 1, perOrder: 1 },
@@ -276,7 +394,7 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
       disputeClass: base.disputeClass,
       confidence: 0.95,
       recommendedAction: base.decision === "defend" ? "PROVIDE_EVIDENCE" : "ACCEPT_CLAIM",
-      reasons: base.reasons.map((r) => ({ text: `Violation code detected: ${r}`, cites: [r] })),
+      reasons: base.reasons.map((r) => ({ text: `Reason code evaluated: ${r}`, cites: [r] })),
       evidencePlan: base.decision === "defend" ? ["Compile signed mandate JWS"] : ["Accept claim"],
     },
     evidenceDraftInfo:
@@ -288,10 +406,14 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
                 heading: "1. Mandate & Checkout Verification",
                 body: `Order ${base.orderId} satisfied intent mandate rules verified at checkout.`,
               },
+              {
+                heading: "2. Cryptographic Attestation",
+                body: `Attestation matches PayPal custom_id pointer (poi:${disputeMandateId}:${pseudoHash.slice(0, 16)}). All ES256 signatures verified against the key registry.`,
+              },
             ],
             buyerMessage: "Order was fulfilled in accordance with your signed mandate.",
-            attestationHash: "a1b2c3d4e5f60000111122223333444455556666777788889999aaaabbbbcccc",
-            customId: `poi:0192f3a0-0000-7000-8000-000000000099:${base.id.toLowerCase()}`,
+            attestationHash: pseudoHash,
+            customId: `poi:${disputeMandateId}:${pseudoHash.slice(0, 16)}`,
             pdfFilename: `evidence-${base.id}.pdf`,
             generatedAt: base.createdAt,
           }

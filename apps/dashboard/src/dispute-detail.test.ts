@@ -39,11 +39,22 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     expect(detail!.classificationInfo.recommendedAction).toBe("PROVIDE_EVIDENCE");
 
     // Evidence package draft
+    expect(detail!.checkoutVerdict).toBe("APPROVE");
     expect(detail!.evidenceDraftInfo).toBeDefined();
     expect(detail!.evidenceDraftInfo?.coverNote.length).toBeGreaterThan(20);
     expect(detail!.evidenceDraftInfo?.attestationSections.length).toBeGreaterThan(2);
-    expect(detail!.evidenceDraftInfo?.customId).toContain("poi:0192f3a0-0000-7000-8000-000000000001");
+    expect(detail!.evidenceDraftInfo?.attestationHash).toBe(
+      "82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d"
+    );
+    expect(detail!.evidenceDraftInfo?.customId).toBe(
+      "poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831"
+    );
     expect(detail!.evidenceDraftInfo?.pdfFilename).toBe("evidence-PP-D-1001.pdf");
+    const cryptoSection = detail!.evidenceDraftInfo?.attestationSections.find((s) =>
+      s.heading.includes("Cryptographic")
+    );
+    expect(cryptoSection?.body).toContain("ES256");
+    expect(cryptoSection?.body).not.toContain("Ed25519");
   });
 
   it("loads overreaching dispute PP-D-1002 with failing rules highlighted", () => {
@@ -75,6 +86,42 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     expect(detail!.classificationInfo.disputeClass).toBe("AGENT_OVERREACH");
     expect(detail!.classificationInfo.recommendedAction).toBe("ACCEPT_CLAIM");
     expect(detail!.evidenceDraftInfo).toBeUndefined();
+  });
+
+  it("handles NO_MANDATE dispute PP-D-1015 honestly with no mandate, no passing checks, and STANDARD_EVIDENCE", () => {
+    const detail = getDisputeDetail("PP-D-1015");
+    expect(detail).toBeDefined();
+    expect(detail!.id).toBe("PP-D-1015");
+    expect(detail!.disputeClass).toBe("NO_MANDATE");
+    expect(detail!.mandateId).toBeUndefined();
+    expect(detail!.shopperIntentText).toBeUndefined();
+    expect(detail!.constraintChecks).toHaveLength(0); // No passing checks
+    expect(detail!.classificationInfo.recommendedAction).toBe("STANDARD_EVIDENCE");
+    expect(detail!.evidenceDraftInfo).toBeUndefined();
+  });
+
+  it("does not fabricate Maximum Budget FAIL on INTENT_MISREAD disputes", () => {
+    const detail = getDisputeDetail("PP-D-1009");
+    expect(detail).toBeDefined();
+    expect(detail!.disputeClass).toBe("INTENT_MISREAD");
+
+    const budgetRule = detail!.constraintChecks.find((c) => c.id === "rule-amount");
+    expect(budgetRule).toBeDefined();
+    expect(budgetRule?.status).toBe("PASS"); // Budget check PASSES
+
+    const intentRule = detail!.constraintChecks.find((c) => c.id === "rule-intent-interpretation");
+    expect(intentRule).toBeDefined();
+    expect(intentRule?.status).toBe("FAIL");
+    expect(intentRule?.reasonCode).toBe("SEMANTIC_MISMATCH");
+  });
+
+  it("assigns distinct mandate IDs to different disputes rather than a shared id", () => {
+    const d3 = getDisputeDetail("PP-D-1003");
+    const d4 = getDisputeDetail("PP-D-1004");
+    expect(d3?.mandateId).toBeDefined();
+    expect(d4?.mandateId).toBeDefined();
+    expect(d3?.mandateId).not.toBe(d4?.mandateId);
+    expect(d3?.mandateId).not.toContain("000000000099");
   });
 
   it("fetches dispute detail from API and falls back gracefully", async () => {

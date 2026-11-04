@@ -71,12 +71,13 @@ export interface EvidenceDraftInfo {
 }
 
 export interface DisputeDetail extends DisputeItem {
-  shopperIntentText: string;
-  mandateId: string;
-  mandateNonce: string;
-  mandateIssuer: string;
-  mandateCreatedAt: string;
-  mandateExpiry: string;
+  shopperIntentText?: string;
+  mandateId?: string;
+  mandateNonce?: string;
+  mandateIssuer?: string;
+  mandateCreatedAt?: string;
+  mandateExpiry?: string;
+  checkoutVerdict?: "APPROVE" | "REJECT" | "STEP_UP" | "NONE" | string;
   cartLines: Array<{
     sku: string;
     title: string;
