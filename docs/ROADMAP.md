@@ -12,7 +12,7 @@ of every `ci` run.
 | Team server: Docker, Compose, Postgres up | Harsh | Pending |
 | Public HTTPS and webhook endpoint (D6, D7) | Harsh | Pending |
 | PayPal sandbox app and accounts (incl. judge accounts) | Harsh | Pending |
-| `PAYPAL_MODE=mock` | Harsh | Pending |
+| `PAYPAL_MODE=mock` | Harsh | ✅ Done |
 | All four registered on Devpost; Representative named | Sumedha | Pending |
 | AG Studio trial key and watermark check | Sikruti | Pending |
 | LLM provider chosen (D1) | Sumedha | Pending |
@@ -24,7 +24,7 @@ of every `ci` run.
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Orders create/authorize/capture/void in sandbox | Harsh | Pending |
+| Orders create/authorize/capture/void in sandbox | Harsh | ✅ Done (authorize after a real approval: integration day) |
 | Vault v3 spike | Harsh | Pending |
 | DB schema, migrations, nonce table | Harsh | Pending |
 | Checkout route end to end | Harsh + Sristee | Pending |

@@ -1,0 +1,63 @@
+{
+  "status": 201,
+  "body": {
+    "id": "51K42838UJ5249456",
+    "intent": "AUTHORIZE",
+    "status": "CREATED",
+    "purchase_units": [
+      {
+        "reference_id": "ord_fixture_mw2fszq3_a",
+        "amount": {
+          "currency_code": "USD",
+          "value": "74.00",
+          "breakdown": {
+            "item_total": {
+              "currency_code": "USD",
+              "value": "74.00"
+            }
+          }
+        },
+        "payee": {
+          "email_address": "redacted@example.com",
+          "merchant_id": "REDACTEDID000"
+        },
+        "custom_id": "poi:0192f3a0-0000-7000-8000-000000000001:0123456789abcdef",
+        "invoice_id": "ord_fixture_mw2fszq3_a",
+        "items": [
+          {
+            "name": "Stride Running Jacket",
+            "unit_amount": {
+              "currency_code": "USD",
+              "value": "74.00"
+            },
+            "quantity": "1",
+            "sku": "JKT-GRY-M"
+          }
+        ]
+      }
+    ],
+    "create_time": "2026-11-04T18:15:26Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/51K42838UJ5249456",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://www.sandbox.paypal.com/checkoutnow?token=51K42838UJ5249456",
+        "rel": "approve",
+        "method": "GET"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/51K42838UJ5249456",
+        "rel": "update",
+        "method": "PATCH"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/51K42838UJ5249456/authorize",
+        "rel": "authorize",
+        "method": "POST"
+      }
+    ]
+  }
+}
