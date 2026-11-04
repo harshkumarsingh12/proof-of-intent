@@ -108,11 +108,23 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect((await db.auditTrail("ord_2")).length).toBe(2);
   });
 
-  test("webhook redelivery is a no-op at the schema level", async () => {
-    const insert =
-      "insert into webhook_events (event_id, event_type, payload) values ('WH-1', 'X', '{}') on conflict do nothing";
-    expect((await raw.query(insert)).rowCount).toBe(1);
-    expect((await raw.query(insert)).rowCount).toBe(0);
+  test("a webhook event is stored once; redelivery returns false and changes nothing", async () => {
+    const event = {
+      eventId: "WH-1",
+      eventType: "PAYMENT.CAPTURE.COMPLETED",
+      resourceId: "CAP-1",
+      payload: { id: "WH-1", n: 1 },
+    };
+    expect(await db.recordWebhookEvent(event)).toBe(true);
+    expect(await db.recordWebhookEvent({ ...event, payload: { id: "WH-1", n: 2 } })).toBe(false);
+    const rows = (await raw.query("select * from webhook_events where event_id = 'WH-1'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      event_type: "PAYMENT.CAPTURE.COMPLETED",
+      resource_id: "CAP-1",
+      payload: { n: 1 },
+      processed_at: null,
+    });
   });
 
   test("the schema refuses malformed hashes and oversized custom_id", async () => {

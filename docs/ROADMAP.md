@@ -28,7 +28,7 @@ of every `ci` run.
 | Vault v3 spike | Harsh | Pending |
 | DB schema, migrations, nonce table | Harsh | ✅ Done |
 | Checkout route end to end | Harsh + Sristee | Pending |
-| Webhook receiver with verification | Harsh | Pending |
+| Webhook receiver with verification | Harsh | Built; live sandbox delivery check pending a public URL |
 | Remaining hard rules (budget, recurrence, address, attributes, SKU) | Sristee | Pending |
 | Key registry with retirement | Sristee | Pending |
 | Buyer app: intent form, browser key, signing, PayPal button | Sristee | Pending |

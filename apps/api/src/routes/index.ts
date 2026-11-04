@@ -18,7 +18,6 @@ const routes: [Method, string, string][] = [
   ["GET", "/disputes/:id/recommendation", "hoursgotviral-dev"],
   ["POST", "/disputes/:id/actions/:action", "hoursgotviral-dev"],
   ["GET", "/analytics/:report", "hoursgotviral-dev"],
-  ["POST", "/webhooks/paypal", "harshkumarsingh12"],
   ["POST", "/ai/studio", "sumedhag28"],
 ];
 
