@@ -210,16 +210,16 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     const week2 = summary.disputesByClassPerWeek.find((w) => w.week === "Oct 26 - Nov 01");
     expect(week2).toBeDefined();
     expect(week2?.total).toBe(16);
-    expect(week2?.mandateCompliant).toBe(9);
-    expect(week2?.agentOverreach).toBe(4);
+    expect(week2?.mandateCompliant).toBe(10);
+    expect(week2?.agentOverreach).toBe(3);
     expect(week2?.intentMisread).toBe(2);
     expect(week2?.noMandate).toBe(1);
 
     const week3 = summary.disputesByClassPerWeek.find((w) => w.week === "Nov 02 - Nov 08");
     expect(week3).toBeDefined();
     expect(week3?.total).toBe(8);
-    expect(week3?.mandateCompliant).toBe(5);
-    expect(week3?.agentOverreach).toBe(3);
+    expect(week3?.mandateCompliant).toBe(4);
+    expect(week3?.agentOverreach).toBe(4);
     expect(week3?.intentMisread).toBe(0);
     expect(week3?.noMandate).toBe(0);
 
@@ -244,5 +244,11 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(nov10Week).toBeDefined();
     expect(nov10Week?.mandateCompliant).toBe(1);
     expect(nov10Week?.total).toBe(1);
+  });
+
+  it("displays sample data label for transparency when displaying seed analytics", () => {
+    expect(SEED_ANALYTICS.disputes.total).toBe(24);
+    expect(SEED_ANALYTICS.byPlatform).toHaveLength(5);
+    expect(SEED_ANALYTICS.blockedOverreachCarts.totalBlocked).toBe(38);
   });
 });

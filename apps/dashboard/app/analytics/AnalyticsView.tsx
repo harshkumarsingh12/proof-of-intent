@@ -47,6 +47,43 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Sample Data Banner */}
+      <div
+        data-testid="sample-data-banner"
+        style={{
+          background: "rgba(245, 158, 11, 0.1)",
+          border: "1px solid rgba(245, 158, 11, 0.3)",
+          borderRadius: 8,
+          padding: "10px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          color: "#fbbf24",
+          fontSize: 13,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>ℹ️</span>
+          <span>
+            <strong>Sample Data:</strong> Showing seeded metrics across 300 checkout orders and 24 dispute scenarios per spec 0007.
+          </span>
+        </div>
+        <span
+          data-testid="sample-data-label"
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            background: "rgba(245, 158, 11, 0.2)",
+            padding: "2px 8px",
+            borderRadius: 4,
+            border: "1px solid rgba(245, 158, 11, 0.4)",
+          }}
+        >
+          Sample Data
+        </span>
+      </div>
+
       {/* Overview Cards: Defended vs Conceded, Amount Protected, Blocked Overreach Carts */}
       <div
         style={{

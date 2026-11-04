@@ -60,7 +60,24 @@ export default async function AnalyticsPage() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span
+            data-testid="sample-data-badge"
+            style={{
+              padding: "4px 10px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              background: "rgba(245, 158, 11, 0.15)",
+              border: "1px solid #f59e0b",
+              color: "#fbbf24",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span>⚠️</span> Sample Data
+          </span>
           <span
             style={{
               padding: "4px 10px",
