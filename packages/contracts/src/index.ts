@@ -132,6 +132,27 @@ export const Verdict = z.object({
 });
 export type Verdict = z.infer<typeof Verdict>;
 
+/**
+ * POST /checkout (docs/specs/0003). The cart is the agent's proposal, unsigned: the merchant signs it as the
+ * Cart Mandate only after it passes. The Payment Mandate commits to it by hash.
+ */
+export const CheckoutRequest = z.object({
+  intent_jws: z.string().min(1),
+  payment_mandate_jws: z.string().min(1),
+  cart: z.unknown(),
+});
+export type CheckoutRequest = z.infer<typeof CheckoutRequest>;
+
+export const CheckoutResponse = z.object({
+  verdict: Verdict,
+  order_id: z.string().optional(),
+  cart_mandate_jws: z.string().optional(),
+  paypal_order_id: z.string().optional(),
+  /** Human present: where the shopper approves with PayPal. */
+  approval_url: z.string().url().optional(),
+});
+export type CheckoutResponse = z.infer<typeof CheckoutResponse>;
+
 export const DisputeClass = z.enum(["MANDATE_COMPLIANT", "AGENT_OVERREACH", "INTENT_MISREAD", "NO_MANDATE"]);
 export type DisputeClass = z.infer<typeof DisputeClass>;
 

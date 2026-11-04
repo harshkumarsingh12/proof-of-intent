@@ -1,22 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
-import type { AuditEntry, Db, WebhookEventRecord } from "@poi/db";
 import { createMockClient, MOCK_WEBHOOK_SIGNATURE, type PayPalClient } from "@poi/paypal";
 import { buildApp } from "./app";
-
-/** In-memory Db with the same once-only semantics as Postgres' primary key. */
-function memoryDb() {
-  const events = new Map<string, WebhookEventRecord>();
-  const audit: AuditEntry[] = [];
-  const db: Db = {
-    claimNonce: async () => true,
-    appendAudit: async (e) => void audit.push(e),
-    auditTrail: async () => [],
-    recordWebhookEvent: async (e) => (events.has(e.eventId) ? false : (events.set(e.eventId, e), true)),
-    migrate: async () => [],
-    close: async () => {},
-  };
-  return { db, events, audit };
-}
+import { memoryDb } from "./test-helpers";
 
 const event = {
   id: "WH-58D329510W468432D-8HN650336L201105X",
@@ -139,8 +124,10 @@ describe("POST /webhooks/paypal", () => {
     const res = await buildApp({ paypal: createMockClient() }).inject({
       method: "POST",
       url: "/checkout",
-      payload: { hello: "world" },
+      payload: { intent_jws: "x", payment_mandate_jws: "y", cart: {} },
     });
-    expect(res.statusCode).toBe(501); // the stub, not a parser error
+    // Parsed as an object, it passes request validation and stops at "no database" (503).
+    // Had the webhook's raw-string parser leaked here, the body would be a string: 400.
+    expect(res.statusCode).toBe(503);
   });
 });

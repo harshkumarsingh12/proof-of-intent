@@ -27,7 +27,7 @@ of every `ci` run.
 | Orders create/authorize/capture/void in sandbox | Harsh | ✅ Done (authorize after a real approval: integration day) |
 | Vault v3 spike | Harsh | Pending |
 | DB schema, migrations, nonce table | Harsh | ✅ Done |
-| Checkout route end to end | Harsh + Sristee | Pending |
+| Checkout route end to end | Harsh + Sristee | Stage 1 ✅ Done; stage 2 (approve → capture/void) next |
 | Webhook receiver with verification | Harsh | Built; live sandbox delivery check pending a public URL |
 | Remaining hard rules (budget, recurrence, address, attributes, SKU) | Sristee | Pending |
 | Key registry with retirement | Sristee | Pending |
