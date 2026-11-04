@@ -108,8 +108,8 @@ export function computeAnalyticsSummary(
   const actualProtectedCents = resolvedWins.reduce((sum, d) => sum + d.amount.value, 0);
   const actualConcededCents = resolvedLosses.reduce((sum, d) => sum + d.amount.value, 0);
 
-  // Platform breakdown across platforms from seed data
-  const platforms = ["AutoGPT", "LangChain", "CrewAI", "OpenAI Swarm"];
+  // Platform breakdown across five platforms from seed data
+  const platforms = ["AutoGPT", "LangChain", "CrewAI", "OpenAI Swarm", "Direct Web"];
   const ordersByPlatform: Record<string, number> = {};
   for (const o of orders) {
     ordersByPlatform[o.agentPlatform] = (ordersByPlatform[o.agentPlatform] ?? 0) + 1;

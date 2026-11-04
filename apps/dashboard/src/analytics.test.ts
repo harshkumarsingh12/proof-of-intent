@@ -116,19 +116,20 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(perf.slaBreachedCount).toBe(1); // D-1 breached
   });
 
-  it("calculates platform breakdown across 300 seed orders and four platforms", () => {
+  it("calculates platform breakdown across 300 seed orders and five platforms", () => {
     const summary = SEED_ANALYTICS;
-    expect(summary.byPlatform).toHaveLength(4);
+    expect(summary.byPlatform).toHaveLength(5);
 
     const platformNames = summary.byPlatform.map((p) => p.platform);
     expect(platformNames).toContain("AutoGPT");
     expect(platformNames).toContain("LangChain");
     expect(platformNames).toContain("CrewAI");
     expect(platformNames).toContain("OpenAI Swarm");
+    expect(platformNames).toContain("Direct Web");
 
-    // Total orders across platforms
+    // Total orders trace to 300 across all five platforms
     const totalOrders = summary.byPlatform.reduce((sum, p) => sum + p.totalOrders, 0);
-    expect(totalOrders).toBe(270);
+    expect(totalOrders).toBe(300);
 
     // AutoGPT stats
     const autogpt = summary.byPlatform.find((p) => p.platform === "AutoGPT");
@@ -143,6 +144,14 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(crewai?.defendedDisputes).toBe(3);
     expect(crewai?.concededDisputes).toBe(3);
     expect(crewai?.overreachRate).toBe(3); // 2 overreach / 65 total orders = 3%
+
+    // Direct Web stats
+    const directWeb = summary.byPlatform.find((p) => p.platform === "Direct Web");
+    expect(directWeb).toBeDefined();
+    expect(directWeb?.totalOrders).toBe(30);
+    expect(directWeb?.defendedDisputes).toBe(0);
+    expect(directWeb?.concededDisputes).toBe(0);
+    expect(directWeb?.overreachRate).toBe(0);
   });
 
   it("fetches analytics from the API over HTTP with zero direct database access", async () => {
