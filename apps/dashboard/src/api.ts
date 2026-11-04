@@ -4,7 +4,12 @@ import type { AnalyticsSummary } from "./analytics-types";
 import { getDisputeDetail } from "./dispute-details";
 export { getDisputeDetail };
 export { isDisputeActionable, recordApprovalAction, validateActionInput } from "./approval-actions";
-export { computeAnalyticsSummary, SEED_ANALYTICS } from "./analytics-data";
+export {
+  computeAnalyticsSummary,
+  computeBlockedCartsMetrics,
+  computePerformanceMetrics,
+  SEED_ANALYTICS,
+} from "./analytics-data";
 export type { AnalyticsSummary, PlatformBreakdown } from "./analytics-types";
 import { computeAnalyticsSummary } from "./analytics-data";
 import { SEED_DISPUTES } from "./seed-disputes";

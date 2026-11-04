@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeAnalyticsSummary, fetchAnalytics, formatMoney, SEED_ANALYTICS } from "./api";
+import {
+  computeAnalyticsSummary,
+  computeBlockedCartsMetrics,
+  computePerformanceMetrics,
+  fetchAnalytics,
+  formatMoney,
+  SEED_ANALYTICS,
+} from "./api";
 import type { AnalyticsSummary } from "./analytics-types";
 
 describe("analytics panel & overreach metrics (spec 0007)", () => {
@@ -34,8 +41,79 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(reasonCodes[2]?.count).toBe(6);
 
     // Performance
-    expect(summary.performance.medianResponseHours).toBe(4.2);
+    expect(summary.performance.medianResponseHours).toBe(10);
     expect(summary.performance.slaBreachedCount).toBe(0);
+  });
+
+  it("computes blocked carts, reason-code tallies, and SLA breaches dynamically from input data per AC4", () => {
+    const customOrders = [
+      {
+        orderId: "ord_test_1",
+        agentPlatform: "AutoGPT",
+        amount: { value: 5000, currency: "USD" as const },
+        status: "BLOCKED" as const,
+        reasonCodes: ["AMOUNT_EXCEEDS_MAX"],
+        createdAt: "2026-11-01T00:00:00Z",
+      },
+      {
+        orderId: "ord_test_2",
+        agentPlatform: "LangChain",
+        amount: { value: 7500, currency: "USD" as const },
+        status: "BLOCKED" as const,
+        reasonCodes: ["ATTRIBUTE_MISMATCH", "AMOUNT_EXCEEDS_MAX"],
+        createdAt: "2026-11-01T01:00:00Z",
+      },
+      {
+        orderId: "ord_test_3",
+        agentPlatform: "Direct Web",
+        amount: { value: 10000, currency: "USD" as const },
+        status: "APPROVED" as const,
+        reasonCodes: [],
+        createdAt: "2026-11-01T02:00:00Z",
+      },
+    ];
+
+    const blockedMetrics = computeBlockedCartsMetrics(customOrders);
+    expect(blockedMetrics.totalBlocked).toBe(2);
+    expect(blockedMetrics.preventedSpend.value).toBe(12500); // 5000 + 7500
+    expect(blockedMetrics.topReasonCodes[0]?.code).toBe("AMOUNT_EXCEEDS_MAX");
+    expect(blockedMetrics.topReasonCodes[0]?.count).toBe(2);
+    expect(blockedMetrics.topReasonCodes[1]?.code).toBe("ATTRIBUTE_MISMATCH");
+    expect(blockedMetrics.topReasonCodes[1]?.count).toBe(1);
+
+    const customDisputes = [
+      {
+        id: "D-1",
+        orderId: "O-1",
+        paypalOrderId: "PP-1",
+        status: "ACTION_REQUIRED" as const,
+        decision: "defend" as const,
+        disputeClass: "MANDATE_COMPLIANT" as const,
+        amount: { value: 5000, currency: "USD" as const },
+        createdAt: "2026-11-01T00:00:00Z",
+        sellerResponseDueDate: "2026-11-02T00:00:00Z", // Past due at 2026-11-03
+        reasons: [],
+        agentPlatform: "AutoGPT",
+        buyerDisputeReason: "TEST",
+      },
+      {
+        id: "D-2",
+        orderId: "O-2",
+        paypalOrderId: "PP-2",
+        status: "ACTION_REQUIRED" as const,
+        decision: "concede" as const,
+        disputeClass: "AGENT_OVERREACH" as const,
+        amount: { value: 7000, currency: "USD" as const },
+        createdAt: "2026-11-01T00:00:00Z",
+        sellerResponseDueDate: "2026-11-05T00:00:00Z", // Future at 2026-11-03
+        reasons: [],
+        agentPlatform: "LangChain",
+        buyerDisputeReason: "TEST",
+      },
+    ];
+
+    const perf = computePerformanceMetrics(customDisputes, "2026-11-03T00:00:00Z");
+    expect(perf.slaBreachedCount).toBe(1); // D-1 breached
   });
 
   it("calculates platform breakdown across 300 seed orders and four platforms", () => {
