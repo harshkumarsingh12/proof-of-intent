@@ -11,6 +11,7 @@
     "@poi/ai": "workspace:*",
     "@poi/contracts": "workspace:*",
     "@poi/db": "workspace:*",
+    "@poi/mandates": "workspace:*",
     "@poi/paypal": "workspace:*",
     "@poi/policy-engine": "workspace:*",
     "tsx": "^4.19.2"
