@@ -24,13 +24,22 @@ services:
     restart: unless-stopped
     networks: [poi]
 
+  # One-shot: applies pending migrations (packages/db/migrations), then exits. Uses the api image.
+  migrate:
+    <<: *app
+    build: { context: ., args: { APP: api } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
+    command: ["pnpm", "--filter", "@poi/db", "migrate"]
+    restart: "no"
+    depends_on: { postgres: { condition: service_healthy } }
+
   api:
     <<: *app
     build: { context: ., args: { APP: api } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
     environment: { PORT: "3000" }
     ports: ["127.0.0.1:3000:3000"]
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { migrate: { condition: service_completed_successfully } }
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz || exit 1"]
       interval: 10s
@@ -40,7 +49,7 @@ services:
     <<: *app
     build: { context: ., args: { APP: worker } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-worker:${IMAGE_TAG:-local}
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { migrate: { condition: service_completed_successfully } }
 
   buyer:
     <<: *app

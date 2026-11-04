@@ -2,12 +2,46 @@
 
 **Path:** `packages/db/` | **Owner:** @harshkumarsingh12 | **Backup:** @hoursgotviral-dev | **Spec:** [0003-checkout-and-verification.md](../../docs/specs/0003-checkout-and-verification.md) | **Milestones:** M1
 
-Postgres schema, migrations, seed, append-only audit log. Currently an interface with stubs. Unique indexes (nonces, webhook event ids) carry replay protection and idempotency.
+Postgres schema, migrations and the append-only audit log. Driver: `pg`.
+
+```ts
+import { createDb } from "@poi/db";
+
+const db = createDb(process.env.DATABASE_URL!);
+if (!(await db.claimNonce(intent.nonce))) reasons.push("NONCE_REPLAYED");
+await db.appendAudit({ actor: "api", action: "verdict", subjectId: orderId, requestBody: verdict });
+const timeline = await db.auditTrail(orderId); // oldest first, each row has `at`
+```
+
+## Schema
+
+`migrations/0001_init.sql`: `shoppers`, `shopper_keys` and `agent_keys` (with `retired_at`), `mandates` (canonical
+bytes + JWS), `nonces`, `orders`, `verdicts`, `webhook_events`, `disputes`, `audit_log`.
+
+- Replay protection and idempotency are unique indexes (`nonces`, `webhook_events.event_id`, `mandates.hash`,
+  PayPal ids on `orders`), never "check then insert".
+- `audit_log` is append-only: a trigger refuses `UPDATE`, `DELETE` and `TRUNCATE`. To reset demo data, drop and
+  recreate the database.
+- Money columns are integer minor units plus `currency`.
+
+## Migrations
+
+New change → new file `migrations/NNNN_name.sql`; never edit one that has shipped. `migrate()` applies pending
+files in name order, each in its own transaction, under an advisory lock so the api and worker can start together.
+
+```bash
+pnpm --filter @poi/db migrate          # uses DATABASE_URL
+```
+
+In Compose, the one-shot `migrate` service runs this before `api` and `worker` start.
 
 ## Test
 
+The tests use a real Postgres and create a throwaway database per run. CI provides one; locally:
+
 ```bash
-pnpm vitest run packages/db
+docker run -d -p 127.0.0.1:5432:5432 -e POSTGRES_USER=poi -e POSTGRES_PASSWORD=poi -e POSTGRES_DB=poi postgres:16-alpine
+DATABASE_URL=postgres://poi:poi@localhost:5432/poi pnpm vitest run packages/db
 ```
 
-Unbuilt acceptance criteria are `ledger()` entries in this folder's `*.test.ts`. Turn each into a plain `test()` as you finish it.
+Without `DATABASE_URL` the db tests are skipped, so `pnpm test` still works with no setup.
