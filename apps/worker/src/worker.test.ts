@@ -1,8 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { compliantCart, greyJacketIntent, NOW, overreachingCart, partialCart } from "@poi/contracts/fixtures";
 import type { AuditEntry } from "@poi/db";
-import { ledger } from "@poi/ledger";
-import { customId, mandateHash } from "@poi/mandates";
+import { customId, generateSigningKeyPair, mandateHash, signMandate } from "@poi/mandates";
 import {
   buildEvidencePackage,
   InMemoryDisputeDataLoader,
@@ -190,14 +189,40 @@ describe("dispute copilot classification", () => {
   });
 });
 
-describe("dispute copilot (unbuilt)", () => {
-  ledger(
-    "M2",
-    "hoursgotviral-dev",
-    "evidence package PDF carries the same hash as the PayPal custom_id",
-    async () => {
-      const pkg = await buildEvidencePackage("fixture-compliant");
-      expect(pkg.bundleJson).toContain("mandate_hash");
-    },
-  );
+describe("evidence package", () => {
+  test("evidence package PDF carries the same hash as the PayPal custom_id", async () => {
+    const { privateKey, publicKey } = await generateSigningKeyPair();
+    const signedIntentJws = await signMandate(greyJacketIntent, privateKey, "shopper-key-1");
+    const evidenceLoader = new InMemoryDisputeDataLoader(
+      [{ disputeId: "fixture-compliant", orderId: "ord_compliant" }],
+      [
+        {
+          orderId: "ord_compliant",
+          customId: pointer,
+          intent: greyJacketIntent,
+          cart: compliantCart,
+          signedIntentJws,
+          capturedAt: NOW,
+          captureRecord: {
+            captureId: "cap_compliant",
+            orderId: "ord_compliant",
+            capturedAt: NOW,
+            amount: compliantCart.contents.total,
+            customId: pointer,
+          },
+        },
+      ],
+    );
+
+    const pkg = await buildEvidencePackage("fixture-compliant", {
+      loader: evidenceLoader,
+      keyResolver: async (kid) => (kid === "shopper-key-1" ? publicKey : undefined),
+    });
+
+    const hash = mandateHash(greyJacketIntent);
+    const pdfText = new TextDecoder().decode(pkg.pdf);
+    expect(pdfText).toContain(hash);
+    expect(pdfText).toContain(pointer);
+    expect(pointer.split(":")[2]).toBe(hash.slice(0, 16));
+  });
 });

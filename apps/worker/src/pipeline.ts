@@ -5,7 +5,6 @@
  * → replay J1 → class + recommendation → operator review → dispute action. Every dispute
  * ends at an operator click, never at the model.
  */
-import { NotImplementedError } from "@poi/contracts";
 import type { Db } from "@poi/db";
 import type { MandateLedger } from "@poi/policy-engine";
 import { runDisputeClassifier, type DisputeDataLoader, type Recommendation } from "./classifier";
@@ -19,9 +18,6 @@ export const JOBS = {
 } as const;
 
 export type { Recommendation };
-
-const OWNER = "hoursgotviral-dev";
-const SPEC = "docs/specs/0005-dispute-copilot.md";
 
 export interface RecommendOptions {
   loader: DisputeDataLoader;
@@ -51,12 +47,7 @@ export async function recommend(disputeId: string, options: RecommendOptions): P
   return rec;
 }
 
-export async function buildEvidencePackage(
-  _disputeId: string,
-): Promise<{ pdf: Uint8Array; bundleJson: string }> {
-  throw new NotImplementedError("evidence package", OWNER, SPEC);
-}
-
 export * from "./intake";
 export * from "./decision";
 export * from "./classifier";
+export * from "./evidence";
