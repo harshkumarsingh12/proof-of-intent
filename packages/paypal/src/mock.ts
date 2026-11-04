@@ -5,13 +5,13 @@
  */
 import { randomBytes } from "node:crypto";
 import { PayPalError, type CreatedOrder, type PayPalClient } from "./index";
-import { orderBody } from "./sandbox";
+import { evidenceForm, orderBody } from "./sandbox";
 
 /** Mock mode accepts a webhook delivery only when it carries this transmission signature. */
 export const MOCK_WEBHOOK_SIGNATURE = "mock-signature";
 
 export type DisputeAction =
-  | { kind: "provide-evidence"; disputeId: string; notes: string; files: string[] }
+  | { kind: "provide-evidence"; disputeId: string; evidenceType: string; notes: string; files: string[] }
   | { kind: "send-message"; disputeId: string; message: string };
 
 export interface MockPayPalClient extends PayPalClient {
@@ -102,9 +102,11 @@ export function createMockClient(): MockPayPalClient {
     },
 
     async provideEvidence(disputeId, input) {
+      evidenceForm(input); // same validation as the sandbox: PDFs only, size cap, at least one file
       disputeActions.push({
         kind: "provide-evidence",
         disputeId,
+        evidenceType: input.evidenceType ?? "OTHER",
         notes: input.notes,
         files: input.files.map((f) => f.name),
       });

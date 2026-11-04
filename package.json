@@ -21,7 +21,8 @@
     "dev:buyer": "pnpm --filter @poi/buyer dev",
     "dev:dashboard": "pnpm --filter @poi/dashboard dev",
     "sandbox:record-orders": "tsx --env-file=.env scripts/sandbox/record-orders.ts",
-    "sandbox:checkout-smoke": "tsx --env-file=.env scripts/sandbox/checkout-smoke.ts"
+    "sandbox:checkout-smoke": "tsx --env-file=.env scripts/sandbox/checkout-smoke.ts",
+    "sandbox:dispute-cycle": "tsx --env-file=.env scripts/sandbox/dispute-cycle.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
