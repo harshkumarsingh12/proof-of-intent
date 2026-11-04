@@ -113,6 +113,12 @@ const MIGRATION_LOCK = 7_007_001;
 
 export function createDb(databaseUrl: string): Db {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
+  // An idle connection can die under us (Postgres restart, failover, an admin terminating it). pg reports that
+  // as an 'error' event on the pool, and with no listener Node treats it as uncaught and kills the process.
+  // The pool already discards the dead client and opens a new one on the next query, so logging is enough.
+  pool.on("error", (err) =>
+    console.error(`postgres: idle connection lost (${err.message}); the pool will reconnect`),
+  );
 
   return {
     async claimNonce(nonce) {
