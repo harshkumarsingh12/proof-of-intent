@@ -95,7 +95,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 12, color: "#8b949e" }}>
-            <span>Defense Win Rate: <strong style={{ color: "#34d399" }}>{data.disputes.defenseRate}%</strong></span>
+            <span>Defense Win Rate (Resolved): <strong style={{ color: "#34d399" }}>{data.disputes.defenseRate}%</strong></span>
             <span>Total: {data.disputes.total}</span>
           </div>
         </div>
@@ -112,7 +112,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
           </div>
 
           <div style={{ fontSize: 13, color: "#8b949e", marginTop: 6 }}>
-            Saved by defending compliant orders with signed mandates
+            Saved from disputes resolved in merchant's favor
           </div>
 
           <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #21262d", fontSize: 12, color: "#8b949e" }}>

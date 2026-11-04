@@ -18,13 +18,13 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(summary.disputes.defended).toBe(14);
     expect(summary.disputes.conceded).toBe(9);
     expect(summary.disputes.standard).toBe(1);
-    expect(summary.disputes.defenseRate).toBe(61); // 14 / (14 + 9) ≈ 60.8% -> 61%
+    expect(summary.disputes.defenseRate).toBe(67); // 2 won / 3 resolved actual outcomes = 66.7% -> 67%
 
-    // Amount protected
-    expect(summary.amountProtected.defendedTotal.value).toBe(104100); // $1,041.00
-    expect(formatMoney(summary.amountProtected.defendedTotal)).toBe("$1041.00");
-    expect(summary.amountProtected.concededTotal.value).toBe(118600); // $1,186.00
-    expect(formatMoney(summary.amountProtected.concededTotal)).toBe("$1186.00");
+    // Amount protected from actual dispute outcomes
+    expect(summary.amountProtected.defendedTotal.value).toBe(16300); // $163.00 (PP-D-1012 $78 + PP-D-1023 $85)
+    expect(formatMoney(summary.amountProtected.defendedTotal)).toBe("$163.00");
+    expect(summary.amountProtected.concededTotal.value).toBe(11000); // $110.00 (PP-D-1013 $110)
+    expect(formatMoney(summary.amountProtected.concededTotal)).toBe("$110.00");
 
     // Blocked overreach carts
     expect(summary.blockedOverreachCarts.totalBlocked).toBe(38);
@@ -189,6 +189,6 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     const fallbackData = await fetchAnalytics({ apiBaseUrl: "http://example.test", fetchFn: mockFetchError });
     expect(fallbackData.disputes.total).toBe(24);
     expect(fallbackData.disputes.defended).toBe(14);
-    expect(fallbackData.amountProtected.defendedTotal.value).toBe(104100);
+    expect(fallbackData.amountProtected.defendedTotal.value).toBe(16300);
   });
 });

@@ -96,10 +96,17 @@ export function computeAnalyticsSummary(
   const conceded = disputes.filter((d) => d.decision === "concede");
   const standard = disputes.filter((d) => d.decision === "standard");
 
-  const defendedCents = defended.reduce((sum, d) => sum + d.amount.value, 0);
-  const concededCents = conceded.reduce((sum, d) => sum + d.amount.value, 0);
+  // Actual dispute outcomes from resolved disputes (excluding unresolved/active disputes)
+  const resolved = disputes.filter((d) => d.status === "RESOLVED");
+  const resolvedWins = resolved.filter((d) => d.decision === "defend");
+  const resolvedLosses = resolved.filter((d) => d.decision === "concede");
 
-  const defenseRate = total > 0 ? Math.round((defended.length / (defended.length + conceded.length || 1)) * 100) : 0;
+  const defenseRate = resolved.length > 0
+    ? Math.round((resolvedWins.length / resolved.length) * 100)
+    : 0;
+
+  const actualProtectedCents = resolvedWins.reduce((sum, d) => sum + d.amount.value, 0);
+  const actualConcededCents = resolvedLosses.reduce((sum, d) => sum + d.amount.value, 0);
 
   // Platform breakdown across four platforms from seed data
   const platforms = ["AutoGPT", "LangChain", "CrewAI", "OpenAI Swarm"];
@@ -139,8 +146,8 @@ export function computeAnalyticsSummary(
       defenseRate,
     },
     amountProtected: {
-      defendedTotal: { value: defendedCents, currency: "USD" },
-      concededTotal: { value: concededCents, currency: "USD" },
+      defendedTotal: { value: actualProtectedCents, currency: "USD" },
+      concededTotal: { value: actualConcededCents, currency: "USD" },
     },
     blockedOverreachCarts,
     performance,
