@@ -116,14 +116,19 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       },
     };
 
-    // Successful API fetch
-    const mockSuccessFetch = (async () => ({
-      ok: true,
-      status: 200,
-      json: async () => mockDetail,
-    })) as unknown as typeof fetch;
+    // Successful API fetch with encoded ID and /recommendation endpoint
+    let calledUrl = "";
+    const mockSuccessFetch = (async (url: string) => {
+      calledUrl = url;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => mockDetail,
+      };
+    }) as unknown as typeof fetch;
 
-    const apiResult = await fetchDisputeDetail("PP-D-API-1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
+    const apiResult = await fetchDisputeDetail("PP-D-API/1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
+    expect(calledUrl).toBe("http://example.test/disputes/PP-D-API%2F1/recommendation");
     expect(apiResult?.id).toBe("PP-D-API-1");
     expect(apiResult?.agentPlatform).toBe("TestBot");
 

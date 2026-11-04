@@ -71,7 +71,8 @@ export async function fetchDisputeDetail(
   const runner = options?.fetchFn ?? fetch;
 
   try {
-    const res = await runner(`${baseUrl}/disputes/${disputeId}`, {
+    const encodedId = encodeURIComponent(disputeId);
+    const res = await runner(`${baseUrl}/disputes/${encodedId}/recommendation`, {
       method: "GET",
       headers: { Accept: "application/json" },
     });
