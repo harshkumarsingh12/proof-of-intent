@@ -273,6 +273,179 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
           })}
         </div>
       </div>
+
+      {/* Chart 2: Disputes by Class per Week per docs/specs/0007 */}
+      <div style={cardStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 18 }}>📈</span>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f0f6fc" }}>
+                Disputes by Class per Week
+              </h2>
+            </div>
+            <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#8b949e" }}>
+              Weekly volume breakdown across mandate compliance, agent overreach, intent misread, and standard classes.
+            </p>
+          </div>
+
+          {/* Chart Legend */}
+          <div style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: "#10b981" }} />
+              <span style={{ color: "#c9d1d9" }}>Mandate Compliant</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: "#f59e0b" }} />
+              <span style={{ color: "#c9d1d9" }}>Agent Overreach</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: "#a855f7" }} />
+              <span style={{ color: "#c9d1d9" }}>Intent Misread</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: "#6b7280" }} />
+              <span style={{ color: "#c9d1d9" }}>No Mandate</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Stacked Bars by Week */}
+        <div
+          data-testid="disputes-by-class-chart"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 18,
+            background: "#0d1117",
+            border: "1px solid #30363d",
+            borderRadius: 8,
+            padding: 20,
+          }}
+        >
+          {data.disputesByClassPerWeek.map((item) => {
+            const maxWeeklyTotal = Math.max(
+              ...data.disputesByClassPerWeek.map((w) => w.total),
+              1
+            );
+            const compliantPct = item.total > 0 ? (item.mandateCompliant / item.total) * 100 : 0;
+            const overreachPct = item.total > 0 ? (item.agentOverreach / item.total) * 100 : 0;
+            const misreadPct = item.total > 0 ? (item.intentMisread / item.total) * 100 : 0;
+            const noMandatePct = item.total > 0 ? (item.noMandate / item.total) * 100 : 0;
+            const barWidthPct = Math.round((item.total / maxWeeklyTotal) * 100);
+
+            return (
+              <div key={item.week} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong style={{ color: "#f0f6fc", minWidth: 140 }}>{item.week}</strong>
+                    <span style={{ fontSize: 11, color: "#8b949e" }}>({item.total} disputes)</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#8b949e" }}>
+                    <span>
+                      Compliant: <strong style={{ color: "#34d399" }}>{item.mandateCompliant}</strong>
+                    </span>
+                    <span>
+                      Overreach: <strong style={{ color: "#fbbf24" }}>{item.agentOverreach}</strong>
+                    </span>
+                    <span>
+                      Misread: <strong style={{ color: "#c084fc" }}>{item.intentMisread}</strong>
+                    </span>
+                    <span>
+                      No Mandate: <strong style={{ color: "#9ca3af" }}>{item.noMandate}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Stacked Progress Bar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      background: "#21262d",
+                      borderRadius: 4,
+                      height: 18,
+                      overflow: "hidden",
+                      display: "flex",
+                    }}
+                  >
+                    {item.total > 0 ? (
+                      <div
+                        style={{
+                          width: `${barWidthPct}%`,
+                          display: "flex",
+                          height: "100%",
+                          borderRadius: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {item.mandateCompliant > 0 && (
+                          <div
+                            style={{
+                              width: `${compliantPct}%`,
+                              background: "#10b981",
+                            }}
+                          />
+                        )}
+                        {item.agentOverreach > 0 && (
+                          <div
+                            style={{
+                              width: `${overreachPct}%`,
+                              background: "#f59e0b",
+                            }}
+                          />
+                        )}
+                        {item.intentMisread > 0 && (
+                          <div
+                            style={{
+                              width: `${misreadPct}%`,
+                              background: "#a855f7",
+                            }}
+                          />
+                        )}
+                        {item.noMandate > 0 && (
+                          <div
+                            style={{
+                              width: `${noMandatePct}%`,
+                              background: "#6b7280",
+                            }}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          paddingLeft: 8,
+                          fontSize: 11,
+                          color: "#484f58",
+                        }}
+                      >
+                        No disputes
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ width: 30, fontSize: 11, color: "#c9d1d9", fontWeight: 600 }}>
+                    {item.total}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

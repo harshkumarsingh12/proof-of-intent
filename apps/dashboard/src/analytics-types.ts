@@ -10,6 +10,15 @@ export interface PlatformBreakdown {
   overreachRate: number; // percentage e.g. 33
 }
 
+export interface WeeklyDisputesByClass {
+  week: string; // e.g. "Oct 26 - Nov 01"
+  mandateCompliant: number;
+  agentOverreach: number;
+  intentMisread: number;
+  noMandate: number;
+  total: number;
+}
+
 export interface AnalyticsSummary {
   disputes: {
     total: number;
@@ -32,4 +41,5 @@ export interface AnalyticsSummary {
     slaBreachedCount: number;
   };
   byPlatform: PlatformBreakdown[];
+  disputesByClassPerWeek: WeeklyDisputesByClass[];
 }

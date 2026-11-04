@@ -7,10 +7,11 @@ export { isDisputeActionable, recordApprovalAction, validateActionInput } from "
 export {
   computeAnalyticsSummary,
   computeBlockedCartsMetrics,
+  computeDisputesByClassPerWeek,
   computePerformanceMetrics,
   SEED_ANALYTICS,
 } from "./analytics-data";
-export type { AnalyticsSummary, PlatformBreakdown } from "./analytics-types";
+export type { AnalyticsSummary, PlatformBreakdown, WeeklyDisputesByClass } from "./analytics-types";
 import { computeAnalyticsSummary } from "./analytics-data";
 import { SEED_DISPUTES } from "./seed-disputes";
 
