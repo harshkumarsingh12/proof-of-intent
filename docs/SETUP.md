@@ -33,7 +33,7 @@ Needs Node 20+.
 ```bash
 corepack enable          # once; provides the pinned pnpm
 pnpm install
-pnpm test                # unit tests + ledger entries
+pnpm test                # unit tests + ledger entries; db tests run when DATABASE_URL is set (packages/db/README.md)
 pnpm dev:api             # :3000
 pnpm dev:buyer           # :3001
 pnpm dev:dashboard       # :3002

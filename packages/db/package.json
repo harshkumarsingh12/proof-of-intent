@@ -5,9 +5,14 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@poi/contracts": "workspace:*"
+    "@poi/contracts": "workspace:*",
+    "pg": "^8.13.1",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
-    "@poi/ledger": "workspace:*"
+    "@types/pg": "^8.11.10"
+  },
+  "scripts": {
+    "migrate": "tsx src/migrate.ts"
   }
 }
