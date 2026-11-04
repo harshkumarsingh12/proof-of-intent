@@ -26,7 +26,7 @@ of every `ci` run.
 |---|---|---|
 | Orders create/authorize/capture/void in sandbox | Harsh | ✅ Done (authorize after a real approval: integration day) |
 | Vault v3 spike | Harsh | Pending |
-| DB schema, migrations, nonce table | Harsh | Pending |
+| DB schema, migrations, nonce table | Harsh | ✅ Done |
 | Checkout route end to end | Harsh + Sristee | Pending |
 | Webhook receiver with verification | Harsh | Pending |
 | Remaining hard rules (budget, recurrence, address, attributes, SKU) | Sristee | Pending |
