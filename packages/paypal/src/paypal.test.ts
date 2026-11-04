@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { ledger } from "@poi/ledger";
 import {
   createMockClient,
   createPayPalClient,
+  evidenceTypeFor,
   MOCK_WEBHOOK_SIGNATURE,
   parseMode,
   PayPalError,
@@ -46,7 +46,12 @@ const fixture = (name: string) =>
 
 /** A fake PayPal that serves recorded responses and keeps every request for inspection. */
 function fakePayPal(routes: Record<string, { status: number; body: unknown }>) {
-  const requests: { method: string; path: string; headers: Record<string, string>; body?: string }[] = [];
+  const requests: {
+    method: string;
+    path: string;
+    headers: Record<string, string>;
+    body?: string | FormData;
+  }[] = [];
   let tokenRequests = 0;
   const fetchFn: typeof fetch = async (url, init) => {
     const path = new URL(String(url)).pathname;
@@ -58,7 +63,7 @@ function fakePayPal(routes: Record<string, { status: number; body: unknown }>) {
       method: init?.method ?? "GET",
       path,
       headers: init?.headers as Record<string, string>,
-      body: init?.body as string,
+      body: init?.body as string | FormData,
     });
     const key = Object.keys(routes).find((k) => path.endsWith(k));
     if (!key) return new Response("not routed", { status: 599 });
@@ -147,7 +152,7 @@ describe("sandbox client against recorded sandbox responses", () => {
     expect(res.id).toMatch(/^[0-9A-Z]{17}$/);
     expect(res.approvalUrl).toMatch(/^https:\/\/www\.sandbox\.paypal\.com\//);
     expect(requests[0]!.headers["PayPal-Request-Id"]).toBe("ord_1");
-    expect(JSON.parse(requests[0]!.body!)).toEqual(orderBody(order));
+    expect(JSON.parse(requests[0]!.body as string)).toEqual(orderBody(order));
   });
 
   test("captures and voids authorizations", async () => {
@@ -199,8 +204,11 @@ describe("sandbox client against recorded sandbox responses", () => {
     });
     const raw = '{"id":"WH-1",  "amount":1.50,"resource":{"note":"caf\\u00e9"}}';
     expect(await client.verifyWebhook(headers, raw)).toBe(true);
-    expect(requests[0]!.body!.endsWith(`"webhook_event":${raw}}`)).toBe(true);
-    expect(JSON.parse(requests[0]!.body!)).toMatchObject({ webhook_id: "WH-1", transmission_sig: "sig" });
+    expect((requests[0]!.body as string).endsWith(`"webhook_event":${raw}}`)).toBe(true);
+    expect(JSON.parse(requests[0]!.body as string)).toMatchObject({
+      webhook_id: "WH-1",
+      transmission_sig: "sig",
+    });
   });
 
   test("webhook verification: 4xx and junk bodies are 'not verified'; outages throw so PayPal redelivers", async () => {
@@ -301,7 +309,13 @@ describe("mock client", () => {
     });
     await mock.sendMessage("PP-D-1", "hello");
     expect(mock.disputeActions).toEqual([
-      { kind: "provide-evidence", disputeId: "PP-D-1", notes: "n", files: ["attestation.pdf"] },
+      {
+        kind: "provide-evidence",
+        disputeId: "PP-D-1",
+        evidenceType: "OTHER",
+        notes: "n",
+        files: ["attestation.pdf"],
+      },
       { kind: "send-message", disputeId: "PP-D-1", message: "hello" },
     ]);
   });
@@ -320,24 +334,85 @@ describe.runIf(
   });
 });
 
-describe("sandbox disputes (unbuilt)", () => {
-  const sandbox = createPayPalClient("sandbox", {
-    clientId: "id",
-    clientSecret: "secret",
-    webhookId: "WH-1",
+describe("sandbox disputes", () => {
+  const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
+
+  test("provide-evidence sends a multipart request with the attestation PDF", async () => {
+    const { client, requests } = fakePayPal({ "/provide-evidence": { status: 200, body: { links: [] } } });
+    await client.provideEvidence("PP-D-1", {
+      notes: "mandate attestation",
+      evidenceType: "OTHER",
+      files: [{ name: "attestation.pdf", data: pdf }],
+    });
+    const req = requests[0]!;
+    expect(req.path).toBe("/v1/customer/disputes/PP-D-1/provide-evidence");
+    expect(req.headers["Content-Type"]).toBeUndefined(); // fetch adds multipart/form-data with the boundary
+    const form = req.body as unknown as FormData;
+    const input = JSON.parse(await (form.get("input") as Blob).text());
+    expect(input).toEqual({
+      evidences: [
+        { evidence_type: "OTHER", notes: "mandate attestation", documents: [{ name: "attestation.pdf" }] },
+      ],
+    });
+    const file = form.get("file1") as File;
+    expect(file.name).toBe("attestation.pdf");
+    expect(file.type).toBe("application/pdf");
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(pdf);
   });
 
-  ledger(
-    "M2",
-    "harshkumarsingh12",
-    "provide-evidence sends a multipart request with the attestation PDF",
-    async () => {
-      await expect(
-        sandbox.provideEvidence("PP-D-1", {
-          notes: "mandate attestation",
-          files: [{ name: "attestation.pdf", data: new Uint8Array([1]) }],
-        }),
-      ).resolves.toBeUndefined();
-    },
-  );
+  test("the multipart body PayPal receives is well formed", async () => {
+    const { evidenceForm } = await import("./sandbox");
+    const res = new Response(evidenceForm({ notes: "n", files: [{ name: "a.pdf", data: pdf }] }));
+    const text = await res.text();
+    expect(res.headers.get("content-type")).toMatch(/^multipart\/form-data; boundary=/);
+    expect(text).toContain('name="input"');
+    expect(text).toContain('name="file1"; filename="a.pdf"');
+    expect(text).toContain("Content-Type: application/pdf");
+  });
+
+  test("refuses evidence PayPal would reject: no files, non-PDF, over 10 MB", async () => {
+    const { client } = fakePayPal({});
+    await expect(client.provideEvidence("PP-D-1", { notes: "n", files: [] })).rejects.toThrow(
+      "at least one file",
+    );
+    await expect(
+      client.provideEvidence("PP-D-1", { notes: "n", files: [{ name: "a.png", data: pdf }] }),
+    ).rejects.toThrow("PDF");
+    const big = new Uint8Array(10 * 1024 * 1024 + 1);
+    await expect(
+      client.provideEvidence("PP-D-1", { notes: "n", files: [{ name: "a.pdf", data: big }] }),
+    ).rejects.toThrow("10 MB");
+  });
+
+  test("send-message posts the message as the multipart input part", async () => {
+    const { client, requests } = fakePayPal({ "/send-message": { status: 200, body: { links: [] } } });
+    await client.sendMessage("PP-D-1", "Here is the signed record of your instructions.");
+    expect(requests[0]!.path).toBe("/v1/customer/disputes/PP-D-1/send-message");
+    const form = requests[0]!.body as unknown as FormData;
+    expect(JSON.parse(await (form.get("input") as Blob).text())).toEqual({
+      message: "Here is the signed record of your instructions.",
+    });
+  });
+
+  test("a refused dispute action surfaces PayPal's issue", async () => {
+    const { client } = fakePayPal({
+      "/provide-evidence": {
+        status: 422,
+        body: { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "NOT_ELIGIBLE" }], debug_id: "d" },
+      },
+    });
+    await expect(
+      client.provideEvidence("PP-D-1", { notes: "n", files: [{ name: "a.pdf", data: pdf }] }),
+    ).rejects.toMatchObject({
+      status: 422,
+      issue: "NOT_ELIGIBLE",
+    });
+  });
+
+  test("evidence type follows the dispute reason (spec 0004)", () => {
+    expect(evidenceTypeFor("MERCHANDISE_OR_SERVICE_NOT_RECEIVED")).toBe("PROOF_OF_FULFILLMENT");
+    expect(evidenceTypeFor("CREDIT_NOT_PROCESSED")).toBe("PROOF_OF_REFUND");
+    expect(evidenceTypeFor("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED")).toBe("OTHER");
+    expect(evidenceTypeFor("UNAUTHORISED")).toBe("OTHER");
+  });
 });

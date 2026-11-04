@@ -1,7 +1,7 @@
 /** Real REST calls against the PayPal sandbox. Spec: docs/specs/0004-paypal-integration.md. */
-import { NotImplementedError } from "@poi/contracts";
 import {
   PayPalError,
+  type ProvideEvidenceInput,
   toPayPalAmount,
   type CreateOrderInput,
   type PayPalClient,
@@ -59,13 +59,14 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
   async function call<T>(
     method: string,
     path: string,
-    opts: { body?: string; requestId?: string } = {},
+    opts: { body?: string | FormData; requestId?: string } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${await accessToken()}`,
-      "Content-Type": "application/json",
       Prefer: "return=representation",
     };
+    // fetch sets multipart/form-data with its boundary itself; only JSON bodies need the header.
+    if (!(opts.body instanceof FormData)) headers["Content-Type"] = "application/json";
     if (opts.requestId) headers["PayPal-Request-Id"] = opts.requestId;
     const res = await config.fetch(`${config.baseUrl}${path}`, { method, headers, body: opts.body });
     if (!res.ok) throw await toError(res);
@@ -139,20 +140,18 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
       }
     },
 
-    async provideEvidence() {
-      throw new NotImplementedError(
-        "sandbox provideEvidence",
-        "harshkumarsingh12",
-        "docs/specs/0004-paypal-integration.md",
-      );
+    async provideEvidence(disputeId, input) {
+      await call("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/provide-evidence`, {
+        body: evidenceForm(input),
+      });
     },
 
-    async sendMessage() {
-      throw new NotImplementedError(
-        "sandbox sendMessage",
-        "harshkumarsingh12",
-        "docs/specs/0004-paypal-integration.md",
-      );
+    async sendMessage(disputeId, message) {
+      const form = new FormData();
+      form.append("input", new Blob([JSON.stringify({ message })], { type: "application/json" }));
+      await call("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/send-message`, {
+        body: form,
+      });
     },
   };
 }
@@ -183,6 +182,29 @@ export function orderBody(input: CreateOrderInput) {
     ],
     ...(input.vaultId ? { payment_source: { paypal: { vault_id: input.vaultId } } } : {}),
   };
+}
+
+/** PayPal's documented per-file cap for dispute evidence. */
+export const MAX_EVIDENCE_FILE_BYTES = 10 * 1024 * 1024;
+
+/** The provide-evidence multipart body: an `input` JSON part naming each file, then the files themselves. */
+export function evidenceForm(input: ProvideEvidenceInput): FormData {
+  if (input.files.length === 0) throw new RangeError("provide-evidence needs at least one file");
+  for (const f of input.files) {
+    if (!f.name.toLowerCase().endsWith(".pdf")) throw new RangeError(`evidence ${f.name} must be a PDF`);
+    if (f.data.byteLength > MAX_EVIDENCE_FILE_BYTES) throw new RangeError(`evidence ${f.name} is over 10 MB`);
+  }
+  const evidence = {
+    evidence_type: input.evidenceType ?? "OTHER",
+    notes: input.notes.slice(0, 2000),
+    documents: input.files.map((f) => ({ name: f.name })),
+  };
+  const form = new FormData();
+  form.append("input", new Blob([JSON.stringify({ evidences: [evidence] })], { type: "application/json" }));
+  input.files.forEach((f, i) =>
+    form.append(`file${i + 1}`, new Blob([Uint8Array.from(f.data)], { type: "application/pdf" }), f.name),
+  );
+  return form;
 }
 
 /** Splices the raw body in verbatim: re-serializing the event could change the bytes PayPal signed. */

@@ -11,12 +11,12 @@ const paypal = createPayPalClient(parseMode(process.env.PAYPAL_MODE)); // mock u
 const order = await paypal.createOrder({ intent: "AUTHORIZE", ourOrderId, customId, total, items });
 ```
 
-| Method | Sandbox | Mock |
-|---|---|---|
-| `createOrder` | Orders v2; `PayPal-Request-Id` = our order id, so retries never duplicate | idempotent on our order id; vaulted CAPTURE completes at once |
-| `authorizeOrder`, `captureAuthorization`, `voidAuthorization` | Orders v2 / Payments v2, deterministic request ids | same state rules and error names as PayPal |
-| `verifyWebhook` | `verify-webhook-signature` with the raw body spliced in verbatim; `false` for 4xx, throws on outages | accepts `transmissionSig === MOCK_WEBHOOK_SIGNATURE` |
-| `provideEvidence`, `sendMessage` | M2 (`NotImplementedError` until then) | recorded in `disputeActions` |
+| Method                                                        | Sandbox                                                                                              | Mock                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `createOrder`                                                 | Orders v2; `PayPal-Request-Id` = our order id, so retries never duplicate                            | idempotent on our order id; vaulted CAPTURE completes at once |
+| `authorizeOrder`, `captureAuthorization`, `voidAuthorization` | Orders v2 / Payments v2, deterministic request ids                                                   | same state rules and error names as PayPal                    |
+| `verifyWebhook`                                               | `verify-webhook-signature` with the raw body spliced in verbatim; `false` for 4xx, throws on outages | accepts `transmissionSig === MOCK_WEBHOOK_SIGNATURE`          |
+| `provideEvidence`, `sendMessage`                              | M2 (`NotImplementedError` until then)                                                                | recorded in `disputeActions`                                  |
 
 - Money in and out is integer minor units (`Money`); `toPayPalAmount` converts with the currency's own exponent.
 - Errors from PayPal are `PayPalError { status, issue, debugId }`. Quote the `debugId` to PayPal support.
