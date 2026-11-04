@@ -49,7 +49,6 @@ export function decideDispute(input: DecisionInput): DisputeDecisionResult {
 
   // Orders without a mandate must fall through to the standard dispute path, never blocked.
   if (classification.class === "NO_MANDATE" || order?.hasMandate === false) {
-
     return {
       disputeId,
       decision: "standard",
@@ -91,7 +90,8 @@ export function decideDispute(input: DecisionInput): DisputeDecisionResult {
       action: "ACCEPT_CLAIM",
       reasons: combinedReasons,
       isBlocked: false,
-      explanation: "Purchased items failed semantic fit check against shopper intent; recommending concession.",
+      explanation:
+        "Purchased items failed semantic fit check against shopper intent; recommending concession.",
     };
   }
 
@@ -103,7 +103,8 @@ export function decideDispute(input: DecisionInput): DisputeDecisionResult {
     action: "PROVIDE_EVIDENCE",
     reasons: classification.reasons ?? [],
     isBlocked: false,
-    explanation: "Cart was verified compliant with signed intent; recommending defense with attestation package.",
+    explanation:
+      "Cart was verified compliant with signed intent; recommending defense with attestation package.",
   };
 }
 

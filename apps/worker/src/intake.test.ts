@@ -139,7 +139,9 @@ describe("dispute intake", () => {
     const db = { appendAudit: async () => {} };
 
     const noId = { ...sampleEvent, id: "" };
-    await expect(intakeDisputeEvent(noId, { db, jobStore })).rejects.toThrow("Webhook event missing required id");
+    await expect(intakeDisputeEvent(noId, { db, jobStore })).rejects.toThrow(
+      "Webhook event missing required id",
+    );
 
     const noDisputeId: DisputeWebhookEvent = {
       id: "WH-999",

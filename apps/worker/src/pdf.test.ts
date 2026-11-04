@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compliantCart, greyJacketIntent, NOW } from "@poi/contracts/fixtures";
 import { customId, mandateHash } from "@poi/mandates";
-import {
-  generateEvidencePdf,
-  renderEvidencePdfText,
-  type EvidencePdfData,
-} from "./pdf";
+import { generateEvidencePdf, renderEvidencePdfText, type EvidencePdfData } from "./pdf";
 
 describe("evidence PDF generation", () => {
   const hash = mandateHash(greyJacketIntent);
@@ -61,12 +57,21 @@ describe("evidence PDF generation", () => {
     },
     timeline: [
       { timestamp: "2026-11-01T09:00:00Z", event: "Shopper signed Intent Mandate", actor: "shopper" },
-      { timestamp: "2026-11-02T10:00:00Z", event: "Policy engine verified cart against constraints", actor: "policy-engine" },
+      {
+        timestamp: "2026-11-02T10:00:00Z",
+        event: "Policy engine verified cart against constraints",
+        actor: "policy-engine",
+      },
       { timestamp: NOW, event: "PayPal order captured with mandate pointer in custom_id", actor: "api" },
       { timestamp: "2026-11-04T12:00:00Z", event: "Dispute received via PayPal webhook", actor: "webhook" },
-      { timestamp: "2026-11-04T12:01:00Z", event: "Copilot classified MANDATE_COMPLIANT and drafted evidence PDF", actor: "worker" },
+      {
+        timestamp: "2026-11-04T12:01:00Z",
+        event: "Copilot classified MANDATE_COMPLIANT and drafted evidence PDF",
+        actor: "worker",
+      },
     ],
-    coverNote: "Customer purchase was verified against signed intent mandate prior to capture. Items strictly match instructions.",
+    coverNote:
+      "Customer purchase was verified against signed intent mandate prior to capture. Items strictly match instructions.",
   };
 
   it("renders a valid PDF 1.4 document structure", () => {
@@ -75,9 +80,12 @@ describe("evidence PDF generation", () => {
 
     expect(text.startsWith("%PDF-1.4")).toBe(true);
     expect(text).toContain("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj");
-    expect(text).toContain("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj");
-    expect(text).toContain("xref\n0 6\n");
-    expect(text).toContain("trailer\n<< /Size 6 /Root 1 0 R >>");
+    const pages = Number(/\/Count (\d+)/.exec(text)?.[1]);
+    const kids = Array.from({ length: pages }, (_, i) => `${3 + i * 2} 0 R`).join(" ");
+    const size = 3 + pages * 2 + 1; // catalog, page tree, (page, content) per page, font, free entry 0
+    expect(text).toContain(`2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${pages} >>\nendobj`);
+    expect(text).toContain(`xref\n0 ${size}\n`);
+    expect(text).toContain(`trailer\n<< /Size ${size} /Root 1 0 R >>`);
     expect(text).toContain("startxref\n");
     expect(text.trim().endsWith("%%EOF")).toBe(true);
   });
@@ -93,7 +101,9 @@ describe("evidence PDF generation", () => {
 
     // 2. Signed intent text
     expect(text).toContain("2. SIGNED INTENT MANDATE (SHOPPER WORDS & CONSTRAINTS)");
-    expect(text).toContain('Shopper Description:      "Find me a grey running jacket under $80, ship to my home address."');
+    expect(text).toContain(
+      'Shopper Description:      "Find me a grey running jacket under $80, ship to my home address."',
+    );
     expect(text).toContain(hash);
 
     // 3. Cart vs mandate comparison
@@ -142,5 +152,30 @@ describe("evidence PDF generation", () => {
     expect(text).toContain("ET");
     const lines = text.split("\n").filter((l) => l.endsWith(") Tj"));
     expect(lines.length).toBeGreaterThan(45);
+  });
+
+  it("continues onto more pages instead of cutting off the bottom", () => {
+    const timeline = Array.from({ length: 40 }, (_, i) => ({
+      timestamp: `2026-11-02T10:${String(i).padStart(2, "0")}:00Z`,
+      event: `audit row ${i}`,
+      actor: "api",
+    }));
+    const text = new TextDecoder().decode(generateEvidencePdf({ ...sampleData, timeline }));
+    const pageCount = Number(/\/Count (\d+)/.exec(text)?.[1]);
+    expect(pageCount).toBeGreaterThan(1);
+    expect(text.match(/\/Type \/Page /g)).toHaveLength(pageCount);
+    // every line is drawn, including the last cover-note line
+    expect(text).toContain("audit row 39");
+    expect(text).toContain("Items strictly match instructions.");
+    // xref offsets point at the objects they name
+    const offsets = [...text.matchAll(/^(\d{10}) 00000 n $/gm)].map((m) => Number(m[1]));
+    offsets.forEach((o, i) => expect(text.slice(o).startsWith(`${i + 1} 0 obj`)).toBe(true));
+  });
+
+  it("folds non-ASCII text so the Courier font can render it", () => {
+    const intent = { ...greyJacketIntent, natural_language_description: "Grey jacket — café size ‘M’" };
+    const bytes = generateEvidencePdf({ ...sampleData, intent });
+    expect(bytes.every((b) => b < 0x80)).toBe(true);
+    expect(new TextDecoder().decode(bytes)).toContain("Grey jacket - cafe size 'M'");
   });
 });

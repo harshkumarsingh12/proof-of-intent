@@ -122,14 +122,20 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
   lines.push("3. CART VS MANDATE COMPARISON");
   lines.push("-----------------------------");
   if (data.cart) {
-    lines.push(`Merchant:                 ${data.cart.contents.merchant_name} (${data.cart.contents.merchant_id})`);
-    lines.push(`Cart Total:               ${data.cart.contents.total.currency} ${(data.cart.contents.total.value / 100).toFixed(2)}`);
+    lines.push(
+      `Merchant:                 ${data.cart.contents.merchant_name} (${data.cart.contents.merchant_id})`,
+    );
+    lines.push(
+      `Cart Total:               ${data.cart.contents.total.currency} ${(data.cart.contents.total.value / 100).toFixed(2)}`,
+    );
     lines.push("Cart Lines Purchased:");
     for (const item of data.cart.contents.lines) {
       const attrs = Object.entries(item.attributes)
         .map(([k, v]) => `${k}=${v}`)
         .join(", ");
-      lines.push(`  - [${item.sku}] ${item.title} x${item.quantity} @ ${item.unit_price.currency} ${(item.unit_price.value / 100).toFixed(2)} (${attrs})`);
+      lines.push(
+        `  - [${item.sku}] ${item.title} x${item.quantity} @ ${item.unit_price.currency} ${(item.unit_price.value / 100).toFixed(2)} (${attrs})`,
+      );
     }
   } else {
     lines.push("Merchant:                 not available");
@@ -151,16 +157,23 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
 
   lines.push("4. VERIFICATION RESULT & CRYPTOGRAPHIC ATTESTATION");
   lines.push("-------------------------------------------------");
-  const sigValidStr = data.verification ? (data.verification.signatureValid ? "VALID" : "INVALID") : "not available";
+  const sigValidStr = data.verification
+    ? data.verification.signatureValid
+      ? "VALID"
+      : "INVALID"
+    : "not available";
   const algStr = data.verification?.algorithm ?? "not available";
   const keyStr = data.verification?.keyId ?? "not available";
   lines.push(`Shopper JWS Signature:    ${sigValidStr} (${algStr}, key: ${keyStr})`);
   lines.push(`Computed Mandate Hash:    ${data.verification?.computedHash ?? "not available"}`);
-  lines.push(`Order Pointer Match:      ${data.verification ? (data.verification.customIdMatches ? "VERIFIED MATCH" : "MISMATCH") : "not available"}`);
+  lines.push(
+    `Order Pointer Match:      ${data.verification ? (data.verification.customIdMatches ? "VERIFIED MATCH" : "MISMATCH") : "not available"}`,
+  );
   lines.push(`Policy Engine Outcome:    ${data.verification?.verdictOutcome ?? "not available"}`);
-  const reasonsStr = data.verification?.reasons && data.verification.reasons.length > 0
-    ? data.verification.reasons.join(", ")
-    : "NONE (COMPLIANT)";
+  const reasonsStr =
+    data.verification?.reasons && data.verification.reasons.length > 0
+      ? data.verification.reasons.join(", ")
+      : "NONE (COMPLIANT)";
   lines.push(`Reason Codes:             ${reasonsStr}`);
   lines.push("");
 
@@ -185,70 +198,72 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
   return lines.join("\n");
 }
 
+/** Courier is a standard 14 font with no Unicode: fold to ASCII so nothing renders as mojibake. */
+export function toPdfAscii(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, "-")
+    .replace(/…/g, "...")
+    .replace(/[^\x20-\x7e]/g, "?");
+}
+
+/** 9 pt Courier, 12 pt leading, from y=760 down to a 40 pt bottom margin. */
+export const LINES_PER_PAGE = 60;
+
 export function generateEvidencePdf(data: EvidencePdfData): Uint8Array {
-  const textContent = renderEvidencePdfText(data);
-  const rawLines = textContent.split("\n");
-  const textLines = rawLines.flatMap((l) => wrapLine(l, 80));
+  const textLines = renderEvidencePdfText(data)
+    .split("\n")
+    .flatMap((l) => wrapLine(toPdfAscii(l), 80));
 
-  // Construct PDF stream layout commands
-  const streamCommands: string[] = [
-    "BT",
-    "/F1 9 Tf",
-    "40 760 Td",
-    "12 TL",
+  const pages: string[][] = [];
+  for (let i = 0; i < textLines.length; i += LINES_PER_PAGE)
+    pages.push(textLines.slice(i, i + LINES_PER_PAGE));
+
+  // Objects: 1 catalog, 2 page tree, then (page, content) per page, then the font. Everything is
+  // ASCII, so string length is byte length and the output is byte-for-byte deterministic.
+  const fontId = 3 + pages.length * 2;
+  const kids = pages.map((_, i) => `${3 + i * 2} 0 R`).join(" ");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`,
   ];
+  pages.forEach((lines, i) => {
+    const body = ["BT", "/F1 9 Tf", "40 760 Td", "12 TL"];
+    lines.forEach((line, j) => {
+      if (j > 0) body.push("T*");
+      body.push(`(${escapePdfText(line)}) Tj`);
+    });
+    body.push("ET");
+    const stream = body.join("\n");
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${4 + i * 2} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    );
+  });
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>");
 
-  for (let i = 0; i < textLines.length; i++) {
-    const rawLine = textLines[i] ?? "";
-    const escaped = escapePdfText(rawLine);
-    if (i === 0) {
-      streamCommands.push(`(${escaped}) Tj`);
-    } else {
-      streamCommands.push("T*");
-      streamCommands.push(`(${escaped}) Tj`);
-    }
-  }
-
-  streamCommands.push("ET");
-  const streamBody = streamCommands.join("\n");
-  const streamLength = Buffer.byteLength(streamBody, "utf8");
-
-  // Build PDF objects with static structure for byte-for-byte determinism
-  const obj1 = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
-  const obj2 = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
-  const obj3 = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n";
-  const obj4 = "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n";
-  const obj5 = `5 0 obj\n<< /Length ${streamLength} >>\nstream\n${streamBody}\nendstream\nendobj\n`;
-
-  const header = "%PDF-1.4\n%POI-DETERMINISTIC-EVIDENCE\n";
-
-  // Calculate byte offsets for xref
-  const offset0 = 0;
-  const offset1 = Buffer.byteLength(header, "utf8");
-  const offset2 = offset1 + Buffer.byteLength(obj1, "utf8");
-  const offset3 = offset2 + Buffer.byteLength(obj2, "utf8");
-  const offset4 = offset3 + Buffer.byteLength(obj3, "utf8");
-  const offset5 = offset4 + Buffer.byteLength(obj4, "utf8");
-  const startXref = offset5 + Buffer.byteLength(obj5, "utf8");
-
+  let out = "%PDF-1.4\n%POI-DETERMINISTIC-EVIDENCE\n";
+  const offsets: number[] = [];
+  objects.forEach((obj, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${obj}\nendobj\n`;
+  });
   const pad = (n: number) => n.toString().padStart(10, "0");
-  const xref = [
+  const startXref = out.length;
+  out += [
     "xref",
-    "0 6",
-    `${pad(offset0)} 65535 f `,
-    `${pad(offset1)} 00000 n `,
-    `${pad(offset2)} 00000 n `,
-    `${pad(offset3)} 00000 n `,
-    `${pad(offset4)} 00000 n `,
-    `${pad(offset5)} 00000 n `,
+    `0 ${objects.length + 1}`,
+    `${pad(0)} 65535 f `,
+    ...offsets.map((o) => `${pad(o)} 00000 n `),
     "trailer",
-    "<< /Size 6 /Root 1 0 R >>",
+    `<< /Size ${objects.length + 1} /Root 1 0 R >>`,
     "startxref",
-    startXref.toString(),
+    String(startXref),
     "%%EOF",
     "",
   ].join("\n");
-
-  const fullPdf = header + obj1 + obj2 + obj3 + obj4 + obj5 + xref;
-  return new TextEncoder().encode(fullPdf);
+  return new TextEncoder().encode(out);
 }
