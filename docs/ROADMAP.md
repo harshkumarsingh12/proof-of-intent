@@ -51,7 +51,7 @@ of every `ci` run.
 | Dispute workspace, mandate diff widget, evidence preview widget | Sikruti | Pending |
 | J2 classification, J3 drafting | Sumedha | Pending |
 | Step-up links; agent-alone flow with vault; buyer agent | Sristee | Pending |
-| Uptime monitor, backups, rate limits | Harsh | Pending |
+| Uptime monitor, backups, rate limits | Harsh | Rate limits + backups ✅; external monitor pending (needs the public URLs) |
 
 **Done when:** a real `CUSTOMER.DISPUTE.CREATED` is classified, evidence is submitted and a claim is accepted in
 sandbox through the UI.
