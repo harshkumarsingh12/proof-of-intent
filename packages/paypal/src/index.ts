@@ -44,6 +44,24 @@ export interface WebhookHeaders {
   authAlgo: string;
 }
 
+/** The evidence types we send (PayPal accepts more). */
+export type EvidenceType = "OTHER" | "PROOF_OF_FULFILLMENT" | "PROOF_OF_REFUND";
+
+export interface ProvideEvidenceInput {
+  notes: string;
+  /** PDFs, at most 10 MB each. */
+  files: { name: string; data: Uint8Array }[];
+  /** Defaults to OTHER; use evidenceTypeFor(dispute reason). */
+  evidenceType?: EvidenceType;
+}
+
+/** Which evidence answers which PayPal dispute reason (docs/specs/0004 §Disputes). */
+export function evidenceTypeFor(reason: string): EvidenceType {
+  if (reason === "MERCHANDISE_OR_SERVICE_NOT_RECEIVED") return "PROOF_OF_FULFILLMENT";
+  if (reason === "CREDIT_NOT_PROCESSED") return "PROOF_OF_REFUND";
+  return "OTHER"; // NOT_AS_DESCRIBED, UNAUTHORISED and the rest: the mandate attestation
+}
+
 export interface PayPalClient {
   createOrder(input: CreateOrderInput): Promise<CreatedOrder>;
   /** Authorizes an order the shopper approved. */
@@ -52,10 +70,8 @@ export interface PayPalClient {
   voidAuthorization(authorizationId: string): Promise<void>;
   /** False for a delivery PayPal didn't sign. Throws only when PayPal can't be reached, so the caller answers 5xx and PayPal retries. */
   verifyWebhook(headers: WebhookHeaders, rawBody: string): Promise<boolean>;
-  provideEvidence(
-    disputeId: string,
-    input: { notes: string; files: { name: string; data: Uint8Array }[] },
-  ): Promise<void>;
+  /** Multipart provide-evidence: the attestation PDF(s) plus notes. Only after an operator click (invariant 4). */
+  provideEvidence(disputeId: string, input: ProvideEvidenceInput): Promise<void>;
   sendMessage(disputeId: string, message: string): Promise<void>;
 }
 

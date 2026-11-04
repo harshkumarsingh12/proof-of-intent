@@ -11,16 +11,19 @@ const paypal = createPayPalClient(parseMode(process.env.PAYPAL_MODE)); // mock u
 const order = await paypal.createOrder({ intent: "AUTHORIZE", ourOrderId, customId, total, items });
 ```
 
-| Method | Sandbox | Mock |
-|---|---|---|
-| `createOrder` | Orders v2; `PayPal-Request-Id` = our order id, so retries never duplicate | idempotent on our order id; vaulted CAPTURE completes at once |
-| `authorizeOrder`, `captureAuthorization`, `voidAuthorization` | Orders v2 / Payments v2, deterministic request ids | same state rules and error names as PayPal |
-| `verifyWebhook` | `verify-webhook-signature` with the raw body spliced in verbatim; `false` for 4xx, throws on outages | accepts `transmissionSig === MOCK_WEBHOOK_SIGNATURE` |
-| `provideEvidence`, `sendMessage` | M2 (`NotImplementedError` until then) | recorded in `disputeActions` |
+| Method                                                        | Sandbox                                                                                                                                                                                          | Mock                                                          |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `createOrder`                                                 | Orders v2; `PayPal-Request-Id` = our order id, so retries never duplicate                                                                                                                        | idempotent on our order id; vaulted CAPTURE completes at once |
+| `authorizeOrder`, `captureAuthorization`, `voidAuthorization` | Orders v2 / Payments v2, deterministic request ids                                                                                                                                               | same state rules and error names as PayPal                    |
+| `verifyWebhook`                                               | `verify-webhook-signature` with the raw body spliced in verbatim; `false` for 4xx, throws on outages                                                                                             | accepts `transmissionSig === MOCK_WEBHOOK_SIGNATURE`          |
+| `provideEvidence`                                             | multipart `provide-evidence`: an `input` JSON part (`evidence_type`, notes, document names) plus each PDF as `fileN`; refuses non-PDFs, files over 10 MB and empty uploads before calling PayPal | same validation; recorded in `disputeActions`                 |
+| `sendMessage`                                                 | multipart `send-message` with the message as the `input` part                                                                                                                                    | recorded in `disputeActions`                                  |
 
 - Money in and out is integer minor units (`Money`); `toPayPalAmount` converts with the currency's own exponent.
 - Errors from PayPal are `PayPalError { status, issue, debugId }`. Quote the `debugId` to PayPal support.
 - The mock treats every order as approved by the shopper (there's nobody to click).
+- `evidenceTypeFor(reason)` maps a PayPal dispute reason to the evidence type spec 0004 prescribes.
+- Accepting a claim goes through the Agent Toolkit in the worker (spec 0005), not this client.
 
 ## Fixtures
 
