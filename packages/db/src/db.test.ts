@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { createDb, type Db } from "./index";
 
 // Runs against real Postgres. CI provides one (ci.yml services); locally:
@@ -40,6 +40,21 @@ describe.runIf(ADMIN_URL)("db", () => {
     await other.close();
     expect([...a, ...b]).toEqual(["0001_init.sql"]);
     expect(await db.migrate()).toEqual([]);
+  });
+
+  test("a killed idle connection doesn't crash the process; the next query reconnects", async () => {
+    const victim = createDb(url.toString());
+    await victim.claimNonce("n-before-kill"); // opens a pooled connection that now sits idle
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    // What a Postgres restart or failover does to an idle client.
+    await raw.query(
+      "select pg_terminate_backend(pid) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() and query like 'insert into nonces%'",
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    expect(errors).toHaveBeenCalledWith(expect.stringContaining("idle connection lost"));
+    expect(await victim.claimNonce("n-after-kill")).toBe(true);
+    errors.mockRestore();
+    await victim.close();
   });
 
   test("a nonce can be claimed once; the second claim returns false", async () => {
