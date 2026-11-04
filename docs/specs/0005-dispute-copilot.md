@@ -19,9 +19,12 @@ fast, with a person making the final call. Journeys C and D.
 webhook → verify, persist, enqueue dispute.received
 → get_dispute (Agent Toolkit) → match seller transaction id to our order
 → no mandate?           → NO_MANDATE       → standard evidence by PayPal reason
+→ custom_id ≠ mandate   → NO_MANDATE       → standard evidence, flagged MANDATE_MISMATCH
 → replay hard rules     → any failure      → AGENT_OVERREACH  → recommend accept
+  (at capture time, with the ledger checkout saw)
+→ checkout was STEP_UP  → shopper approved → MANDATE_COMPLIANT → build evidence package
 → replay J1             → not match        → INTENT_MISREAD   → recommend offer or accept
-                        → match            → MANDATE_COMPLIANT → build evidence package
+  (or confidence < 0.8) → match            → MANDATE_COMPLIANT → build evidence package
 → operator review (approve / edit / override with a note)
 → the one PayPal action the operator clicked; every step in audit_log
 ```
