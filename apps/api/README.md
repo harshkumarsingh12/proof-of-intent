@@ -4,7 +4,7 @@
 
 Fastify service on port 3000 (`pnpm dev:api`).
 
-**Built:** `/healthz`, `/readyz`, `POST /checkout` (stage 1), `POST /webhooks/paypal`. Every other agreed route
+**Built:** `/healthz`, `/readyz`, `POST /checkout`, `POST /checkout/:id/approve`, `POST /webhooks/paypal`. Every other agreed route
 returns 501 with its owner.
 
 `buildApp(deps)` takes `{ paypal, db?, merchant?, aiMode?, semanticFit?, now? }`; `await depsFromEnv()` builds them
@@ -19,6 +19,12 @@ spec 0003 §Stage 1. A REJECT is HTTP 200; 400 is a malformed request, 409 an ag
 502 PayPal down, 503 missing configuration.
 
 Against the sandbox: `DATABASE_URL=… pnpm sandbox:checkout-smoke` runs journey B and reads the order back from PayPal.
+
+## POST /checkout/:id/approve
+
+Human present, from PayPal's `onApprove`: `{ approval_jws }` (the shopper's `CartApproval` countersignature) →
+authorize, re-check, then `{ status: "CAPTURED", capture_id }` or `{ status: "VOIDED", reasons }`. 409 if the shopper
+hasn't approved on PayPal yet; 502 if PayPal fails (retry is safe). Details in spec 0003 §Stage 2.
 
 ## POST /webhooks/paypal
 

@@ -46,7 +46,19 @@ PayPal order we have no record of.
 
 ### Stage 2, before capture (human present only)
 
-Cart hash unchanged, cart not expired (15 min), shopper countersignature valid → capture; otherwise void.
+`POST /checkout/:id/approve { approval_jws }`, called by the buyer app from PayPal's `onApprove`. Built in
+`apps/api/src/approve.ts`.
+
+1. Authorize the PayPal order (PayPal refuses with `ORDER_NOT_APPROVED` → 409 `shopper_has_not_approved`).
+2. Re-check: the countersignature (`CartApproval { order_id, cart_mandate_hash, approved_at }`, see spec 0001)
+   verifies with **the key that signed the Intent Mandate** (else `UNKNOWN_KEY` / `SIGNATURE_INVALID`); it names
+   this order and the exact Cart Mandate we signed (else `MANDATE_MISMATCH`); the cart hasn't expired (else
+   `CART_EXPIRED`).
+3. All good → capture → `{ status: "CAPTURED", capture_id }`. Otherwise void → `{ status: "VOIDED", reasons }`.
+
+Authorizing before re-checking means a failed check releases the hold instead of leaving the shopper's money
+held. A retry after completion returns the same outcome; a PayPal failure answers 502 and leaves the order at its
+last state (`AUTHORIZED`), so a retry finishes the job with the same idempotent capture request.
 
 ### Jobs (pg-boss)
 
@@ -78,7 +90,8 @@ A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVE
 
 1. `/checkout` rejects the red $95 fixture with no PayPal order created. *(done; `pnpm sandbox:checkout-smoke`)*
 2. A replayed nonce is rejected with `NONCE_REPLAYED`. *(done)*
-3. An approved human-present cart is authorized, re-checked and captured; a modified cart is voided.
+3. An approved human-present cart is authorized, re-checked and captured; a modified cart is voided. *(done with the
+   mock; live on integration day, needs a sandbox shopper to approve)*
 4. Step-up: no order exists until the shopper approves; an expired link creates nothing. *(ledger M2 @srshriv)*
 5. Every verdict and PayPal call is in `audit_log` with the request body. *(done for stage 1)*
 

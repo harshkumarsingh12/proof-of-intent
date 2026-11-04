@@ -153,6 +153,29 @@ export const CheckoutResponse = z.object({
 });
 export type CheckoutResponse = z.infer<typeof CheckoutResponse>;
 
+/**
+ * The shopper's countersignature at human-present approval (docs/specs/0001, 0003 stage 2), signed with the
+ * same key as their Intent Mandate. It binds "I approved on PayPal" to this order and this exact cart.
+ */
+export const CartApproval = z.object({
+  order_id: z.string().min(1),
+  cart_mandate_hash: sha256Hex,
+  approved_at: isoDateTime,
+});
+export type CartApproval = z.infer<typeof CartApproval>;
+
+/** POST /checkout/:id/approve, sent by the buyer app from PayPal's onApprove. */
+export const ApproveRequest = z.object({ approval_jws: z.string().min(1) });
+export type ApproveRequest = z.infer<typeof ApproveRequest>;
+
+export const ApproveResponse = z.object({
+  status: z.enum(["CAPTURED", "VOIDED"]),
+  capture_id: z.string().optional(),
+  /** Why the authorization was voided. */
+  reasons: z.array(ReasonCode).optional(),
+});
+export type ApproveResponse = z.infer<typeof ApproveResponse>;
+
 export const DisputeClass = z.enum(["MANDATE_COMPLIANT", "AGENT_OVERREACH", "INTENT_MISREAD", "NO_MANDATE"]);
 export type DisputeClass = z.infer<typeof DisputeClass>;
 
