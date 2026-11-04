@@ -1,6 +1,6 @@
-import { buildApp } from "./app";
+import { buildApp, depsFromEnv } from "./app";
 
-const app = buildApp();
+const app = buildApp(await depsFromEnv());
 const port = Number(process.env.PORT ?? 3000);
 
 app.listen({ port, host: "0.0.0.0" }).catch((err) => {

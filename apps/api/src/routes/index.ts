@@ -9,7 +9,6 @@ type Method = "GET" | "POST";
 const SPEC = "docs/specs/0003-checkout-and-verification.md";
 
 const routes: [Method, string, string][] = [
-  ["POST", "/checkout", "harshkumarsingh12"],
   ["POST", "/checkout/:id/approve", "harshkumarsingh12"],
   ["POST", "/stepup/:token/approve", "srshriv"],
   ["GET", "/orders", "harshkumarsingh12"],

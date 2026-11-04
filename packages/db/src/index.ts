@@ -30,6 +30,58 @@ export interface WebhookEventRecord {
   payload: unknown;
 }
 
+export interface KeyRecord {
+  kid: string;
+  publicJwk: Record<string, unknown>;
+  retiredAt?: string;
+  /** Shopper keys: who signed, and their vaulted wallet if they saved one. */
+  shopperId?: string;
+  vaultId?: string;
+  /** Agent keys: the platform the key was registered to (KYA-lite). */
+  platform?: string;
+}
+
+export interface MandateRecord {
+  hash: string;
+  kind: "intent" | "cart" | "payment";
+  mandateId: string;
+  canonical: string;
+  jws: string;
+  kid: string;
+}
+
+export interface VerdictRecord {
+  intentMandateId: string;
+  cartId: string;
+  orderId?: string;
+  outcome: "APPROVE" | "STEP_UP" | "REJECT";
+  reasons: string[];
+  semantic?: unknown;
+}
+
+export interface OrderRecord {
+  id: string;
+  intentMandateId: string;
+  intentMandateHash: string;
+  cartMandateHash: string;
+  customId: string;
+  paypalIntent: "AUTHORIZE" | "CAPTURE";
+  status: string;
+  totalValue: number;
+  currency: string;
+  shopperId?: string;
+  agentPlatform: string;
+  humanPresent: boolean;
+}
+
+export interface OrderPatch {
+  status: string;
+  paypalOrderId?: string;
+  authorizationId?: string;
+  captureId?: string;
+  capturedAt?: string;
+}
+
 export interface Db {
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
@@ -41,6 +93,15 @@ export interface Db {
    * receiver acknowledges without doing anything twice. Rows with no processed_at are the worker's inbox.
    */
   recordWebhookEvent(event: WebhookEventRecord): Promise<boolean>;
+  /** A registered public key, or null. Retired keys are returned with retiredAt; the caller applies the rule. */
+  findKey(kind: "shopper" | "agent", kid: string): Promise<KeyRecord | null>;
+  /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
+  saveMandate(m: MandateRecord): Promise<void>;
+  /** Prior captures under an intent mandate, for budget_cap and recurrence. Integer minor units. */
+  mandateLedger(intentMandateId: string): Promise<{ capturedTotal: number; capturedOrderTimes: string[] }>;
+  recordVerdict(v: VerdictRecord): Promise<void>;
+  createOrder(o: OrderRecord): Promise<void>;
+  updateOrder(id: string, patch: OrderPatch): Promise<void>;
   /** Applies pending migrations. Safe to call from several processes at once. */
   migrate(): Promise<string[]>;
   close(): Promise<void>;
@@ -80,6 +141,90 @@ export function createDb(databaseUrl: string): Db {
         [e.eventId, e.eventType, e.resourceId ?? null, json(e.payload)],
       );
       return res.rowCount === 1;
+    },
+
+    async findKey(kind, kid) {
+      const sql =
+        kind === "shopper"
+          ? `select k.kid, k.public_jwk, k.retired_at, k.shopper_id, s.vault_id
+               from shopper_keys k join shoppers s on s.id = k.shopper_id where k.kid = $1`
+          : "select kid, public_jwk, retired_at, platform from agent_keys where kid = $1";
+      const row = (await pool.query(sql, [kid])).rows[0];
+      if (!row) return null;
+      return {
+        kid: row.kid,
+        publicJwk: row.public_jwk,
+        ...(row.retired_at ? { retiredAt: (row.retired_at as Date).toISOString() } : {}),
+        ...(row.shopper_id ? { shopperId: row.shopper_id } : {}),
+        ...(row.vault_id ? { vaultId: row.vault_id } : {}),
+        ...(row.platform ? { platform: row.platform } : {}),
+      };
+    },
+
+    async saveMandate(m) {
+      await pool.query(
+        `insert into mandates (hash, kind, mandate_id, canonical, jws, kid) values ($1, $2, $3, $4, $5, $6)
+         on conflict (hash) do nothing`,
+        [m.hash, m.kind, m.mandateId, m.canonical, m.jws, m.kid],
+      );
+    },
+
+    async mandateLedger(intentMandateId) {
+      const res = await pool.query<{ total_value: string; captured_at: Date }>(
+        "select total_value, captured_at from orders where intent_mandate_id = $1 and captured_at is not null order by captured_at",
+        [intentMandateId],
+      );
+      return {
+        capturedTotal: res.rows.reduce((sum, r) => sum + Number(r.total_value), 0),
+        capturedOrderTimes: res.rows.map((r) => r.captured_at.toISOString()),
+      };
+    },
+
+    async recordVerdict(v) {
+      await pool.query(
+        "insert into verdicts (intent_mandate_id, cart_id, order_id, outcome, reasons, semantic) values ($1, $2, $3, $4, $5, $6)",
+        [v.intentMandateId, v.cartId, v.orderId ?? null, v.outcome, v.reasons, json(v.semantic)],
+      );
+    },
+
+    async createOrder(o) {
+      await pool.query(
+        `insert into orders (id, intent_mandate_id, intent_mandate_hash, cart_mandate_hash, custom_id, paypal_intent,
+                             status, total_value, currency, shopper_id, agent_platform, human_present)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          o.id,
+          o.intentMandateId,
+          o.intentMandateHash,
+          o.cartMandateHash,
+          o.customId,
+          o.paypalIntent,
+          o.status,
+          o.totalValue,
+          o.currency,
+          o.shopperId ?? null,
+          o.agentPlatform,
+          o.humanPresent,
+        ],
+      );
+    },
+
+    async updateOrder(id, p) {
+      const res = await pool.query(
+        `update orders set status = $2,
+                paypal_order_id = coalesce($3, paypal_order_id), authorization_id = coalesce($4, authorization_id),
+                capture_id = coalesce($5, capture_id), captured_at = coalesce($6, captured_at), updated_at = now()
+          where id = $1`,
+        [
+          id,
+          p.status,
+          p.paypalOrderId ?? null,
+          p.authorizationId ?? null,
+          p.captureId ?? null,
+          p.capturedAt ?? null,
+        ],
+      );
+      if (res.rowCount !== 1) throw new Error(`order ${id} does not exist`);
     },
 
     async auditTrail(subjectId) {
