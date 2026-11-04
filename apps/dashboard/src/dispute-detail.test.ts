@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { executeDisputeAction, fetchDisputeDetail, getDisputeDetail } from "./api";
+import {
+  executeDisputeAction,
+  fetchDisputeDetail,
+  fetchDisputeDetailDetailed,
+  getDisputeDetail,
+} from "./api";
 import type { DisputeDetail } from "./dispute-types";
 import { widgets } from "./widgets";
 
@@ -174,23 +179,31 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       };
     }) as unknown as typeof fetch;
 
-    const apiResult = await fetchDisputeDetail("PP-D-API/1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
+    const detailedApiResult = await fetchDisputeDetailDetailed("PP-D-API/1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
     expect(calledUrl).toBe("http://example.test/disputes/PP-D-API%2F1/recommendation");
-    expect(apiResult?.id).toBe("PP-D-API-1");
-    expect(apiResult?.agentPlatform).toBe("TestBot");
+    expect(detailedApiResult.isFallback).toBe(false);
+    expect(detailedApiResult.dispute?.isDemoData).toBe(false);
+    expect(detailedApiResult.dispute?.id).toBe("PP-D-API-1");
+    expect(detailedApiResult.dispute?.agentPlatform).toBe("TestBot");
 
-    // API error (501 or network failure) -> falls back to local fixture
+    const directResult = await fetchDisputeDetail("PP-D-API/1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
+    expect(directResult?.id).toBe("PP-D-API-1");
+
+    // API error (501 or network failure) -> falls back to local fixture with isFallback=true and isDemoData=true
     const mockErrorFetch = (async () => {
       throw new Error("connection failed");
     }) as unknown as typeof fetch;
 
-    const fallbackResult = await fetchDisputeDetail("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
-    expect(fallbackResult?.id).toBe("PP-D-1001");
-    expect(fallbackResult?.decision).toBe("defend");
+    const fallbackDetailed = await fetchDisputeDetailDetailed("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
+    expect(fallbackDetailed.isFallback).toBe(true);
+    expect(fallbackDetailed.dispute?.isDemoData).toBe(true);
+    expect(fallbackDetailed.dispute?.id).toBe("PP-D-1001");
+    expect(fallbackDetailed.dispute?.decision).toBe("defend");
 
     // Unknown dispute ID returns undefined
-    const notFoundResult = await fetchDisputeDetail("UNKNOWN-ID", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
-    expect(notFoundResult).toBeUndefined();
+    const notFoundResult = await fetchDisputeDetailDetailed("UNKNOWN-ID", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
+    expect(notFoundResult.dispute).toBeUndefined();
+    expect(notFoundResult.isFallback).toBe(true);
   });
 
   it("calls API action endpoint and never reports success on failure or 501", async () => {

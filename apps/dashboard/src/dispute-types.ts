@@ -71,6 +71,7 @@ export interface EvidenceDraftInfo {
 }
 
 export interface DisputeDetail extends DisputeItem {
+  isDemoData?: boolean;
   shopperIntentText?: string;
   mandateId?: string;
   mandateNonce?: string;

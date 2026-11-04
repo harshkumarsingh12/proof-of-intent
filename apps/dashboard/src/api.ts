@@ -58,15 +58,19 @@ export async function fetchDisputes(options?: FetchDisputesOptions): Promise<Dis
   return res.disputes;
 }
 
+export interface FetchDisputeDetailResponse {
+  dispute: DisputeDetail | undefined;
+  isFallback: boolean;
+}
+
 /**
  * Fetch a single dispute with full mandate, cart, and copilot details.
- * Reads from the API over HTTP with no direct database access.
- * Falls back to canonical fixture data if the API server is unavailable or returns 501.
+ * Returns response metadata including whether data came from canonical seed fallback.
  */
-export async function fetchDisputeDetail(
+export async function fetchDisputeDetailDetailed(
   disputeId: string,
   options?: FetchDisputesOptions
-): Promise<DisputeDetail | undefined> {
+): Promise<FetchDisputeDetailResponse> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
@@ -80,14 +84,31 @@ export async function fetchDisputeDetail(
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
-        return data as DisputeDetail;
+        return { dispute: { ...(data as DisputeDetail), isDemoData: false }, isFallback: false };
       }
     }
   } catch {
     // API server not reachable; fallback to canonical dispute detail
   }
 
-  return getDisputeDetail(disputeId);
+  const dispute = getDisputeDetail(disputeId);
+  return {
+    dispute: dispute ? { ...dispute, isDemoData: true } : undefined,
+    isFallback: true,
+  };
+}
+
+/**
+ * Fetch a single dispute with full mandate, cart, and copilot details.
+ * Reads from the API over HTTP with no direct database access.
+ * Falls back to canonical fixture data if the API server is unavailable or returns 501.
+ */
+export async function fetchDisputeDetail(
+  disputeId: string,
+  options?: FetchDisputesOptions
+): Promise<DisputeDetail | undefined> {
+  const res = await fetchDisputeDetailDetailed(disputeId, options);
+  return res.dispute;
 }
 
 export type DisputeOperatorAction =

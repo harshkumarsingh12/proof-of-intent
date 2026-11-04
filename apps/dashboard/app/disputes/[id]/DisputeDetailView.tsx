@@ -4,7 +4,14 @@ import { useMemo, useState } from "react";
 import type { DisputeDetail } from "../../../src/dispute-types";
 import { calculateAge, calculateSla, executeDisputeAction, formatMoney } from "../../../src/api";
 
-export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
+export function DisputeDetailView({
+  dispute,
+  isDemoData: isDemoDataProp,
+}: {
+  dispute: DisputeDetail;
+  isDemoData?: boolean;
+}) {
+  const isDemoData = isDemoDataProp ?? dispute.isDemoData ?? true;
   const [onlyViolations, setOnlyViolations] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [hasBeenPreviewed, setHasBeenPreviewed] = useState(false);
@@ -70,6 +77,41 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Fallback Demo Data Banner */}
+      {isDemoData && (
+        <div
+          data-testid="demo-data-banner"
+          style={{
+            background: "rgba(210, 153, 34, 0.15)",
+            border: "1px solid #d29922",
+            borderRadius: 8,
+            padding: "12px 16px",
+            color: "#e3b341",
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <span
+            style={{
+              padding: "2px 8px",
+              background: "#d29922",
+              color: "#0d1117",
+              fontWeight: 700,
+              borderRadius: 4,
+              fontSize: 11,
+              letterSpacing: "0.5px",
+            }}
+          >
+            DEMO DATA
+          </span>
+          <span>
+            API endpoint (<code>/disputes/:id/recommendation</code>) is unavailable or returned 501. Showing local demo dispute data.
+          </span>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div style={cardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
@@ -85,6 +127,23 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
               </span>
               <span style={statusBadgeStyle(dispute.status)}>{dispute.status.replace(/_/g, " ")}</span>
               <span style={platformBadgeStyle}>{dispute.agentPlatform}</span>
+              {isDemoData && (
+                <span
+                  data-testid="demo-data-badge"
+                  style={{
+                    padding: "3px 8px",
+                    background: "rgba(210, 153, 34, 0.2)",
+                    color: "#e3b341",
+                    border: "1px solid #d29922",
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  DEMO DATA
+                </span>
+              )}
             </div>
 
             <div style={{ marginTop: 8, fontSize: 13, color: "#8b949e", display: "flex", gap: 16, flexWrap: "wrap" }}>
