@@ -103,18 +103,18 @@ describe.runIf(ADMIN_URL)("db", () => {
   test("the schema refuses malformed hashes and oversized custom_id", async () => {
     await expect(
       raw.query(
-        "insert into mandates (id, kind, hash, canonical, jws, kid) values ('m1', 'intent', $1, '{}', 'j', 'k')",
+        "insert into mandates (hash, kind, mandate_id, canonical, jws, kid) values ($1, 'intent', 'm1', '{}', 'j', 'k')",
         ["A".repeat(64)],
       ),
     ).rejects.toThrow();
     await raw.query(
-      "insert into mandates (id, kind, hash, canonical, jws, kid) values ('m2', 'intent', $1, '{}', 'j', 'k')",
+      "insert into mandates (hash, kind, mandate_id, canonical, jws, kid) values ($1, 'intent', 'm2', '{}', 'j', 'k')",
       ["a".repeat(64)],
     );
     await expect(
       raw.query(
-        "insert into orders (id, intent_mandate_id, custom_id, paypal_intent, status, total_value, currency, human_present) values ('o1', 'm2', $1, 'AUTHORIZE', 'CREATED', 1, 'USD', true)",
-        ["x".repeat(128)],
+        "insert into orders (id, intent_mandate_id, intent_mandate_hash, custom_id, paypal_intent, status, total_value, currency, human_present) values ('o1', 'm2', $2, $1, 'AUTHORIZE', 'CREATED', 1, 'USD', true)",
+        ["x".repeat(128), "a".repeat(64)],
       ),
     ).rejects.toThrow();
   });
