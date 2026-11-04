@@ -4,6 +4,7 @@ import {
   NotImplementedError,
   type CartMandate,
   type IntentMandate,
+  type Money,
   type ReasonCode,
   type Verdict,
 } from "@poi/contracts";
@@ -15,6 +16,16 @@ export interface DisputeRecord {
   orderId?: string;
   status?: string;
   reason?: string;
+  amount?: Money;
+  responseDueDate?: string;
+}
+
+export interface CaptureRecord {
+  captureId: string;
+  orderId: string;
+  capturedAt: string;
+  amount: Money;
+  customId: string;
 }
 
 export interface OrderRecord {
@@ -22,6 +33,9 @@ export interface OrderRecord {
   customId?: string;
   intent?: IntentMandate;
   cart?: CartMandate;
+  /** The Intent Mandate JWS exactly as verified at checkout. */
+  signedIntentJws?: string;
+  captureRecord?: CaptureRecord;
   capturedAt?: string;
   /** Prior captures under this mandate, excluding this order: what checkout saw. */
   ledger?: MandateLedger;
