@@ -72,3 +72,19 @@ git tag v0.1.0-hackathon && git push origin v0.1.0-hackathon   # deploy.yml pull
 
 Repository secrets for `deploy.yml`: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY` (optional `SERVER_PORT`,
 `SERVER_DIR`). Without them the workflow pushes images and skips the deploy step.
+
+Server `.env` beyond the defaults: `PAYPAL_MODE=sandbox` with the PayPal variables, `MERCHANT_SIGNING_KEY`
+(`pnpm keys:gen`; the API refuses to start in sandbox mode without it), and `TRUST_PROXY=1` because Caddy or a
+Cloudflare Tunnel sits in front (rate limits then key on the real client IP). Never set `TRUST_PROXY` on a host
+the internet reaches directly: clients could pick their own IP with `X-Forwarded-For`.
+
+**Backups.** The `backup` service (server profile) dumps Postgres every 24 h to `./backups/poi-<UTC time>.sql.gz`
+and keeps 7 days. A failed dump is logged as `backup FAILED` and never replaces a good file. Restore:
+
+```bash
+docker compose exec -T postgres psql -U poi -d postgres -c "create database poi_restore"
+gunzip -c backups/poi-<time>.sql.gz | docker compose exec -T postgres psql -U poi -d poi_restore
+# check it, then point DATABASE_URL at poi_restore (or rename the databases) and restart api and worker
+```
+
+`audit_log` is append-only by trigger, so a demo reset means dropping and recreating the database, not deleting rows.

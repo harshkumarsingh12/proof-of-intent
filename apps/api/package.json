@@ -8,6 +8,7 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^10.2.1",
     "@poi/ai": "workspace:*",
     "@poi/contracts": "workspace:*",
     "@poi/db": "workspace:*",

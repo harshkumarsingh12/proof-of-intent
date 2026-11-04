@@ -2,6 +2,7 @@
  * Merchant service. Owner: @harshkumarsingh12 (routes), @srshriv (verification logic).
  * Spec: docs/specs/0003-checkout-and-verification.md.
  */
+import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import { parseAiMode, semanticFit, type AiMode } from "@poi/ai";
 import { createDb, type Db } from "@poi/db";
@@ -50,7 +51,20 @@ async function merchantFromEnv(env: NodeJS.ProcessEnv, required: boolean): Promi
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
-  const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
+  const app = Fastify({
+    logger: process.env.NODE_ENV !== "test",
+    trustProxy: process.env.TRUST_PROXY === "1",
+  });
+
+  // Opt-in per route (config.rateLimit, see rate-limits.ts); errors in the API's usual shape.
+  app.register(rateLimit, {
+    global: false,
+    errorResponseBuilder: (_req, ctx) => ({
+      statusCode: 429,
+      error: "rate_limited",
+      message: `Too many requests; retry in ${ctx.after}`,
+    }),
+  });
 
   app.get("/healthz", async () => ({ status: "ok" }));
 
@@ -68,7 +82,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     semanticFit: deps.semanticFit ?? semanticFit,
     now: deps.now ?? (() => new Date().toISOString()),
   });
-  registerRoutes(app);
+  // As a plugin, so these load after rate-limit and its per-route hook sees them.
+  app.register(async (instance) => registerRoutes(instance));
   if (deps.db) app.addHook("onClose", () => deps.db!.close());
   return app;
 }

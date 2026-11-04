@@ -72,6 +72,29 @@ services:
       interval: 10s
       retries: 5
 
+  # Server only: pg_dump every 24 h into ./backups, keeping 7 days (spec 0008). Restore: docs/SETUP.md.
+  # A failed dump never replaces a good file: it's written to .tmp and renamed only on success.
+  backup:
+    image: postgres:16-alpine
+    profiles: [server]
+    environment: { PGPASSWORD: "${POSTGRES_PASSWORD:-poi}" }
+    volumes: ["./backups:/backups"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -o pipefail
+        while true; do
+          f=/backups/poi-$$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+          if pg_dump -h postgres -U poi -d poi | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "backup ok $$f"
+          else rm -f "$$f.tmp"; echo "backup FAILED" >&2; fi
+          find /backups -name 'poi-*.sql.gz' -mtime +6 -delete
+          sleep 86400
+        done
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+    networks: [poi]
+
   caddy:
     image: caddy:2-alpine
     profiles: [server]
