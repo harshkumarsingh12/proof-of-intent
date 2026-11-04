@@ -23,12 +23,24 @@ export interface AuditRecord extends AuditEntry {
   at: string;
 }
 
+export interface WebhookEventRecord {
+  eventId: string;
+  eventType: string;
+  resourceId?: string;
+  payload: unknown;
+}
+
 export interface Db {
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
   appendAudit(entry: AuditEntry): Promise<void>;
   /** Every audit row for a subject, oldest first. The evidence timeline is built from these. */
   auditTrail(subjectId: string): Promise<AuditRecord[]>;
+  /**
+   * Stores a verified PayPal delivery. Returns false for a redelivery (same event id), which the
+   * receiver acknowledges without doing anything twice. Rows with no processed_at are the worker's inbox.
+   */
+  recordWebhookEvent(event: WebhookEventRecord): Promise<boolean>;
   /** Applies pending migrations. Safe to call from several processes at once. */
   migrate(): Promise<string[]>;
   close(): Promise<void>;
@@ -54,6 +66,14 @@ export function createDb(databaseUrl: string): Db {
         "insert into audit_log (actor, action, subject_id, prior_state, request_body) values ($1, $2, $3, $4, $5)",
         [entry.actor, entry.action, entry.subjectId, json(entry.priorState), json(entry.requestBody)],
       );
+    },
+
+    async recordWebhookEvent(e) {
+      const res = await pool.query(
+        "insert into webhook_events (event_id, event_type, resource_id, payload) values ($1, $2, $3, $4) on conflict (event_id) do nothing",
+        [e.eventId, e.eventType, e.resourceId ?? null, json(e.payload)],
+      );
+      return res.rowCount === 1;
     },
 
     async auditTrail(subjectId) {

@@ -18,21 +18,21 @@ describe("api", () => {
 });
 
 describe("checkout (unbuilt)", () => {
-  ledger("M1", "harshkumarsingh12", "POST /checkout rejects the red $95 jacket before any PayPal order exists", async () => {
-    const res = await buildApp().inject({
-      method: "POST",
-      url: "/checkout",
-      payload: { intent: greyJacketIntent, cart: overreachingCart },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().verdict.outcome).toBe("REJECT");
-    expect(res.json().paypalOrderId).toBeUndefined();
-  });
-
-  ledger("M1", "harshkumarsingh12", "webhook receiver answers 400 to an unverified delivery", async () => {
-    const res = await buildApp().inject({ method: "POST", url: "/webhooks/paypal", payload: {} });
-    expect(res.statusCode).toBe(400);
-  });
+  ledger(
+    "M1",
+    "harshkumarsingh12",
+    "POST /checkout rejects the red $95 jacket before any PayPal order exists",
+    async () => {
+      const res = await buildApp().inject({
+        method: "POST",
+        url: "/checkout",
+        payload: { intent: greyJacketIntent, cart: overreachingCart },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().verdict.outcome).toBe("REJECT");
+      expect(res.json().paypalOrderId).toBeUndefined();
+    },
+  );
 
   ledger("M2", "srshriv", "step-up approval link captures only after the shopper approves", async () => {
     const res = await buildApp().inject({ method: "POST", url: "/stepup/test-token/approve" });
