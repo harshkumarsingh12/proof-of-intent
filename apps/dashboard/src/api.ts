@@ -2,10 +2,8 @@ import type { Money } from "@poi/contracts";
 import type { DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
 import { SEED_DISPUTES } from "./seed-disputes";
 
-export const DEFAULT_API_BASE_URL =
-  process.env.API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:3000";
+/** Same-origin proxy (app/api/[...path]/route.ts), so the browser needs neither the API's URL nor CORS. */
+export const DEFAULT_API_BASE_URL = "/api";
 
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
@@ -22,9 +20,7 @@ export interface FetchDisputesResponse {
  * Reads from the API over HTTP with no direct database access.
  * Returns response metadata including whether data came from canonical seed fallback.
  */
-export async function fetchDisputesDetailed(
-  options?: FetchDisputesOptions
-): Promise<FetchDisputesResponse> {
+export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Promise<FetchDisputesResponse> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
@@ -55,9 +51,7 @@ export async function fetchDisputesDetailed(
  * Reads from the API over HTTP with no direct database access.
  * Falls back to canonical seed fixtures if the API server is unavailable or returns 501.
  */
-export async function fetchDisputes(
-  options?: FetchDisputesOptions
-): Promise<DisputeItem[]> {
+export async function fetchDisputes(options?: FetchDisputesOptions): Promise<DisputeItem[]> {
   const res = await fetchDisputesDetailed(options);
   return res.disputes;
 }
@@ -72,9 +66,7 @@ export function formatMoney(money: Money): string {
 }
 
 /** Aggregates dispute amounts per currency without summing distinct currencies together. */
-export function aggregateCurrencyTotals(
-  disputes: Array<{ amount: Money }>
-): Record<string, number> {
+export function aggregateCurrencyTotals(disputes: Array<{ amount: Money }>): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const d of disputes) {
     const cur = d.amount.currency;
@@ -84,12 +76,8 @@ export function aggregateCurrencyTotals(
 }
 
 /** Formats aggregated currency amounts into a combined string (e.g. "$1,850.00 + 45.00 EUR"). */
-export function formatCurrencyTotals(
-  totals: Record<string, number> | Array<{ amount: Money }>
-): string {
-  const map: Record<string, number> = Array.isArray(totals)
-    ? aggregateCurrencyTotals(totals)
-    : totals;
+export function formatCurrencyTotals(totals: Record<string, number> | Array<{ amount: Money }>): string {
+  const map: Record<string, number> = Array.isArray(totals) ? aggregateCurrencyTotals(totals) : totals;
 
   const entries = Object.entries(map);
   if (entries.length === 0) {
@@ -103,15 +91,13 @@ export function formatCurrencyTotals(
     return curA.localeCompare(curB);
   });
 
-  return entries
-    .map(([currency, value]) => formatMoney({ value, currency }))
-    .join(" + ");
+  return entries.map(([currency, value]) => formatMoney({ value, currency })).join(" + ");
 }
 
 /** Calculates human-readable age from creation timestamp. */
 export function calculateAge(
   isoDate: string,
-  nowInput?: string | Date
+  nowInput?: string | Date,
 ): { hours: number; days: number; text: string } {
   const now = nowInput ? new Date(nowInput).getTime() : Date.now();
   const created = new Date(isoDate).getTime();
@@ -135,7 +121,7 @@ export function calculateAge(
  */
 export function calculateSla(
   dueDateIso: string,
-  nowInput?: string | Date
+  nowInput?: string | Date,
 ): { hoursRemaining: number; isUrgent: boolean; isExpired: boolean; text: string } {
   const now = nowInput ? new Date(nowInput).getTime() : Date.now();
   const due = new Date(dueDateIso).getTime();
@@ -170,10 +156,7 @@ export function calculateSla(
 }
 
 /** Filters disputes by decision, status, and search query. */
-export function filterDisputes(
-  disputes: DisputeItem[],
-  filters: DisputeFilters
-): DisputeItem[] {
+export function filterDisputes(disputes: DisputeItem[], filters: DisputeFilters): DisputeItem[] {
   return disputes.filter((item) => {
     // Decision filter
     if (filters.decision !== "all" && item.decision !== filters.decision) {
@@ -208,7 +191,7 @@ export const PINNED_DISPUTE_IDS = ["PP-D-1001", "PP-D-1002"] as const;
 export function sortDisputes(
   disputes: DisputeItem[],
   sorting: DisputeSorting,
-  _nowInput?: string | Date
+  _nowInput?: string | Date,
 ): DisputeItem[] {
   const pinnedRanks = new Map<string, number>([
     ["PP-D-1001", 0],

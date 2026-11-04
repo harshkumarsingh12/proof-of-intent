@@ -95,12 +95,12 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     const searchResults = filterDisputes(SEED_DISPUTES, searchFilter);
     expect(searchResults).toHaveLength(1);
     expect(searchResults[0]?.id).toBe("PP-D-1002");
-    expect(searchResults[0]?.agentPlatform).toBe("LangChain");
+    expect(searchResults[0]?.agentPlatform).toBe("Wayfinder");
 
-    const platformFilter: DisputeFilters = { decision: "all", status: "all", search: "AutoGPT" };
+    const platformFilter: DisputeFilters = { decision: "all", status: "all", search: "Northstar" };
     const platformResults = filterDisputes(SEED_DISPUTES, platformFilter);
     expect(platformResults.length).toBeGreaterThan(0);
-    expect(platformResults.every((d) => d.agentPlatform === "AutoGPT")).toBe(true);
+    expect(platformResults.every((d) => d.agentPlatform === "Northstar")).toBe(true);
   });
 
   it("sorts disputes while keeping the two scripted demo disputes pinned at the top", () => {
@@ -130,7 +130,9 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     const nonPinnedByAmountDesc = byAmountDesc.slice(2);
     expect(nonPinnedByAmountDesc[0]?.amount.value).toBe(21000); // PP-D-1011 $210.00
     for (let i = 0; i < nonPinnedByAmountDesc.length - 1; i++) {
-      expect(nonPinnedByAmountDesc[i]!.amount.value).toBeGreaterThanOrEqual(nonPinnedByAmountDesc[i + 1]!.amount.value);
+      expect(nonPinnedByAmountDesc[i]!.amount.value).toBeGreaterThanOrEqual(
+        nonPinnedByAmountDesc[i + 1]!.amount.value,
+      );
     }
 
     // Sort by amount ascending
@@ -142,7 +144,9 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     const nonPinnedByAmountAsc = byAmountAsc.slice(2);
     expect(nonPinnedByAmountAsc[0]?.amount.value).toBe(3900); // PP-D-1015 $39.00
     for (let i = 0; i < nonPinnedByAmountAsc.length - 1; i++) {
-      expect(nonPinnedByAmountAsc[i]!.amount.value).toBeLessThanOrEqual(nonPinnedByAmountAsc[i + 1]!.amount.value);
+      expect(nonPinnedByAmountAsc[i]!.amount.value).toBeLessThanOrEqual(
+        nonPinnedByAmountAsc[i + 1]!.amount.value,
+      );
     }
   });
 
@@ -194,7 +198,10 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     expect(data).toHaveLength(1);
     expect(data[0]?.id).toBe("PP-D-API-1");
 
-    const detailedSuccess = await fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: mockFetchSuccess });
+    const detailedSuccess = await fetchDisputesDetailed({
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockFetchSuccess,
+    });
     expect(detailedSuccess.isFallback).toBe(false);
     expect(detailedSuccess.disputes).toHaveLength(1);
 
@@ -208,7 +215,10 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     const fallbackData = await fetchDisputes({ apiBaseUrl: "http://example.test", fetchFn: mockFetch501 });
     expect(fallbackData).toEqual(SEED_DISPUTES);
 
-    const detailed501 = await fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: mockFetch501 });
+    const detailed501 = await fetchDisputesDetailed({
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockFetch501,
+    });
     expect(detailed501.isFallback).toBe(true);
     expect(detailed501.disputes).toEqual(SEED_DISPUTES);
 
@@ -217,10 +227,16 @@ describe("dispute queue data & helpers (spec 0007)", () => {
       throw new Error("connection refused");
     }) as unknown as typeof fetch;
 
-    const networkFallbackData = await fetchDisputes({ apiBaseUrl: "http://example.test", fetchFn: mockFetchError });
+    const networkFallbackData = await fetchDisputes({
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockFetchError,
+    });
     expect(networkFallbackData).toEqual(SEED_DISPUTES);
 
-    const detailedError = await fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: mockFetchError });
+    const detailedError = await fetchDisputesDetailed({
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockFetchError,
+    });
     expect(detailedError.isFallback).toBe(true);
     expect(detailedError.disputes).toEqual(SEED_DISPUTES);
   });
@@ -248,9 +264,9 @@ describe("dispute queue data & helpers (spec 0007)", () => {
 
     // All four platforms represented
     const platforms = new Set(SEED_DISPUTES.map((d) => d.agentPlatform));
-    expect(platforms.has("AutoGPT")).toBe(true);
-    expect(platforms.has("LangChain")).toBe(true);
-    expect(platforms.has("CrewAI")).toBe(true);
-    expect(platforms.has("OpenAI Swarm")).toBe(true);
+    expect(platforms.has("Northstar")).toBe(true);
+    expect(platforms.has("Wayfinder")).toBe(true);
+    expect(platforms.has("Errandly")).toBe(true);
+    expect(platforms.has("Tote")).toBe(true);
   });
 });

@@ -19,7 +19,7 @@ export interface DisputeItem {
   amount: Money;
   createdAt: string;
   sellerResponseDueDate: string;
-  reasons: ReasonCode[] | string[];
+  reasons: ReasonCode[];
   agentPlatform: string;
   buyerDisputeReason: string;
   shopperNotes?: string;

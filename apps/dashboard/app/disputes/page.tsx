@@ -40,7 +40,8 @@ export default function DisputesPage() {
             Dispute Queue
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: "#8b949e" }}>
-            Real-time disputes from the merchant API. Sorted by seller response deadline with copilot defend/concede recommendations.
+            Disputes from the merchant API, sorted by seller response deadline with copilot defend/concede
+            recommendations.
           </p>
         </div>
 
