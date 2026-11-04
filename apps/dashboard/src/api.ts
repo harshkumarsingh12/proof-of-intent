@@ -90,6 +90,68 @@ export async function fetchDisputeDetail(
   return getDisputeDetail(disputeId);
 }
 
+export type DisputeOperatorAction =
+  | "provide-evidence"
+  | "accept-claim"
+  | "make-offer"
+  | "send-message";
+
+export interface DisputeActionResult {
+  success: boolean;
+  status: number;
+  error?: string;
+  data?: unknown;
+}
+
+/**
+ * Execute an operator action against the merchant API (docs/specs/0003, 0007).
+ * Calls POST /disputes/:id/actions/:action over HTTP with no direct database access.
+ */
+export async function executeDisputeAction(
+  disputeId: string,
+  action: DisputeOperatorAction,
+  payload?: Record<string, unknown>,
+  options?: FetchDisputesOptions
+): Promise<DisputeActionResult> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+
+  try {
+    const encodedId = encodeURIComponent(disputeId);
+    const res = await runner(`${baseUrl}/disputes/${encodedId}/actions/${action}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload ?? {}),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { success: true, status: res.status, data };
+    }
+
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const errorMessage =
+      typeof body?.error === "string"
+        ? body.error
+        : `Action rejected by API (${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
+
+    return {
+      success: false,
+      status: res.status,
+      error: errorMessage,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      status: 0,
+      error: err instanceof Error ? err.message : "Network error calling API",
+    };
+  }
+}
+
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
 export function formatMoney(money: Money): string {
   const dollars = (money.value / 100).toFixed(2);

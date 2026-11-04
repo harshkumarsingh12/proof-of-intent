@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchDisputeDetail, getDisputeDetail } from "./api";
+import { executeDisputeAction, fetchDisputeDetail, getDisputeDetail } from "./api";
 import type { DisputeDetail } from "./dispute-types";
 import { widgets } from "./widgets";
 
@@ -191,5 +191,66 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     // Unknown dispute ID returns undefined
     const notFoundResult = await fetchDisputeDetail("UNKNOWN-ID", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
     expect(notFoundResult).toBeUndefined();
+  });
+
+  it("calls API action endpoint and never reports success on failure or 501", async () => {
+    // 1. Successful action
+    let calledUrl = "";
+    let calledOptions: RequestInit | undefined;
+    const mockSuccessFetch = (async (url: string, init?: RequestInit) => {
+      calledUrl = url;
+      calledOptions = init;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ status: "RESOLVED" }),
+      };
+    }) as unknown as typeof fetch;
+
+    const successResult = await executeDisputeAction(
+      "PP-D-1001",
+      "provide-evidence",
+      { note: "evidence submitted" },
+      { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch }
+    );
+
+    expect(calledUrl).toBe("http://example.test/disputes/PP-D-1001/actions/provide-evidence");
+    expect(calledOptions?.method).toBe("POST");
+    expect(JSON.parse(String(calledOptions?.body))).toEqual({ note: "evidence submitted" });
+    expect(successResult.success).toBe(true);
+
+    // 2. Unimplemented 501 API route returns failure, never success
+    const mock501Fetch = (async () => ({
+      ok: false,
+      status: 501,
+      statusText: "Not Implemented",
+      json: async () => ({ error: "not_implemented" }),
+    })) as unknown as typeof fetch;
+
+    const failureResult = await executeDisputeAction(
+      "PP-D-1001",
+      "accept-claim",
+      {},
+      { apiBaseUrl: "http://example.test", fetchFn: mock501Fetch }
+    );
+
+    expect(failureResult.success).toBe(false);
+    expect(failureResult.status).toBe(501);
+    expect(failureResult.error).toBe("not_implemented");
+
+    // 3. Network error returns failure, never success
+    const mockNetworkErrorFetch = (async () => {
+      throw new Error("network timeout");
+    }) as unknown as typeof fetch;
+
+    const netResult = await executeDisputeAction(
+      "PP-D-1001",
+      "provide-evidence",
+      {},
+      { apiBaseUrl: "http://example.test", fetchFn: mockNetworkErrorFetch }
+    );
+
+    expect(netResult.success).toBe(false);
+    expect(netResult.error).toContain("network timeout");
   });
 });

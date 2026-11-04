@@ -2,14 +2,55 @@
 
 import { useMemo, useState } from "react";
 import type { DisputeDetail } from "../../../src/dispute-types";
-import { calculateAge, calculateSla, formatMoney } from "../../../src/api";
+import { calculateAge, calculateSla, executeDisputeAction, formatMoney } from "../../../src/api";
 
 export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
   const [onlyViolations, setOnlyViolations] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [hasBeenPreviewed, setHasBeenPreviewed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [conceding, setConceding] = useState(false);
   const [conceded, setConceded] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleSubmitEvidence = async () => {
+    setSubmitting(true);
+    setActionError(null);
+    try {
+      const result = await executeDisputeAction(dispute.id, "provide-evidence", {
+        evidenceDraft: dispute.evidenceDraftInfo,
+      });
+      if (result.success) {
+        setSubmitted(true);
+      } else {
+        setActionError(result.error ?? "Failed to submit evidence");
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Error executing evidence submission");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAcceptClaim = async () => {
+    setConceding(true);
+    setActionError(null);
+    try {
+      const result = await executeDisputeAction(dispute.id, "accept-claim", {
+        amount: dispute.amount,
+      });
+      if (result.success) {
+        setConceded(true);
+      } else {
+        setActionError(result.error ?? "Failed to accept claim");
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Error executing claim acceptance");
+    } finally {
+      setConceding(false);
+    }
+  };
 
   const age = useMemo(() => calculateAge(dispute.createdAt), [dispute.createdAt]);
   const sla = useMemo(() => calculateSla(dispute.sellerResponseDueDate), [dispute.sellerResponseDueDate]);
@@ -447,6 +488,35 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
               </div>
             </div>
 
+            {/* Action Error Alert */}
+            {actionError && (
+              <div
+                data-testid="action-error"
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 14px",
+                  background: "rgba(248, 81, 73, 0.15)",
+                  border: "1px solid rgba(248, 81, 73, 0.4)",
+                  borderRadius: 6,
+                  color: "#f85149",
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span>⚠️ {actionError}</span>
+                <button
+                  type="button"
+                  onClick={() => setActionError(null)}
+                  style={{ background: "none", border: "none", color: "#f85149", cursor: "pointer", fontSize: 13 }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             {/* Operator Submission Action */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center", borderTop: "1px solid #30363d", paddingTop: 16 }}>
               {!hasBeenPreviewed && (
@@ -456,19 +526,23 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
               )}
               <button
                 type="button"
-                disabled={!hasBeenPreviewed || submitted}
-                onClick={() => setSubmitted(true)}
+                disabled={!hasBeenPreviewed || submitting || submitted}
+                onClick={handleSubmitEvidence}
                 style={{
                   ...pillBtnStyle,
-                  background: submitted ? "#21262d" : hasBeenPreviewed ? "#238636" : "#21262d",
-                  color: submitted ? "#8b949e" : hasBeenPreviewed ? "#ffffff" : "#484f58",
-                  borderColor: hasBeenPreviewed && !submitted ? "#2ea043" : "#30363d",
-                  cursor: hasBeenPreviewed && !submitted ? "pointer" : "not-allowed",
+                  background: submitted ? "#21262d" : hasBeenPreviewed && !submitting ? "#238636" : "#21262d",
+                  color: submitted ? "#8b949e" : hasBeenPreviewed && !submitting ? "#ffffff" : "#484f58",
+                  borderColor: hasBeenPreviewed && !submitted && !submitting ? "#2ea043" : "#30363d",
+                  cursor: hasBeenPreviewed && !submitted && !submitting ? "pointer" : "not-allowed",
                   fontSize: 13,
                   padding: "8px 18px",
                 }}
               >
-                {submitted ? "✓ Evidence Submitted to PayPal" : "Submit Evidence to PayPal"}
+                {submitted
+                  ? "✓ Evidence Submitted to PayPal"
+                  : submitting
+                    ? "Submitting to PayPal..."
+                    : "Submit Evidence to PayPal"}
               </button>
             </div>
           </div>
@@ -493,22 +567,55 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
               </p>
             </div>
 
+            {/* Action Error Alert */}
+            {actionError && (
+              <div
+                data-testid="action-error"
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 14px",
+                  background: "rgba(248, 81, 73, 0.15)",
+                  border: "1px solid rgba(248, 81, 73, 0.4)",
+                  borderRadius: 6,
+                  color: "#f85149",
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <span>⚠️ {actionError}</span>
+                <button
+                  type="button"
+                  onClick={() => setActionError(null)}
+                  style={{ background: "none", border: "none", color: "#f85149", cursor: "pointer", fontSize: 13 }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, borderTop: "1px solid #30363d", paddingTop: 16 }}>
               <button
                 type="button"
-                disabled={conceded}
-                onClick={() => setConceded(true)}
+                disabled={conceding || conceded}
+                onClick={handleAcceptClaim}
                 style={{
                   ...pillBtnStyle,
-                  background: conceded ? "#21262d" : "#d97706",
-                  color: conceded ? "#8b949e" : "#ffffff",
-                  borderColor: conceded ? "#30363d" : "#f59e0b",
-                  cursor: conceded ? "not-allowed" : "pointer",
+                  background: conceded ? "#21262d" : conceding ? "#21262d" : "#d97706",
+                  color: conceded ? "#8b949e" : conceding ? "#484f58" : "#ffffff",
+                  borderColor: conceded || conceding ? "#30363d" : "#f59e0b",
+                  cursor: conceded || conceding ? "not-allowed" : "pointer",
                   fontSize: 13,
                   padding: "8px 18px",
                 }}
               >
-                {conceded ? "✓ Claim Conceded & Refund Issued" : `Accept Claim & Refund (${formatMoney(dispute.amount)})`}
+                {conceded
+                  ? "✓ Claim Conceded & Refund Issued"
+                  : conceding
+                    ? "Issuing Refund..."
+                    : `Accept Claim & Refund (${formatMoney(dispute.amount)})`}
               </button>
             </div>
           </div>
