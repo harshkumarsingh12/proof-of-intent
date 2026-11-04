@@ -50,6 +50,8 @@ export function memoryDb() {
       if (orders.has(o.id)) throw new Error("duplicate order id");
       orders.set(o.id, { ...o });
     },
+    getOrder: async (id) => orders.get(id) ?? null,
+    getMandate: async (hash) => mandates.get(hash) ?? null,
     updateOrder: async (id, p) => {
       const o = orders.get(id);
       if (!o) throw new Error(`order ${id} does not exist`);

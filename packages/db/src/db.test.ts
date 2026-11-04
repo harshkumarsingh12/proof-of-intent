@@ -112,6 +112,81 @@ describe.runIf(ADMIN_URL)("db", () => {
     });
   });
 
+  test("mandates, orders and the capture ledger round-trip through Postgres", async () => {
+    const h = (c: string) => c.repeat(64);
+    await raw.query("insert into shoppers (id) values ('shopper-rt')");
+    await raw.query(
+      `insert into shopper_keys (kid, shopper_id, public_jwk, retired_at) values ('kid-rt', 'shopper-rt', '{"kty":"EC"}', '2026-11-03T00:00:00Z')`,
+    );
+    expect(await db.findKey("shopper", "kid-rt")).toEqual({
+      kid: "kid-rt",
+      publicJwk: { kty: "EC" },
+      retiredAt: "2026-11-03T00:00:00.000Z",
+      shopperId: "shopper-rt",
+    });
+    expect(await db.findKey("agent", "kid-rt")).toBeNull();
+
+    const mandate = {
+      hash: h("b"),
+      kind: "intent" as const,
+      mandateId: "m-rt",
+      canonical: '{"a":1}',
+      jws: "j",
+      kid: "kid-rt",
+    };
+    await db.saveMandate(mandate);
+    await db.saveMandate({ ...mandate, canonical: "changed" }); // same hash: no-op
+    expect(await db.getMandate(h("b"))).toEqual(mandate);
+    await db.saveMandate({ ...mandate, hash: h("c"), kind: "cart", mandateId: "cart-rt" });
+
+    const order = {
+      id: "ord_rt",
+      intentMandateId: "m-rt",
+      intentMandateHash: h("b"),
+      cartMandateHash: h("c"),
+      customId: "poi:m-rt:bbbbbbbbbbbbbbbb",
+      paypalIntent: "AUTHORIZE" as const,
+      status: "PENDING",
+      totalValue: 7400,
+      currency: "USD",
+      shopperId: "shopper-rt",
+      agentPlatform: "Northstar",
+      humanPresent: true,
+    };
+    await db.createOrder(order);
+    expect(await db.mandateLedger("m-rt")).toEqual({ capturedTotal: 0, capturedOrderTimes: [] });
+    await db.updateOrder("ord_rt", { status: "CREATED", paypalOrderId: "PP-RT" });
+    await db.updateOrder("ord_rt", {
+      status: "CAPTURED",
+      captureId: "CAP-RT",
+      capturedAt: "2026-11-02T10:05:00Z",
+    });
+    expect(await db.getOrder("ord_rt")).toEqual({
+      ...order,
+      status: "CAPTURED",
+      paypalOrderId: "PP-RT", // kept from the earlier update
+      captureId: "CAP-RT",
+      capturedAt: "2026-11-02T10:05:00.000Z",
+    });
+    expect(await db.mandateLedger("m-rt")).toEqual({
+      capturedTotal: 7400,
+      capturedOrderTimes: ["2026-11-02T10:05:00.000Z"],
+    });
+    await expect(db.updateOrder("ord_missing", { status: "X" })).rejects.toThrow("does not exist");
+    expect(await db.getOrder("ord_missing")).toBeNull();
+
+    await db.recordVerdict({
+      intentMandateId: "m-rt",
+      cartId: "cart-rt",
+      orderId: "ord_rt",
+      outcome: "APPROVE",
+      reasons: ["A"],
+    });
+    expect((await raw.query("select outcome, reasons from verdicts where order_id = 'ord_rt'")).rows).toEqual(
+      [{ outcome: "APPROVE", reasons: ["A"] }],
+    );
+  });
+
   test("the schema refuses malformed hashes and oversized custom_id", async () => {
     await expect(
       raw.query(

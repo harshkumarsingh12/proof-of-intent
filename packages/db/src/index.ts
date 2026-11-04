@@ -82,6 +82,9 @@ export interface OrderPatch {
   capturedAt?: string;
 }
 
+/** An order as stored, with whatever PayPal ids it has collected so far. */
+export type StoredOrder = OrderRecord & Partial<OrderPatch>;
+
 export interface Db {
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
@@ -101,6 +104,8 @@ export interface Db {
   mandateLedger(intentMandateId: string): Promise<{ capturedTotal: number; capturedOrderTimes: string[] }>;
   recordVerdict(v: VerdictRecord): Promise<void>;
   createOrder(o: OrderRecord): Promise<void>;
+  getOrder(id: string): Promise<StoredOrder | null>;
+  getMandate(hash: string): Promise<MandateRecord | null>;
   updateOrder(id: string, patch: OrderPatch): Promise<void>;
   /** Applies pending migrations. Safe to call from several processes at once. */
   migrate(): Promise<string[]>;
@@ -201,6 +206,43 @@ export function createDb(databaseUrl: string): Db {
           o.humanPresent,
         ],
       );
+    },
+
+    async getOrder(id) {
+      const r = (await pool.query("select * from orders where id = $1", [id])).rows[0];
+      if (!r) return null;
+      return {
+        id: r.id,
+        intentMandateId: r.intent_mandate_id,
+        intentMandateHash: r.intent_mandate_hash,
+        cartMandateHash: r.cart_mandate_hash,
+        customId: r.custom_id,
+        paypalIntent: r.paypal_intent,
+        status: r.status,
+        totalValue: Number(r.total_value),
+        currency: r.currency,
+        agentPlatform: r.agent_platform,
+        humanPresent: r.human_present,
+        ...(r.shopper_id ? { shopperId: r.shopper_id } : {}),
+        ...(r.paypal_order_id ? { paypalOrderId: r.paypal_order_id } : {}),
+        ...(r.authorization_id ? { authorizationId: r.authorization_id } : {}),
+        ...(r.capture_id ? { captureId: r.capture_id } : {}),
+        ...(r.captured_at ? { capturedAt: (r.captured_at as Date).toISOString() } : {}),
+      };
+    },
+
+    async getMandate(hash) {
+      const r = (await pool.query("select * from mandates where hash = $1", [hash])).rows[0];
+      return r
+        ? {
+            hash: r.hash,
+            kind: r.kind,
+            mandateId: r.mandate_id,
+            canonical: r.canonical,
+            jws: r.jws,
+            kid: r.kid,
+          }
+        : null;
     },
 
     async updateOrder(id, p) {
