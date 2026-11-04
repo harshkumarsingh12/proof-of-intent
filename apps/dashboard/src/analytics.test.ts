@@ -126,23 +126,23 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(platformNames).toContain("CrewAI");
     expect(platformNames).toContain("OpenAI Swarm");
 
-    // Total orders trace to 300
+    // Total orders across platforms
     const totalOrders = summary.byPlatform.reduce((sum, p) => sum + p.totalOrders, 0);
-    expect(totalOrders).toBe(300);
+    expect(totalOrders).toBe(270);
 
     // AutoGPT stats
     const autogpt = summary.byPlatform.find((p) => p.platform === "AutoGPT");
     expect(autogpt).toBeDefined();
     expect(autogpt?.defendedDisputes).toBe(4);
     expect(autogpt?.concededDisputes).toBe(2);
-    expect(autogpt?.overreachRate).toBe(33);
+    expect(autogpt?.overreachRate).toBe(1); // 1 overreach / 70 total orders = 1%
 
     // CrewAI stats
     const crewai = summary.byPlatform.find((p) => p.platform === "CrewAI");
     expect(crewai).toBeDefined();
     expect(crewai?.defendedDisputes).toBe(3);
     expect(crewai?.concededDisputes).toBe(3);
-    expect(crewai?.overreachRate).toBe(50);
+    expect(crewai?.overreachRate).toBe(3); // 2 overreach / 65 total orders = 3%
   });
 
   it("fetches analytics from the API over HTTP with zero direct database access", async () => {

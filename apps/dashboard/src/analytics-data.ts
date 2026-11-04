@@ -108,24 +108,26 @@ export function computeAnalyticsSummary(
   const actualProtectedCents = resolvedWins.reduce((sum, d) => sum + d.amount.value, 0);
   const actualConcededCents = resolvedLosses.reduce((sum, d) => sum + d.amount.value, 0);
 
-  // Platform breakdown across four platforms from seed data
+  // Platform breakdown across platforms from seed data
   const platforms = ["AutoGPT", "LangChain", "CrewAI", "OpenAI Swarm"];
-  const ordersByPlatform: Record<string, number> = {
-    AutoGPT: 75,
-    LangChain: 80,
-    CrewAI: 72,
-    "OpenAI Swarm": 73,
-  };
+  const ordersByPlatform: Record<string, number> = {};
+  for (const o of orders) {
+    ordersByPlatform[o.agentPlatform] = (ordersByPlatform[o.agentPlatform] ?? 0) + 1;
+  }
 
   const byPlatform: PlatformBreakdown[] = platforms.map((p) => {
-    const pDefended = defended.filter((d) => d.agentPlatform === p);
-    const pConceded = conceded.filter((d) => d.agentPlatform === p);
-    const pTotal = pDefended.length + pConceded.length;
-    const overreachRate = pTotal > 0 ? Math.round((pConceded.length / pTotal) * 100) : 0;
+    const pDisputes = disputes.filter((d) => d.agentPlatform === p);
+    const pDefended = pDisputes.filter((d) => d.decision === "defend");
+    const pConceded = pDisputes.filter((d) => d.decision === "concede");
+    // Overreach count strictly excludes INTENT_MISREAD
+    const pOverreach = pDisputes.filter((d) => d.disputeClass === "AGENT_OVERREACH");
+    const totalOrders = ordersByPlatform[p] ?? 75;
+    // Overreach rate = overreach count divided by total orders
+    const overreachRate = totalOrders > 0 ? Math.round((pOverreach.length / totalOrders) * 100) : 0;
 
     return {
       platform: p,
-      totalOrders: ordersByPlatform[p] ?? 75,
+      totalOrders,
       defendedDisputes: pDefended.length,
       concededDisputes: pConceded.length,
       defendedAmount: { value: pDefended.reduce((sum, d) => sum + d.amount.value, 0), currency: "USD" },
