@@ -2,22 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type {
-  DecisionFilter,
-  DisputeFilters,
-  DisputeItem,
-  DisputeSorting,
-  SortField,
-} from "../../src/dispute-types";
-import {
-  calculateAge,
-  calculateSla,
-  fetchDisputesDetailed,
-  filterDisputes,
-  formatCurrencyTotals,
-  formatMoney,
-  sortDisputes,
-} from "../../src/api";
+import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
+import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, sortDisputes } from "../../src/api";
 
 export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: DisputeItem[] }) {
   const [disputes, setDisputes] = useState<DisputeItem[]>(initialDisputes);
@@ -63,9 +49,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
     const defend = disputes.filter((d) => d.decision === "defend").length;
     const concede = disputes.filter((d) => d.decision === "concede").length;
     const standard = disputes.filter((d) => d.decision === "standard").length;
-    const urgent = disputes.filter(
-      (d) => calculateSla(d.sellerResponseDueDate).isUrgent && d.status === "ACTION_REQUIRED",
-    ).length;
+    const urgent = disputes.filter((d) => calculateSla(d.sellerResponseDueDate).isUrgent && d.status === "ACTION_REQUIRED").length;
     const totalAmount = formatCurrencyTotals(disputes);
 
     return { total, defend, concede, standard, urgent, totalAmount };
@@ -123,8 +107,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
             DEMO DATA
           </span>
           <span>
-            API endpoint (<code>/disputes</code>) is unavailable or returned 501. Showing local demo disputes
-            (canonical seed data).
+            API endpoint (<code>/disputes</code>) is unavailable or returned 501. Showing local demo disputes (canonical seed data).
           </span>
         </div>
       )}
@@ -346,12 +329,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                   >
                     {/* Dispute & Order ID */}
                     <td style={tdStyle}>
-                      <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#58a6ff" }}>
-                        {item.id}
-                      </div>
-                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>
-                        {item.orderId}
-                      </div>
+                      <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#58a6ff" }}>{item.id}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>{item.orderId}</div>
                     </td>
 
                     {/* Agent Platform */}
@@ -403,14 +382,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         <span style={codeBadgeStyle}>{item.disputeClass}</span>
                         {item.reasons.map((r) => (
-                          <span
-                            key={r}
-                            style={{
-                              ...codeBadgeStyle,
-                              color: "#f85149",
-                              borderColor: "rgba(248, 81, 73, 0.4)",
-                            }}
-                          >
+                          <span key={r} style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
                             {r}
                           </span>
                         ))}
@@ -442,22 +414,13 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
       {selectedDispute && (
         <div style={drawerOverlayStyle}>
           <div style={drawerContentStyle}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: 16,
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 18, color: "#f0f6fc" }}>
-                  Dispute Details ·{" "}
-                  <span style={{ fontFamily: "monospace", color: "#58a6ff" }}>{selectedDispute.id}</span>
+                  Dispute Details · <span style={{ fontFamily: "monospace", color: "#58a6ff" }}>{selectedDispute.id}</span>
                 </h3>
                 <div style={{ fontSize: 12, color: "#8b949e", marginTop: 4 }}>
-                  PayPal Order:{" "}
-                  <span style={{ fontFamily: "monospace" }}>{selectedDispute.paypalOrderId}</span> · Platform:{" "}
+                  PayPal Order: <span style={{ fontFamily: "monospace" }}>{selectedDispute.paypalOrderId}</span> · Platform:{" "}
                   <strong>{selectedDispute.agentPlatform}</strong>
                 </div>
               </div>
@@ -496,10 +459,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 <div style={kpiLabelStyle}>Reason Codes</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                   {selectedDispute.reasons.map((r) => (
-                    <span
-                      key={r}
-                      style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}
-                    >
+                    <span key={r} style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
                       {r}
                     </span>
                   ))}
@@ -510,17 +470,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
             {selectedDispute.shopperNotes && (
               <div style={{ marginBottom: 16 }}>
                 <div style={kpiLabelStyle}>Audit & Copilot Notes</div>
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 13,
-                    color: "#c9d1d9",
-                    background: "#0d1117",
-                    padding: 12,
-                    borderRadius: 6,
-                    border: "1px solid #30363d",
-                  }}
-                >
+                <div style={{ marginTop: 6, fontSize: 13, color: "#c9d1d9", background: "#0d1117", padding: 12, borderRadius: 6, border: "1px solid #30363d" }}>
                   {selectedDispute.shopperNotes}
                 </div>
               </div>
@@ -534,19 +484,9 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 href={`/disputes/${selectedDispute.id}`}
                 style={{
                   ...pillBtnStyle,
-                  background:
-                    selectedDispute.decision === "defend"
-                      ? "#238636"
-                      : selectedDispute.decision === "concede"
-                        ? "#d97706"
-                        : "#1f6feb",
+                  background: selectedDispute.decision === "defend" ? "#238636" : selectedDispute.decision === "concede" ? "#d97706" : "#1f6feb",
                   color: "#fff",
-                  borderColor:
-                    selectedDispute.decision === "defend"
-                      ? "#2ea043"
-                      : selectedDispute.decision === "concede"
-                        ? "#f59e0b"
-                        : "#388bfd",
+                  borderColor: selectedDispute.decision === "defend" ? "#2ea043" : selectedDispute.decision === "concede" ? "#f59e0b" : "#388bfd",
                   textDecoration: "none",
                   display: "inline-flex",
                   alignItems: "center",
@@ -556,8 +496,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 {selectedDispute.decision === "defend"
                   ? "Open Review & Submit Evidence →"
                   : selectedDispute.decision === "concede"
-                    ? "Open Review & Accept Claim →"
-                    : "View Dispute Details →"}
+                  ? "Open Review & Accept Claim →"
+                  : "View Dispute Details →"}
               </Link>
             </div>
           </div>
