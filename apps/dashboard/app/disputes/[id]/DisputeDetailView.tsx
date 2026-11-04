@@ -6,7 +6,8 @@ import { calculateAge, calculateSla, formatMoney } from "../../../src/api";
 
 export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
   const [onlyViolations, setOnlyViolations] = useState(false);
-  const [pdfOpened, setPdfOpened] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [hasBeenPreviewed, setHasBeenPreviewed] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [conceded, setConceded] = useState(false);
 
@@ -380,12 +381,15 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
 
                   <button
                     type="button"
-                    onClick={() => setPdfOpened(true)}
+                    onClick={() => {
+                      setPdfModalOpen(true);
+                      setHasBeenPreviewed(true);
+                    }}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
                       borderRadius: 6,
-                      background: pdfOpened ? "#1f6feb" : "#238636",
+                      background: hasBeenPreviewed ? "#1f6feb" : "#238636",
                       color: "#fff",
                       border: "none",
                       fontWeight: 600,
@@ -393,10 +397,10 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
                       cursor: "pointer",
                     }}
                   >
-                    📄 {pdfOpened ? "Re-open PDF Preview" : "Preview Evidence PDF"}
+                    📄 {hasBeenPreviewed ? "Re-open PDF Preview" : "Preview Evidence PDF"}
                   </button>
 
-                  {pdfOpened && (
+                  {hasBeenPreviewed && (
                     <div style={{ marginTop: 8, fontSize: 11, color: "#34d399", textAlign: "center" }}>
                       ✓ PDF preview verified
                     </div>
@@ -414,21 +418,21 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
 
             {/* Operator Submission Action */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center", borderTop: "1px solid #30363d", paddingTop: 16 }}>
-              {!pdfOpened && (
+              {!hasBeenPreviewed && (
                 <span style={{ fontSize: 12, color: "#8b949e" }}>
                   ⚠️ Open PDF preview above to unlock Submit Evidence
                 </span>
               )}
               <button
                 type="button"
-                disabled={!pdfOpened || submitted}
+                disabled={!hasBeenPreviewed || submitted}
                 onClick={() => setSubmitted(true)}
                 style={{
                   ...pillBtnStyle,
-                  background: submitted ? "#21262d" : pdfOpened ? "#238636" : "#21262d",
-                  color: submitted ? "#8b949e" : pdfOpened ? "#ffffff" : "#484f58",
-                  borderColor: pdfOpened && !submitted ? "#2ea043" : "#30363d",
-                  cursor: pdfOpened && !submitted ? "pointer" : "not-allowed",
+                  background: submitted ? "#21262d" : hasBeenPreviewed ? "#238636" : "#21262d",
+                  color: submitted ? "#8b949e" : hasBeenPreviewed ? "#ffffff" : "#484f58",
+                  borderColor: hasBeenPreviewed && !submitted ? "#2ea043" : "#30363d",
+                  cursor: hasBeenPreviewed && !submitted ? "pointer" : "not-allowed",
                   fontSize: 13,
                   padding: "8px 18px",
                 }}
@@ -481,7 +485,7 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
       </div>
 
       {/* PDF Modal Preview */}
-      {pdfOpened && (
+      {pdfModalOpen && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -491,7 +495,7 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
                   Evidence Attestation PDF Preview · {dispute.id}
                 </h3>
               </div>
-              <button type="button" onClick={() => setPdfOpened(false)} style={closeBtnStyle}>
+              <button type="button" onClick={() => setPdfModalOpen(false)} style={closeBtnStyle}>
                 ✕
               </button>
             </div>
@@ -549,7 +553,7 @@ export function DisputeDetailView({ dispute }: { dispute: DisputeDetail }) {
               </span>
               <button
                 type="button"
-                onClick={() => setPdfOpened(false)}
+                onClick={() => setPdfModalOpen(false)}
                 style={{ ...pillBtnStyle, background: "#21262d", color: "#f0f6fc" }}
               >
                 Close Preview
