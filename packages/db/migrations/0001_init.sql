@@ -27,15 +27,17 @@ create table agent_keys (
 );
 
 -- Every mandate exactly as verified: the canonical bytes that were signed, and the JWS.
+-- Keyed by content hash: ids inside mandates (a cart_id especially) are chosen by the sender and not unique.
 create table mandates (
-  id          text primary key,                  -- mandate_id, cart_id or payment_mandate_id
+  hash        char(64) primary key check (hash ~ '^[0-9a-f]{64}$'),
   kind        text not null check (kind in ('intent', 'cart', 'payment')),
-  hash        char(64) not null unique check (hash ~ '^[0-9a-f]{64}$'),
+  mandate_id  text not null,                     -- mandate_id, cart_id or payment_mandate_id as sent
   canonical   text not null,
   jws         text not null,
   kid         text not null,
   created_at  timestamptz not null default now()
 );
+create index mandates_id_idx on mandates (kind, mandate_id);
 
 -- Replay protection: a nonce can be claimed once, ever.
 create table nonces (
@@ -45,8 +47,9 @@ create table nonces (
 
 create table orders (
   id                 text primary key,           -- ord_<id>, also PayPal invoice_id and PayPal-Request-Id
-  intent_mandate_id  text not null references mandates (id),
-  cart_mandate_id    text references mandates (id),
+  intent_mandate_id    text not null,          -- for budget and recurrence lookups
+  intent_mandate_hash  char(64) not null references mandates (hash),
+  cart_mandate_hash    char(64) references mandates (hash),
   custom_id          text not null check (length(custom_id) <= 127),
   paypal_intent      text not null check (paypal_intent in ('AUTHORIZE', 'CAPTURE')),
   paypal_order_id    text unique,
@@ -55,12 +58,14 @@ create table orders (
   status             text not null,
   total_value        bigint not null check (total_value >= 0),
   currency           char(3) not null,
+  shopper_id         text references shoppers (id),
   agent_platform     text,
   human_present      boolean not null,
   captured_at        timestamptz,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
+create index orders_intent_idx on orders (intent_mandate_id);
 
 -- Every checkout decision, including REJECTs that never become an order.
 create table verdicts (
