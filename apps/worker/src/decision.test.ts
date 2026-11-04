@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ReasonCode, Verdict } from "@poi/contracts";
 import type { AuditEntry } from "@poi/db";
-import { decideDispute, InMemoryDecisionStore, recordDisputeDecision, type DecisionInput } from "./decision";
+import {
+  decideDispute,
+  InMemoryDecisionStore,
+  recordDisputeDecision,
+  type DecisionInput,
+} from "./decision";
 
 describe("dispute decision step", () => {
   it("marks a compliant order as defend with provide-evidence action", () => {

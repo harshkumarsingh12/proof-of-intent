@@ -2,7 +2,9 @@ import type { Db } from "@poi/db";
 import { JOBS } from "./pipeline";
 
 export type DisputeEventType =
-  "CUSTOMER.DISPUTE.CREATED" | "CUSTOMER.DISPUTE.UPDATED" | "CUSTOMER.DISPUTE.RESOLVED";
+  | "CUSTOMER.DISPUTE.CREATED"
+  | "CUSTOMER.DISPUTE.UPDATED"
+  | "CUSTOMER.DISPUTE.RESOLVED";
 
 export interface DisputeWebhookEvent {
   id: string;
@@ -44,9 +46,7 @@ export interface DisputeJob {
 }
 
 export interface DisputeJobStore {
-  createJob(
-    job: Omit<DisputeJob, "id" | "createdAt" | "updatedAt">,
-  ): Promise<{ job: DisputeJob; created: boolean }>;
+  createJob(job: Omit<DisputeJob, "id" | "createdAt" | "updatedAt">): Promise<{ job: DisputeJob; created: boolean }>;
   getJob(id: string): Promise<DisputeJob | null>;
   getJobByEventId(eventId: string): Promise<DisputeJob | null>;
   getJobsByDisputeId(disputeId: string): Promise<DisputeJob[]>;
