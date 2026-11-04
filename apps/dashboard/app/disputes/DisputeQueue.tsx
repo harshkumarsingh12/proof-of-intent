@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
-import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatMoney, sortDisputes } from "../../src/api";
+import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, sortDisputes } from "../../src/api";
 
 export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: DisputeItem[] }) {
   const [disputes, setDisputes] = useState<DisputeItem[]>(initialDisputes);
@@ -50,9 +50,9 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
     const concede = disputes.filter((d) => d.decision === "concede").length;
     const standard = disputes.filter((d) => d.decision === "standard").length;
     const urgent = disputes.filter((d) => calculateSla(d.sellerResponseDueDate).isUrgent && d.status === "ACTION_REQUIRED").length;
-    const totalCents = disputes.reduce((sum, d) => sum + d.amount.value, 0);
+    const totalAmount = formatCurrencyTotals(disputes);
 
-    return { total, defend, concede, standard, urgent, totalAmount: formatMoney({ value: totalCents, currency: "USD" }) };
+    return { total, defend, concede, standard, urgent, totalAmount };
   }, [disputes]);
 
   // Filtered and sorted rows
@@ -147,7 +147,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
         <div style={cardStyle}>
           <div style={kpiLabelStyle}>Disputed Volume</div>
           <div style={kpiValueStyle}>{counts.totalAmount}</div>
-          <div style={kpiSubStyle}>Minor units converted to USD</div>
+          <div style={kpiSubStyle}>Aggregated per currency</div>
         </div>
       </div>
 

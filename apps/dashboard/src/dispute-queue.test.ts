@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  aggregateCurrencyTotals,
   calculateAge,
   calculateSla,
   fetchDisputes,
   fetchDisputesDetailed,
   filterDisputes,
+  formatCurrencyTotals,
   formatMoney,
   sortDisputes,
 } from "./api";
@@ -18,6 +20,31 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     expect(formatMoney({ value: 0, currency: "USD" })).toBe("$0.00");
     expect(formatMoney({ value: 50, currency: "USD" })).toBe("$0.50");
     expect(formatMoney({ value: 1250, currency: "EUR" })).toBe("12.50 EUR");
+  });
+
+  it("aggregates dispute amounts per currency without summing mixed currencies into USD", () => {
+    expect(formatCurrencyTotals([])).toBe("$0.00");
+    expect(aggregateCurrencyTotals([])).toEqual({});
+
+    const usdOnly = [
+      { amount: { value: 7400, currency: "USD" } },
+      { amount: { value: 2600, currency: "USD" } },
+    ];
+    expect(aggregateCurrencyTotals(usdOnly)).toEqual({ USD: 10000 });
+    expect(formatCurrencyTotals(usdOnly)).toBe("$100.00");
+
+    const mixed = [
+      { amount: { value: 5000, currency: "USD" } },
+      { amount: { value: 4500, currency: "EUR" } },
+      { amount: { value: 2500, currency: "USD" } },
+      { amount: { value: 3000, currency: "GBP" } },
+    ];
+    expect(aggregateCurrencyTotals(mixed)).toEqual({
+      USD: 7500,
+      EUR: 4500,
+      GBP: 3000,
+    });
+    expect(formatCurrencyTotals(mixed)).toBe("$75.00 + 45.00 EUR + 30.00 GBP");
   });
 
   it("calculates age accurately against a reference time", () => {

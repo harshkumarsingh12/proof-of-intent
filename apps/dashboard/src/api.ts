@@ -71,6 +71,43 @@ export function formatMoney(money: Money): string {
   return `${dollars} ${money.currency}`;
 }
 
+/** Aggregates dispute amounts per currency without summing distinct currencies together. */
+export function aggregateCurrencyTotals(
+  disputes: Array<{ amount: Money }>
+): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const d of disputes) {
+    const cur = d.amount.currency;
+    totals[cur] = (totals[cur] ?? 0) + d.amount.value;
+  }
+  return totals;
+}
+
+/** Formats aggregated currency amounts into a combined string (e.g. "$1,850.00 + 45.00 EUR"). */
+export function formatCurrencyTotals(
+  totals: Record<string, number> | Array<{ amount: Money }>
+): string {
+  const map: Record<string, number> = Array.isArray(totals)
+    ? aggregateCurrencyTotals(totals)
+    : totals;
+
+  const entries = Object.entries(map);
+  if (entries.length === 0) {
+    return "$0.00";
+  }
+
+  // Sort currencies: USD first, then alphabetically
+  entries.sort(([curA], [curB]) => {
+    if (curA === "USD") return -1;
+    if (curB === "USD") return 1;
+    return curA.localeCompare(curB);
+  });
+
+  return entries
+    .map(([currency, value]) => formatMoney({ value, currency }))
+    .join(" + ");
+}
+
 /** Calculates human-readable age from creation timestamp. */
 export function calculateAge(
   isoDate: string,
