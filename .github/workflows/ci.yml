@@ -18,6 +18,20 @@ jobs:
     name: ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # packages/db tests run against a real Postgres (the same major version as compose).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: poi
+          POSTGRES_PASSWORD: poi
+          POSTGRES_DB: poi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U poi -d poi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,6 +46,8 @@ jobs:
         run: pnpm typecheck
       - name: Test
         run: pnpm test:ci
+        env:
+          DATABASE_URL: postgres://poi:poi@localhost:5432/poi
       - name: Acceptance-criteria ledger
         if: always()
         run: pnpm ledger

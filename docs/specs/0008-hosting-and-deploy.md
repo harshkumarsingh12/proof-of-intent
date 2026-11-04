@@ -21,8 +21,8 @@ deliver webhooks to it. The team runs it on its own server; the same Compose fil
 | HTTPS | Public IP: Caddy with automatic Let's Encrypt on `API_HOST`, `SHOP_HOST`, `OPS_HOST`. Behind NAT: Cloudflare Tunnel to ports 3000–3002 instead (D6) |
 | Uptime | External monitor (e.g. UptimeRobot) on the three `/healthz` URLs, alerting the team chat; Compose starts on boot |
 | Isolation | Own Docker network; only the proxy publishes ports; Postgres unreachable from outside; non-root containers |
-| Abuse | Rate limits on `/checkout`, `/webhooks/paypal`, `/ai/studio`; AI budget kill switch; viewer demo login |
-| Backups | Nightly `pg_dump`, 7 days kept; nightly demo reset Dec 1–15 |
+| Abuse | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/ai/studio` 10/min, 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch; viewer demo login |
+| Backups | `backup` service (server profile): `pg_dump` every 24 h, 7 days kept, atomic writes; restore in docs/SETUP.md. Nightly demo reset Dec 1–15 |
 | Secrets | Server `.env` (mode 600) outside git; GitHub Actions secrets for CI/CD |
 | Release | Tag `v*` → `deploy.yml`: build 4 images to GHCR → SSH to server → `compose pull && up -d` → health check → GitHub Release |
 

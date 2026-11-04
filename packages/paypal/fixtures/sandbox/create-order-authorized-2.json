@@ -1,0 +1,142 @@
+{
+  "status": 201,
+  "body": {
+    "id": "2CX7993615089832X",
+    "intent": "AUTHORIZE",
+    "status": "COMPLETED",
+    "payment_source": {
+      "card": {
+        "name": "Test Shopper",
+        "last_digits": "4658",
+        "expiry": "2030-12",
+        "brand": "VISA",
+        "available_networks": ["VISA"],
+        "type": "CREDIT",
+        "bin_details": {
+          "bin": "403203",
+          "issuing_bank": "Baxter Credit Union",
+          "bin_country_code": "US"
+        }
+      }
+    },
+    "purchase_units": [
+      {
+        "reference_id": "ord_fixture_mw2fszq3_c",
+        "amount": {
+          "currency_code": "USD",
+          "value": "74.00",
+          "breakdown": {
+            "item_total": {
+              "currency_code": "USD",
+              "value": "74.00"
+            },
+            "shipping": {
+              "currency_code": "USD",
+              "value": "0.00"
+            },
+            "handling": {
+              "currency_code": "USD",
+              "value": "0.00"
+            },
+            "insurance": {
+              "currency_code": "USD",
+              "value": "0.00"
+            },
+            "shipping_discount": {
+              "currency_code": "USD",
+              "value": "0.00"
+            }
+          }
+        },
+        "payee": {
+          "email_address": "redacted@example.com",
+          "merchant_id": "REDACTEDID000"
+        },
+        "description": "Stride Running Jacket",
+        "custom_id": "poi:0192f3a0-0000-7000-8000-000000000001:0123456789abcdef",
+        "invoice_id": "ord_fixture_mw2fszq3_c",
+        "soft_descriptor": "TEST STORE",
+        "items": [
+          {
+            "name": "Stride Running Jacket",
+            "unit_amount": {
+              "currency_code": "USD",
+              "value": "74.00"
+            },
+            "tax": {
+              "currency_code": "USD",
+              "value": "0.00"
+            },
+            "quantity": "1",
+            "sku": "JKT-GRY-M"
+          }
+        ],
+        "payments": {
+          "authorizations": [
+            {
+              "status": "CREATED",
+              "id": "8JX24272LU906294M",
+              "amount": {
+                "currency_code": "USD",
+                "value": "74.00"
+              },
+              "invoice_id": "ord_fixture_mw2fszq3_c",
+              "custom_id": "poi:0192f3a0-0000-7000-8000-000000000001:0123456789abcdef",
+              "seller_protection": {
+                "status": "NOT_ELIGIBLE"
+              },
+              "processor_response": {
+                "avs_code": "A",
+                "cvv_code": "M",
+                "response_code": "0000"
+              },
+              "expiration_time": "2026-12-03T18:15:39Z",
+              "links": [
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/authorizations/8JX24272LU906294M",
+                  "rel": "self",
+                  "method": "GET"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/authorizations/8JX24272LU906294M/capture",
+                  "rel": "capture",
+                  "method": "POST"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/authorizations/8JX24272LU906294M/void",
+                  "rel": "void",
+                  "method": "POST"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/payments/authorizations/8JX24272LU906294M/reauthorize",
+                  "rel": "reauthorize",
+                  "method": "POST"
+                },
+                {
+                  "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2CX7993615089832X",
+                  "rel": "up",
+                  "method": "GET"
+                }
+              ],
+              "create_time": "2026-11-04T18:15:39Z",
+              "update_time": "2026-11-04T18:15:39Z",
+              "network_transaction_reference": {
+                "id": "901039968101422",
+                "network": "VISA"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "create_time": "2026-11-04T18:15:39Z",
+    "update_time": "2026-11-04T18:15:39Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2CX7993615089832X",
+        "rel": "self",
+        "method": "GET"
+      }
+    ]
+  }
+}

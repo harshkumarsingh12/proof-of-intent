@@ -24,13 +24,22 @@ services:
     restart: unless-stopped
     networks: [poi]
 
+  # One-shot: applies pending migrations (packages/db/migrations), then exits. Uses the api image.
+  migrate:
+    <<: *app
+    build: { context: ., args: { APP: api } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
+    command: ["pnpm", "--filter", "@poi/db", "migrate"]
+    restart: "no"
+    depends_on: { postgres: { condition: service_healthy } }
+
   api:
     <<: *app
     build: { context: ., args: { APP: api } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
     environment: { PORT: "3000" }
     ports: ["127.0.0.1:3000:3000"]
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { migrate: { condition: service_completed_successfully } }
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz || exit 1"]
       interval: 10s
@@ -40,7 +49,7 @@ services:
     <<: *app
     build: { context: ., args: { APP: worker } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-worker:${IMAGE_TAG:-local}
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { migrate: { condition: service_completed_successfully } }
 
   buyer:
     <<: *app
@@ -62,6 +71,29 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/healthz || exit 1"]
       interval: 10s
       retries: 5
+
+  # Server only: pg_dump every 24 h into ./backups, keeping 7 days (spec 0008). Restore: docs/SETUP.md.
+  # A failed dump never replaces a good file: it's written to .tmp and renamed only on success.
+  backup:
+    image: postgres:16-alpine
+    profiles: [server]
+    environment: { PGPASSWORD: "${POSTGRES_PASSWORD:-poi}" }
+    volumes: ["./backups:/backups"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -o pipefail
+        while true; do
+          f=/backups/poi-$$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+          if pg_dump -h postgres -U poi -d poi | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "backup ok $$f"
+          else rm -f "$$f.tmp"; echo "backup FAILED" >&2; fi
+          find /backups -name 'poi-*.sql.gz' -mtime +6 -delete
+          sleep 86400
+        done
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+    networks: [poi]
 
   caddy:
     image: caddy:2-alpine

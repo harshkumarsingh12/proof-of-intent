@@ -8,15 +8,21 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^10.2.1",
+    "@poi/ai": "workspace:*",
     "@poi/contracts": "workspace:*",
     "@poi/db": "workspace:*",
     "@poi/mandates": "workspace:*",
     "@poi/paypal": "workspace:*",
     "@poi/policy-engine": "workspace:*",
     "fastify": "^5.1.0",
-    "tsx": "^4.19.2"
+    "jose": "^5.9.6",
+    "tsx": "^4.19.2",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@poi/ledger": "workspace:*"
+    "@poi/ledger": "workspace:*",
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1"
   }
 }

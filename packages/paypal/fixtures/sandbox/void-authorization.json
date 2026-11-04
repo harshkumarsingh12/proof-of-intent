@@ -1,0 +1,25 @@
+{
+  "status": 200,
+  "body": {
+    "id": "8JX24272LU906294M",
+    "status": "VOIDED",
+    "amount": {
+      "currency_code": "USD",
+      "value": "74.00"
+    },
+    "invoice_id": "ord_fixture_mw2fszq3_c",
+    "seller_protection": {
+      "status": "NOT_ELIGIBLE"
+    },
+    "expiration_time": "2026-12-03T10:15:39-08:00",
+    "create_time": "2026-11-04T10:15:39-08:00",
+    "update_time": "2026-11-04T10:15:42-08:00",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/payments/authorizations/8JX24272LU906294M",
+        "rel": "self",
+        "method": "GET"
+      }
+    ]
+  }
+}
