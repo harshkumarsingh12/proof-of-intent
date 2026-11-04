@@ -43,7 +43,7 @@ of every `ci` run.
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Sandbox dispute recipe script | Harsh | Pending |
+| Sandbox dispute recipe script | Harsh | Built (`pnpm sandbox:dispute-cycle`); first live run needs the sandbox shopper clicks |
 | require-evidence, provide-evidence, send-message | Harsh | provide-evidence + send-message ✅; require-evidence lives in the recipe script (sandbox-only) |
 | Agent Toolkit dispute tools in the worker | Sikruti | Pending |
 | Evidence package (PDF + JSON) | Sikruti | Pending |

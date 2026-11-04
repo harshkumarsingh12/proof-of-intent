@@ -39,8 +39,11 @@ docs/SETUP.md) plus a dev tunnel webhook.
 
 ### Sandbox dispute recipe (`scripts/sandbox/dispute-cycle.ts`)
 
-Capture for `shopper-dispute` → shopper reports a problem in Resolution Center → `require-evidence` →
-copilot acts → `adjudicate` → `CUSTOMER.DISPUTE.RESOLVED`.
+Built. `pnpm sandbox:dispute-cycle start` runs a compliant order through our own API (`/checkout` → the shopper
+approves on PayPal → stage 2 capture), waits while the shopper reports a problem in the Resolution Center (the
+one manual click), then calls `require-evidence` when the dispute is `UNDER_REVIEW`. After the copilot acts:
+`evidence <id>`, `message <id> "<text>"`, `adjudicate <id> seller|buyer` → `CUSTOMER.DISPUTE.RESOLVED`; `status <id>`
+at any point. Sandbox-only calls live in `scripts/sandbox/paypal-raw.ts`, never in the production client.
 
 ## Interfaces
 
