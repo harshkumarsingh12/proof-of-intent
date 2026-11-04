@@ -52,7 +52,7 @@ copilot acts → `adjudicate` → `CUSTOMER.DISPUTE.RESOLVED`.
 1. Mock `createOrder` returns `CREATED`; authorize + capture return ids. *(done)*
 2. Sandbox: create, authorize, capture and void recorded as fixtures for CI. *(done: `pnpm sandbox:record-orders`; authorize after a real shopper approval is exercised on integration day)*
 3. A forged webhook signature is rejected. *(done, also against the live sandbox)*
-4. `provide-evidence` sends multipart with the attestation PDF. *(ledger M2)*
+4. `provide-evidence` sends multipart with the attestation PDF. *(done; visible on a real sandbox dispute once the recipe in criterion 5 runs)*
 5. The dispute recipe script regenerates a dispute in under 5 minutes with one manual click. *(M2)*
 
 ## Open questions
