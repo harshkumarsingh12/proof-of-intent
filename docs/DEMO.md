@@ -6,7 +6,7 @@ any change to the demo path.
 ## Video (target 2:30, hard limit 3:00)
 
 Recorded in `AI_MODE=replay` against the PayPal sandbox so every take is identical. 1080p, 30 fps; buyer and
-merchant browsers side by side; dashboard in the dark theme; voiceover recorded separately; captions on key
+merchant browsers side by side; dashboard in its light theme; voiceover recorded separately; captions on key
 phrases so it works muted; no music; agent platforms named in speech only, **no third-party logos**.
 
 | Time | Shot | Line |

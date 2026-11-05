@@ -2,12 +2,51 @@
 
 **Path:** `apps/dashboard/` | **Owner:** @hoursgotviral-dev | **Backup:** @harshkumarsingh12 | **Spec:** [0007-dashboard.md](../../docs/specs/0007-dashboard.md) | **Milestones:** M1, M2, M3
 
-Next.js + AG Studio: orders, verification queue, disputes workspace, analytics, custom widgets, Studio agent. Run: `pnpm dev:dashboard` (port 3002).
+Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 3002). Live: https://poi-dashboard.iotkiit.in.
+
+## Pages
+
+| Page           | Route            | Files                                                            |
+| -------------- | ---------------- | ---------------------------------------------------------------- |
+| Home           | `/`              | `app/(home)/page.tsx`, `app/HomeView.tsx`                        |
+| Dispute queue  | `/disputes`      | `app/disputes/(queue)/page.tsx`, `app/disputes/DisputeQueue.tsx` |
+| Dispute detail | `/disputes/<id>` | `app/disputes/[id]/page.tsx`, `DisputeDetailView.tsx`            |
+| Analytics      | `/analytics`     | `app/analytics/page.tsx`, `AnalyticsView.tsx`                    |
+
+Not built yet: agent orders and the verification queue (greyed out as "Soon" in the sidebar), and AG Studio.
+
+## Layout
+
+- **Shell** (`app/AppShell.tsx`): sidebar, top bar with the merchant name and dispute search
+  (`app/DisputeSearch.tsx`), and a mode badge and banner from `PAYPAL_MODE`. There's no account menu until
+  operator login exists (#74).
+- **Rendering:** `app/layout.tsx` uses `force-dynamic`, so `PAYPAL_MODE` comes from the runtime `.env` and seed
+  data is relative to the request time.
+- **Skeletons:** `loading.tsx` lives in the `(home)` and `disputes/(queue)` route groups and in `analytics/`. Don't
+  add one at the app root or in `disputes/`: it would wrap `/disputes/[id]` and turn its 404 into a 200.
+
+## Theme
+
+`src/theme.ts` holds the palette (a light, PayPal-inspired navy and blue) and writes it to `:root` as
+`--poi-*` variables. Use `v("token")` or `var(--poi-…)` in inline styles, never raw hex. Shared shapes: `card`,
+`kpiLabel`, `pillButton`, `pageTitle`, `pageSubtitle`. Every text/background pair passes WCAG AA; recheck new
+pairs.
+
+Brand rules: our own wordmark, icons (`app/icons.tsx`) and color bands. No PayPal logo, PayPal Sans or PayPal
+illustrations.
+
+## Data
+
+Pages call the API through the same-origin proxy `app/api/[...path]/route.ts`, which forwards **GET only**. While
+`GET /disputes` and `GET /disputes/:id/recommendation` return 501, pages fall back to seed data
+(`src/seed-disputes.ts`, `src/seed-orders.ts`) and show a demo-data banner. Logic lives in plain `.ts` under
+`src/` (`api.ts`, `home.ts`, `analytics-data.ts`, `dispute-details.ts`); JSX lives under `app/`.
 
 ## Test
 
 ```bash
 pnpm vitest run apps/dashboard
+pnpm --filter @poi/dashboard build
 ```
 
 Unbuilt acceptance criteria are `ledger()` entries in this folder's `*.test.ts`. Turn each into a plain `test()` as you finish it.

@@ -21,10 +21,11 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 
 | Page | Content | Data |
 |---|---|---|
+| Home *(built, #76)* | disputes due in 24 h; tabs: action required, defend, concede, resolved; quick links | seed until `/disputes` |
 | Agent orders | grid (order, platform, mandate status, verdict, reason codes, amount, captured at); KPI tiles | `/orders` |
 | Verification queue | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
-| Disputes | sorted by due date; class + action chips; SLA countdown; evidence preview; Submit / Accept / Offer | `/disputes` |
-| Analytics | disputes by class per week; overreach rate by platform; defended vs conceded; median response time | `/analytics/*` |
+| Disputes *(built: queue #60, detail #61)* | sorted by due date; class + action chips; SLA countdown; evidence preview; Submit / Accept / Offer | `/disputes` |
+| Analytics *(built, #73)* | disputes by class per week; overreach rate by platform; defended vs conceded; median response window | `/analytics/*` |
 
 **Custom widgets** (`apps/dashboard/src/widgets.ts`), each with an AI description:
 1. `mandate-diff`: intent left, cart right, failed constraints highlighted with codes; "only violations" toggle;
@@ -32,8 +33,11 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 2. `evidence-preview`: attestation PDF + cover note; Submit disabled until opened.
 3. `agent-platform`: card per platform with orders, overreach rate, conceded amount.
 
-**Theme:** brand color, dense rows, monospace reason codes, light and dark; locked operator layout plus an
-"explore" mode.
+**Theme** *(built, #75 and #76)*: light, PayPal-inspired palette in `apps/dashboard/src/theme.ts`, written to
+`:root` as CSS variables; sidebar shell with the merchant name, dispute search and a `PAYPAL_MODE` badge; monospace
+reason codes; WCAG AA contrast. Our own wordmark and icons, no PayPal logo or assets. Dark mode and the locked
+operator layout with an "explore" mode are not built yet. AG Studio isn't integrated yet; when it is, its theme
+should read the same tokens.
 
 **Studio agent** (owner @sumedhag28): custom harness on the example OpenAI-style adapter pointed at
 `POST /ai/studio`; keep the five built-in agents and add `DisputeExplainer` with `explain_dispute(id)` and
@@ -45,8 +49,10 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 
 1. `mandate-diff` registered with an AI description. *(ledger M2 @hoursgotviral-dev)*
 2. DisputeExplainer exposes read-only tools only. *(ledger M3 @sumedhag28)*
-3. Without a license key, behaviour is documented in SETUP.md. *(M0)*
-4. Every number on the analytics page traces to seed data or a sandbox order.
+3. Without a license key, behaviour is documented in SETUP.md. *(M0; today the dashboard has no AG Studio
+   dependency, so it runs without a key, as SETUP.md says)*
+4. Every number on the analytics page traces to seed data or a sandbox order. *(done, #73: tests check against
+   `SEED_DISPUTES` and `SEED_ORDERS`)*
 
 ## Out of scope
 
