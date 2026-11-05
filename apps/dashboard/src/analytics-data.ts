@@ -55,13 +55,14 @@ export function computePerformanceMetrics(
     return due < refTime;
   }).length;
 
-  // Turnaround hours for resolved or evidence-drafted disputes
+  // Response window in hours (dispute opened -> seller deadline) for resolved or evidence-drafted disputes.
+  // The seed data has no response timestamp, so this is the window, not the time actually taken.
   const responseHoursList: number[] = [];
   for (const d of disputes) {
     if (d.evidenceDrafted || d.status === "RESOLVED") {
       const created = new Date(d.createdAt).getTime();
       const due = new Date(d.sellerResponseDueDate).getTime();
-      const hours = Math.round(((due - created) / (1000 * 60 * 60 * 12)) * 10) / 10;
+      const hours = Math.round(((due - created) / (1000 * 60 * 60)) * 10) / 10;
       if (hours > 0) {
         responseHoursList.push(hours);
       }
@@ -69,7 +70,7 @@ export function computePerformanceMetrics(
   }
 
   responseHoursList.sort((a, b) => a - b);
-  let medianResponseHours = 4.2;
+  let medianResponseHours = 0;
   if (responseHoursList.length > 0) {
     const mid = Math.floor(responseHoursList.length / 2);
     medianResponseHours =
@@ -90,87 +91,38 @@ export function computePerformanceMetrics(
 export function computeDisputesByClassPerWeek(
   disputes: DisputeItem[] = SEED_DISPUTES
 ): WeeklyDisputesByClass[] {
-  const defaultWeeks = [
-    {
-      label: "Oct 19 - Oct 25",
-      start: new Date("2026-10-19T00:00:00Z").getTime(),
-      end: new Date("2026-10-25T23:59:59Z").getTime(),
-    },
-    {
-      label: "Oct 26 - Nov 01",
-      start: new Date("2026-10-26T00:00:00Z").getTime(),
-      end: new Date("2026-11-01T23:59:59Z").getTime(),
-    },
-    {
-      label: "Nov 02 - Nov 08",
-      start: new Date("2026-11-02T00:00:00Z").getTime(),
-      end: new Date("2026-11-08T23:59:59Z").getTime(),
-    },
-  ];
-
-  const map = new Map<string, WeeklyDisputesByClass>();
-  for (const w of defaultWeeks) {
-    map.set(w.label, {
-      week: w.label,
-      mandateCompliant: 0,
-      agentOverreach: 0,
-      intentMisread: 0,
-      noMandate: 0,
-      total: 0,
-    });
-  }
+  const weeks = new Map<number, WeeklyDisputesByClass>();
+  const fmt = (x: Date) => x.toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
 
   for (const d of disputes) {
-    const time = new Date(d.createdAt).getTime();
-    let matched = false;
-    for (const w of defaultWeeks) {
-      if (time >= w.start && time <= w.end) {
-        const item = map.get(w.label)!;
-        item.total++;
-        if (d.disputeClass === "MANDATE_COMPLIANT") item.mandateCompliant++;
-        else if (d.disputeClass === "AGENT_OVERREACH") item.agentOverreach++;
-        else if (d.disputeClass === "INTENT_MISREAD") item.intentMisread++;
-        else if (d.disputeClass === "NO_MANDATE") item.noMandate++;
-        matched = true;
-        break;
-      }
-    }
+    // Monday 00:00 UTC of the dispute's week
+    const monday = new Date(d.createdAt);
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+    monday.setUTCHours(0, 0, 0, 0);
+    const key = monday.getTime();
 
-    if (!matched) {
-      const dt = new Date(d.createdAt);
-      const day = dt.getUTCDay();
-      const diffToMonday = (day + 6) % 7;
-      const monday = new Date(dt);
-      monday.setUTCDate(dt.getUTCDate() - diffToMonday);
-      monday.setUTCHours(0, 0, 0, 0);
-      const sunday = new Date(monday);
-      sunday.setUTCDate(monday.getUTCDate() + 6);
-      sunday.setUTCHours(23, 59, 59, 999);
-      const fmt = (x: Date) =>
-        x.toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
-      const label = `${fmt(monday)} - ${fmt(sunday)}`;
-
-      let item = map.get(label);
-      if (!item) {
-        item = {
-          week: label,
-          mandateCompliant: 0,
-          agentOverreach: 0,
-          intentMisread: 0,
-          noMandate: 0,
-          total: 0,
-        };
-        map.set(label, item);
-      }
-      item.total++;
-      if (d.disputeClass === "MANDATE_COMPLIANT") item.mandateCompliant++;
-      else if (d.disputeClass === "AGENT_OVERREACH") item.agentOverreach++;
-      else if (d.disputeClass === "INTENT_MISREAD") item.intentMisread++;
-      else if (d.disputeClass === "NO_MANDATE") item.noMandate++;
+    let item = weeks.get(key);
+    if (!item) {
+      const sunday = new Date(key);
+      sunday.setUTCDate(sunday.getUTCDate() + 6);
+      item = {
+        week: `${fmt(monday)} - ${fmt(sunday)}`,
+        mandateCompliant: 0,
+        agentOverreach: 0,
+        intentMisread: 0,
+        noMandate: 0,
+        total: 0,
+      };
+      weeks.set(key, item);
     }
+    item.total++;
+    if (d.disputeClass === "MANDATE_COMPLIANT") item.mandateCompliant++;
+    else if (d.disputeClass === "AGENT_OVERREACH") item.agentOverreach++;
+    else if (d.disputeClass === "INTENT_MISREAD") item.intentMisread++;
+    else if (d.disputeClass === "NO_MANDATE") item.noMandate++;
   }
 
-  return Array.from(map.values());
+  return [...weeks.entries()].sort((a, b) => a[0] - b[0]).map(([, w]) => w);
 }
 
 /**
@@ -197,12 +149,14 @@ export function computeAnalyticsSummary(
   const actualProtectedCents = resolvedWins.reduce((sum, d) => sum + d.amount.value, 0);
   const actualConcededCents = resolvedLosses.reduce((sum, d) => sum + d.amount.value, 0);
 
-  // Platform breakdown across five platforms from seed data
-  const platforms = ["AutoGPT", "LangChain", "CrewAI", "OpenAI Swarm", "Direct Web"];
+  // Platform breakdown: every platform that appears in the orders or the disputes, busiest first
   const ordersByPlatform: Record<string, number> = {};
   for (const o of orders) {
     ordersByPlatform[o.agentPlatform] = (ordersByPlatform[o.agentPlatform] ?? 0) + 1;
   }
+  const platforms = [...new Set([...orders.map((o) => o.agentPlatform), ...disputes.map((d) => d.agentPlatform)])].sort(
+    (a, b) => (ordersByPlatform[b] ?? 0) - (ordersByPlatform[a] ?? 0) || a.localeCompare(b),
+  );
 
   const byPlatform: PlatformBreakdown[] = platforms.map((p) => {
     const pDisputes = disputes.filter((d) => d.agentPlatform === p);
@@ -210,7 +164,7 @@ export function computeAnalyticsSummary(
     const pConceded = pDisputes.filter((d) => d.decision === "concede");
     // Overreach count strictly excludes INTENT_MISREAD
     const pOverreach = pDisputes.filter((d) => d.disputeClass === "AGENT_OVERREACH");
-    const totalOrders = ordersByPlatform[p] ?? 75;
+    const totalOrders = ordersByPlatform[p] ?? 0;
     // Overreach rate = overreach count divided by total orders
     const overreachRate = totalOrders > 0 ? Math.round((pOverreach.length / totalOrders) * 100) : 0;
 

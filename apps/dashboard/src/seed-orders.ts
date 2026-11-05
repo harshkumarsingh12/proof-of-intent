@@ -11,16 +11,16 @@ export interface SeedOrder {
 
 /**
  * Generates canonical 300 seeded checkout orders per docs/specs/0007-dashboard.md.
- * Distributed across 5 platforms (AutoGPT, LangChain, CrewAI, OpenAI Swarm, Direct Web).
+ * Distributed across the same 5 platforms as the seed disputes (Northstar, Wayfinder, Errandly, Tote, Direct Web).
  * Includes 38 blocked overreach carts totaling $3,420.00.
  */
 function createSeedOrders(): SeedOrder[] {
   const orders: SeedOrder[] = [];
   const platforms = [
-    { name: "AutoGPT", total: 70, blocked: 9 },
-    { name: "LangChain", total: 75, blocked: 10 },
-    { name: "CrewAI", total: 65, blocked: 11 },
-    { name: "OpenAI Swarm", total: 60, blocked: 8 },
+    { name: "Northstar", total: 70, blocked: 9 },
+    { name: "Wayfinder", total: 75, blocked: 10 },
+    { name: "Errandly", total: 65, blocked: 11 },
+    { name: "Tote", total: 60, blocked: 8 },
     { name: "Direct Web", total: 30, blocked: 0 },
   ];
 

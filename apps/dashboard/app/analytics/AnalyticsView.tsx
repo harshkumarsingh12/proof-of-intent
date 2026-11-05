@@ -188,7 +188,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         {/* Card 4: Response Efficiency */}
         <div style={{ ...cardStyle, borderLeft: "4px solid #a855f7" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div style={{ ...kpiLabelStyle, color: "#c084fc" }}>Median Response Time</div>
+            <div style={{ ...kpiLabelStyle, color: "#c084fc" }}>Median response window</div>
             <span style={{ fontSize: 18 }}>⚡</span>
           </div>
 
@@ -196,11 +196,11 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
             <span style={{ fontSize: 32, fontWeight: 700, color: "#f0f6fc" }}>
               {data.performance.medianResponseHours}
             </span>
-            <span style={{ fontSize: 14, color: "#8b949e" }}>hours to submit evidence</span>
+            <span style={{ fontSize: 14, color: "#8b949e" }}>hours from dispute opened to seller deadline</span>
           </div>
 
           <div style={{ fontSize: 13, color: "#8b949e", marginTop: 4 }}>
-            Accelerated from industry standard 5 days to automated drafting
+            Across disputes with drafted evidence or a resolution
           </div>
 
           <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #21262d", fontSize: 12, color: "#34d399" }}>
