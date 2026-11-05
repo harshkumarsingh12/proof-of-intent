@@ -105,6 +105,15 @@ export function toPayPalAmount(money: Money): { currency_code: string; value: st
   return { currency_code: money.currency, value: (money.value / 10 ** digits).toFixed(digits) };
 }
 
+/** PayPal's decimal string → minor units, the inverse of toPayPalAmount. */
+export function fromPayPalAmount(amount: { currency_code: string; value: string }): Money {
+  const digits = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: amount.currency_code,
+  }).resolvedOptions().maximumFractionDigits!;
+  return { currency: amount.currency_code, value: Math.round(Number(amount.value) * 10 ** digits) };
+}
+
 export function createPayPalClient(mode: PayPalMode, config: Partial<SandboxConfig> = {}): PayPalClient {
   if (mode === "mock") return createMockClient();
   const clientId = config.clientId ?? process.env.PAYPAL_CLIENT_ID;

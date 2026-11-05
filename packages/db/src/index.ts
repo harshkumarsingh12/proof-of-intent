@@ -234,7 +234,7 @@ export function createDb(databaseUrl: string): Db {
       const res = await pool.query<{ total_value: string; captured_at: Date }>(
         `select total_value, captured_at from orders
           where intent_mandate_id = $1 and captured_at is not null
-            and ($2::text is null or captured_at < (select created_at from orders where id = $2))
+            and ($2::text is null or (id <> $2 and captured_at < (select created_at from orders where id = $2)))
           order by captured_at`,
         [intentMandateId, asOfOrderId ?? null],
       );

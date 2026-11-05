@@ -11,11 +11,6 @@ const SPEC = "docs/specs/0003-checkout-and-verification.md";
 
 const routes: [Method, string, string][] = [
   ["POST", "/stepup/:token/approve", "srshriv"],
-  ["GET", "/orders", "harshkumarsingh12"],
-  ["GET", "/verifications", "harshkumarsingh12"],
-  ["GET", "/disputes", "hoursgotviral-dev"],
-  ["GET", "/disputes/:id/recommendation", "hoursgotviral-dev"],
-  ["POST", "/disputes/:id/actions/:action", "hoursgotviral-dev"],
   ["GET", "/analytics/:report", "hoursgotviral-dev"],
   ["POST", "/ai/studio", "sumedhag28"],
 ];

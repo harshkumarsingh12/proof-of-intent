@@ -49,6 +49,14 @@ agent platform it's attributed to.
 `recommend(disputeId) → { class, action, reasons }`, `buildEvidencePackage(disputeId) → { pdf, bundleJson }` in
 `apps/worker/src/pipeline.ts`. API surface in spec 0003 (`/disputes*`).
 
+**As built (Nov 6).** The queue is the `webhook_events` table itself: the worker (`apps/worker/src/inbox.ts`) polls
+verified `CUSTOMER.DISPUTE.*` rows with no `processed_at`, matches `invoice_number` to our order, runs the tree
+above and stores the recommendation, the PDF and the bundle on the `disputes` row (migration 0002). Handling an
+event twice yields the same row, so a crash before `processed_at` is set only repeats the work. The API serves
+`GET /disputes`, `GET /disputes/:id/recommendation`, `GET /disputes/:id/evidence.pdf` and
+`POST /disputes/:id/actions/{provide-evidence,accept-claim,send-message}`; actions need `Bearer OPERATOR_TOKEN`,
+write the operator's audit row first, then call PayPal.
+
 ## Acceptance criteria
 
 1. Overreach fixture → `AGENT_OVERREACH` → accept. *(ledger M2)*

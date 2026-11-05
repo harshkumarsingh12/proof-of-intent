@@ -11,6 +11,7 @@ import { createPayPalClient, parseMode, type PayPalClient } from "@poi/paypal";
 import { importPKCS8 } from "jose";
 import type { CheckoutDeps, Merchant } from "./checkout";
 import { checkoutRoutes } from "./routes/checkout";
+import { disputeRoutes } from "./routes/disputes";
 import { registerRoutes } from "./routes/index";
 import { webhookRoutes } from "./routes/webhooks";
 
@@ -21,13 +22,15 @@ export interface AppDeps {
   /** Signs Cart Mandates. Absent → checkout answers 503. */
   merchant?: Merchant;
   aiMode?: AiMode;
+  /** Bearer token for operator dispute actions. Absent → those routes answer 503. */
+  operatorToken?: string;
   semanticFit?: CheckoutDeps["semanticFit"];
   now?: () => string;
 }
 
 /**
  * Real dependencies from the environment. PAYPAL_MODE (mock by default), DATABASE_URL, AI_MODE,
- * MERCHANT_ID, MERCHANT_KEY_ID and MERCHANT_SIGNING_KEY (PKCS#8 PEM from `pnpm keys:gen`, `\n` escaped).
+ * OPERATOR_TOKEN, MERCHANT_ID, MERCHANT_KEY_ID and MERCHANT_SIGNING_KEY (PKCS#8 PEM from `pnpm keys:gen`, `\n` escaped).
  */
 export async function depsFromEnv(env = process.env): Promise<AppDeps> {
   const paypalMode = parseMode(env.PAYPAL_MODE);
@@ -36,6 +39,7 @@ export async function depsFromEnv(env = process.env): Promise<AppDeps> {
     db: env.DATABASE_URL ? createDb(env.DATABASE_URL) : undefined,
     merchant: await merchantFromEnv(env, paypalMode === "sandbox"),
     aiMode: parseAiMode(env.AI_MODE),
+    operatorToken: env.OPERATOR_TOKEN || undefined,
   };
 }
 
@@ -76,6 +80,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   }));
 
   app.register(webhookRoutes, deps);
+  app.register(disputeRoutes, deps);
   app.register(checkoutRoutes, {
     ...deps,
     aiMode: deps.aiMode ?? "replay",

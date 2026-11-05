@@ -14,9 +14,12 @@
     "@poi/mandates": "workspace:*",
     "@poi/paypal": "workspace:*",
     "@poi/policy-engine": "workspace:*",
+    "jose": "^5.9.6",
     "tsx": "^4.19.2"
   },
   "devDependencies": {
-    "@poi/ledger": "workspace:*"
+    "@poi/ledger": "workspace:*",
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1"
   }
 }

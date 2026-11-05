@@ -54,7 +54,7 @@ export function memoryDb() {
         (o) =>
           o.intentMandateId === intentMandateId &&
           o.capturedAt &&
-          (!asOfOrderId || (asOf && o.capturedAt < asOf)),
+          (!asOfOrderId || (o.id !== asOfOrderId && asOf && o.capturedAt < asOf)),
       );
       return {
         capturedTotal: captured.reduce((s, o) => s + o.totalValue, 0),

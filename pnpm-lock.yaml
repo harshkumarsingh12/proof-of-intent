@@ -158,6 +158,9 @@ importers:
       '@poi/policy-engine':
         specifier: workspace:*
         version: link:../../packages/policy-engine
+      jose:
+        specifier: ^5.9.6
+        version: 5.10.0
       tsx:
         specifier: ^4.19.2
         version: 4.23.15

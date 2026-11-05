@@ -51,3 +51,4 @@ export * from "./intake";
 export * from "./decision";
 export * from "./classifier";
 export * from "./evidence";
+export * from "./inbox";
