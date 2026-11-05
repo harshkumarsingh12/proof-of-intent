@@ -78,7 +78,7 @@ jobs:
             docker compose --profile server pull
             docker compose --profile server up -d
             sleep 15
-            curl -fsS http://127.0.0.1:3000/healthz
+            docker compose exec -T api wget -qO- http://127.0.0.1:3000/healthz
 
   release:
     needs: server
