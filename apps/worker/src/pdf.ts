@@ -100,7 +100,7 @@ export function renderEvidencePdfText(data: EvidencePdfData): string {
   lines.push("1. DISPUTE SUMMARY");
   lines.push("------------------");
   lines.push(`Dispute ID:               ${data.summary.disputeId ?? "not available"}`);
-  lines.push(`PayPal Order ID:          ${data.summary.orderId ?? "not available"}`);
+  lines.push(`Order ID:                 ${data.summary.orderId ?? "not available"}`);
   lines.push(`PayPal custom_id:         ${data.summary.customId ?? "not available"}`);
   lines.push(`Dispute Status:           ${data.summary.status ?? "not available"}`);
   lines.push(`Dispute Reason:           ${data.summary.reason ?? "not available"}`);

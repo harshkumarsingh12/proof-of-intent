@@ -645,6 +645,14 @@ export function DisputeDetailView({
               </button>
             </div>
 
+            {!isDemoData ? (
+              // Live dispute: the exact PDF that "Submit evidence" sends to PayPal.
+              <iframe
+                title={`Evidence PDF for ${dispute.id}`}
+                src={`/api/disputes/${encodeURIComponent(dispute.id)}/evidence.pdf`}
+                style={{ width: "100%", height: "65vh", border: "1px solid var(--poi-border)", borderRadius: 6 }}
+              />
+            ) : (
             <div
               style={{
                 background: "var(--poi-bg)",
@@ -693,6 +701,7 @@ export function DisputeDetailView({
                 <div>custom_id pointer: {dispute.evidenceDraftInfo?.customId}</div>
               </div>
             </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
               <span style={{ fontSize: 12, color: "var(--poi-success)" }}>
