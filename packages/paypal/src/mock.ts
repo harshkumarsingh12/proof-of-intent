@@ -12,7 +12,8 @@ export const MOCK_WEBHOOK_SIGNATURE = "mock-signature";
 
 export type DisputeAction =
   | { kind: "provide-evidence"; disputeId: string; evidenceType: string; notes: string; files: string[] }
-  | { kind: "send-message"; disputeId: string; message: string };
+  | { kind: "send-message"; disputeId: string; message: string }
+  | { kind: "accept-claim"; disputeId: string; note: string };
 
 export interface MockPayPalClient extends PayPalClient {
   /** Every dispute action the mock received, oldest first. Lets tests prove what was (not) sent. */
@@ -114,6 +115,10 @@ export function createMockClient(): MockPayPalClient {
 
     async sendMessage(disputeId, message) {
       disputeActions.push({ kind: "send-message", disputeId, message });
+    },
+
+    async acceptClaim(disputeId, note) {
+      disputeActions.push({ kind: "accept-claim", disputeId, note });
     },
   };
 }

@@ -73,6 +73,8 @@ export interface PayPalClient {
   /** Multipart provide-evidence: the attestation PDF(s) plus notes. Only after an operator click (invariant 4). */
   provideEvidence(disputeId: string, input: ProvideEvidenceInput): Promise<void>;
   sendMessage(disputeId: string, message: string): Promise<void>;
+  /** Concede: PayPal refunds the buyer. Only after an operator click (invariant 4). */
+  acceptClaim(disputeId: string, note: string): Promise<void>;
 }
 
 /** A non-2xx answer from PayPal, with the fields their support asks for. */

@@ -83,7 +83,44 @@ export interface OrderPatch {
 }
 
 /** An order as stored, with whatever PayPal ids it has collected so far. */
-export type StoredOrder = OrderRecord & Partial<OrderPatch>;
+export type StoredOrder = OrderRecord & Partial<OrderPatch> & { createdAt?: string };
+
+export type StoredVerdict = VerdictRecord & { id: number; createdAt: string };
+
+/** A verified webhook delivery the worker hasn't handled yet. */
+export interface PendingEvent {
+  eventId: string;
+  eventType: string;
+  payload: unknown;
+}
+
+/** A PayPal dispute and what the copilot made of it (docs/specs/0005). */
+export interface DisputeRow {
+  id: string;
+  orderId?: string;
+  reason?: string;
+  status?: string;
+  amountValue?: number;
+  currency?: string;
+  sellerResponseDueDate?: string;
+  /** PayPal's create_time; defaults to when we first saw it. */
+  createdAt?: string;
+  /** The PayPal dispute object as received. */
+  paypal: unknown;
+  /** PayPal's update_time for that object. */
+  paypalUpdatedAt?: string;
+  recommendation?: unknown;
+  evidencePdf?: Uint8Array;
+  evidenceBundle?: unknown;
+}
+
+/** Listing view: no PDF bytes, just whether there is one. */
+export type DisputeSummary = Omit<DisputeRow, "evidencePdf"> & { hasEvidencePdf: boolean };
+
+export interface Page {
+  limit: number;
+  offset: number;
+}
 
 export interface Db {
   /** Inserts the nonce; returns false if it was already used. */
@@ -100,13 +137,32 @@ export interface Db {
   findKey(kind: "shopper" | "agent", kid: string): Promise<KeyRecord | null>;
   /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
   saveMandate(m: MandateRecord): Promise<void>;
-  /** Prior captures under an intent mandate, for budget_cap and recurrence. Integer minor units. */
-  mandateLedger(intentMandateId: string): Promise<{ capturedTotal: number; capturedOrderTimes: string[] }>;
+  /**
+   * Prior captures under an intent mandate, for budget_cap and recurrence. Integer minor units.
+   * With asOfOrderId: only captures that existed when that order was created, which is what its checkout saw.
+   */
+  mandateLedger(
+    intentMandateId: string,
+    asOfOrderId?: string,
+  ): Promise<{ capturedTotal: number; capturedOrderTimes: string[] }>;
   recordVerdict(v: VerdictRecord): Promise<void>;
   createOrder(o: OrderRecord): Promise<void>;
   getOrder(id: string): Promise<StoredOrder | null>;
   getMandate(hash: string): Promise<MandateRecord | null>;
   updateOrder(id: string, patch: OrderPatch): Promise<void>;
+  /** The checkout verdict that created an order. */
+  orderVerdict(orderId: string): Promise<VerdictRecord | null>;
+  /** Newest first, for the dashboard grids. */
+  listOrders(page: Page): Promise<StoredOrder[]>;
+  listVerdicts(page: Page): Promise<StoredVerdict[]>;
+  /** Dispute deliveries the worker hasn't handled yet, oldest first. */
+  pendingDisputeEvents(limit: number): Promise<PendingEvent[]>;
+  markEventProcessed(eventId: string): Promise<void>;
+  /** Insert or replace. Returns false when we already hold a newer PayPal version (out-of-order delivery). */
+  saveDispute(d: DisputeRow): Promise<boolean>;
+  getDispute(id: string): Promise<DisputeRow | null>;
+  /** Response deadline first: disputes close to seller_response_due_date sort to the top (spec 0005). */
+  listDisputes(page: Page): Promise<DisputeSummary[]>;
   /** Applies pending migrations. Safe to call from several processes at once. */
   migrate(): Promise<string[]>;
   close(): Promise<void>;
@@ -174,10 +230,13 @@ export function createDb(databaseUrl: string): Db {
       );
     },
 
-    async mandateLedger(intentMandateId) {
+    async mandateLedger(intentMandateId, asOfOrderId) {
       const res = await pool.query<{ total_value: string; captured_at: Date }>(
-        "select total_value, captured_at from orders where intent_mandate_id = $1 and captured_at is not null order by captured_at",
-        [intentMandateId],
+        `select total_value, captured_at from orders
+          where intent_mandate_id = $1 and captured_at is not null
+            and ($2::text is null or captured_at < (select created_at from orders where id = $2))
+          order by captured_at`,
+        [intentMandateId, asOfOrderId ?? null],
       );
       return {
         capturedTotal: res.rows.reduce((sum, r) => sum + Number(r.total_value), 0),
@@ -216,25 +275,96 @@ export function createDb(databaseUrl: string): Db {
 
     async getOrder(id) {
       const r = (await pool.query("select * from orders where id = $1", [id])).rows[0];
+      return r ? toOrder(r) : null;
+    },
+
+    async listOrders({ limit, offset }) {
+      const res = await pool.query("select * from orders order by created_at desc, id limit $1 offset $2", [
+        limit,
+        offset,
+      ]);
+      return res.rows.map(toOrder);
+    },
+
+    async orderVerdict(orderId) {
+      const r = (
+        await pool.query("select * from verdicts where order_id = $1 order by id desc limit 1", [orderId])
+      ).rows[0];
       if (!r) return null;
-      return {
-        id: r.id,
-        intentMandateId: r.intent_mandate_id,
-        intentMandateHash: r.intent_mandate_hash,
-        cartMandateHash: r.cart_mandate_hash,
-        customId: r.custom_id,
-        paypalIntent: r.paypal_intent,
-        status: r.status,
-        totalValue: Number(r.total_value),
-        currency: r.currency,
-        agentPlatform: r.agent_platform,
-        humanPresent: r.human_present,
-        ...(r.shopper_id ? { shopperId: r.shopper_id } : {}),
-        ...(r.paypal_order_id ? { paypalOrderId: r.paypal_order_id } : {}),
-        ...(r.authorization_id ? { authorizationId: r.authorization_id } : {}),
-        ...(r.capture_id ? { captureId: r.capture_id } : {}),
-        ...(r.captured_at ? { capturedAt: (r.captured_at as Date).toISOString() } : {}),
-      };
+      const { id: _id, createdAt: _at, ...verdict } = toVerdict(r);
+      return verdict;
+    },
+
+    async listVerdicts({ limit, offset }) {
+      const res = await pool.query("select * from verdicts order by id desc limit $1 offset $2", [
+        limit,
+        offset,
+      ]);
+      return res.rows.map(toVerdict);
+    },
+
+    async pendingDisputeEvents(limit) {
+      const res = await pool.query<{ event_id: string; event_type: string; payload: unknown }>(
+        `select event_id, event_type, payload from webhook_events
+          where processed_at is null and event_type like 'CUSTOMER.DISPUTE.%'
+          order by received_at, event_id limit $1`,
+        [limit],
+      );
+      return res.rows.map((r) => ({ eventId: r.event_id, eventType: r.event_type, payload: r.payload }));
+    },
+
+    async markEventProcessed(eventId) {
+      await pool.query("update webhook_events set processed_at = now() where event_id = $1", [eventId]);
+    },
+
+    async saveDispute(d) {
+      const res = await pool.query(
+        `insert into disputes (id, order_id, reason, status, amount_value, currency, seller_response_due_date,
+                               paypal, paypal_updated_at, recommendation, evidence_pdf, evidence_bundle, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, coalesce($13, now()))
+         on conflict (id) do update set
+           order_id = excluded.order_id, reason = excluded.reason, status = excluded.status,
+           amount_value = excluded.amount_value, currency = excluded.currency,
+           seller_response_due_date = excluded.seller_response_due_date, paypal = excluded.paypal,
+           paypal_updated_at = excluded.paypal_updated_at, recommendation = excluded.recommendation,
+           evidence_pdf = excluded.evidence_pdf, evidence_bundle = excluded.evidence_bundle, updated_at = now()
+         where disputes.paypal_updated_at is null or excluded.paypal_updated_at is null
+            or excluded.paypal_updated_at >= disputes.paypal_updated_at`,
+        [
+          d.id,
+          d.orderId ?? null,
+          d.reason ?? null,
+          d.status ?? null,
+          d.amountValue ?? null,
+          d.currency ?? null,
+          d.sellerResponseDueDate ?? null,
+          json(d.paypal),
+          d.paypalUpdatedAt ?? null,
+          json(d.recommendation),
+          d.evidencePdf ? Buffer.from(d.evidencePdf) : null,
+          json(d.evidenceBundle),
+          d.createdAt ?? null,
+        ],
+      );
+      return res.rowCount === 1;
+    },
+
+    async getDispute(id) {
+      const r = (await pool.query("select * from disputes where id = $1", [id])).rows[0];
+      if (!r) return null;
+      const { hasEvidencePdf: _, ...row } = toDispute(r);
+      return r.evidence_pdf ? { ...row, evidencePdf: new Uint8Array(r.evidence_pdf as Buffer) } : row;
+    },
+
+    async listDisputes({ limit, offset }) {
+      const res = await pool.query(
+        `select id, order_id, reason, status, amount_value, currency, seller_response_due_date, created_at, paypal,
+                paypal_updated_at, recommendation, evidence_bundle, evidence_pdf is not null as has_evidence_pdf
+           from disputes order by seller_response_due_date asc nulls last, created_at desc
+          limit $1 offset $2`,
+        [limit, offset],
+      );
+      return res.rows.map(toDispute);
     },
 
     async getMandate(hash) {
@@ -328,6 +458,64 @@ export function createDb(databaseUrl: string): Db {
     async close() {
       await pool.end();
     },
+  };
+}
+
+type Row = Record<string, unknown>;
+const iso = (v: unknown) => (v as Date).toISOString();
+
+function toOrder(r: Row): StoredOrder {
+  return {
+    id: r.id as string,
+    intentMandateId: r.intent_mandate_id as string,
+    intentMandateHash: r.intent_mandate_hash as string,
+    cartMandateHash: r.cart_mandate_hash as string,
+    customId: r.custom_id as string,
+    paypalIntent: r.paypal_intent as StoredOrder["paypalIntent"],
+    status: r.status as string,
+    totalValue: Number(r.total_value),
+    currency: r.currency as string,
+    agentPlatform: r.agent_platform as string,
+    humanPresent: r.human_present as boolean,
+    ...(r.shopper_id ? { shopperId: r.shopper_id as string } : {}),
+    ...(r.paypal_order_id ? { paypalOrderId: r.paypal_order_id as string } : {}),
+    ...(r.authorization_id ? { authorizationId: r.authorization_id as string } : {}),
+    ...(r.capture_id ? { captureId: r.capture_id as string } : {}),
+    ...(r.captured_at ? { capturedAt: iso(r.captured_at) } : {}),
+    ...(r.created_at ? { createdAt: iso(r.created_at) } : {}),
+  };
+}
+
+function toVerdict(r: Row): StoredVerdict {
+  return {
+    id: Number(r.id),
+    createdAt: iso(r.created_at),
+    intentMandateId: r.intent_mandate_id as string,
+    cartId: r.cart_id as string,
+    ...(r.order_id ? { orderId: r.order_id as string } : {}),
+    outcome: r.outcome as StoredVerdict["outcome"],
+    reasons: r.reasons as string[],
+    ...(r.semantic === null ? {} : { semantic: r.semantic }),
+  };
+}
+
+function toDispute(r: Row): DisputeSummary {
+  return {
+    id: r.id as string,
+    ...(r.order_id ? { orderId: r.order_id as string } : {}),
+    ...(r.reason ? { reason: r.reason as string } : {}),
+    ...(r.status ? { status: r.status as string } : {}),
+    ...(r.amount_value !== null && r.amount_value !== undefined
+      ? { amountValue: Number(r.amount_value) }
+      : {}),
+    ...(r.currency ? { currency: r.currency as string } : {}),
+    ...(r.seller_response_due_date ? { sellerResponseDueDate: iso(r.seller_response_due_date) } : {}),
+    ...(r.created_at ? { createdAt: iso(r.created_at) } : {}),
+    paypal: r.paypal,
+    ...(r.paypal_updated_at ? { paypalUpdatedAt: iso(r.paypal_updated_at) } : {}),
+    ...(r.recommendation === null ? {} : { recommendation: r.recommendation }),
+    ...(r.evidence_bundle === null ? {} : { evidenceBundle: r.evidence_bundle }),
+    hasEvidencePdf: r.has_evidence_pdf === undefined ? r.evidence_pdf != null : Boolean(r.has_evidence_pdf),
   };
 }
 
