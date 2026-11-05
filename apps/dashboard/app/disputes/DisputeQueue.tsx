@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
 import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, sortDisputes } from "../../src/api";
+import { card, kpiLabel, pillButton } from "../../src/theme";
 
 export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: DisputeItem[] }) {
   const [disputes, setDisputes] = useState<DisputeItem[]>(initialDisputes);
@@ -82,11 +83,11 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
         <div
           data-testid="demo-data-banner"
           style={{
-            background: "rgba(210, 153, 34, 0.15)",
-            border: "1px solid #d29922",
+            background: "var(--poi-warning-bg)",
+            border: "1px solid var(--poi-warning)",
             borderRadius: 8,
             padding: "12px 16px",
-            color: "#e3b341",
+            color: "var(--poi-warning)",
             fontSize: 13,
             display: "flex",
             alignItems: "center",
@@ -96,8 +97,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
           <span
             style={{
               padding: "2px 8px",
-              background: "#d29922",
-              color: "#0d1117",
+              background: "var(--poi-warning)",
+              color: "#ffffff",
               fontWeight: 700,
               borderRadius: 4,
               fontSize: 11,
@@ -121,31 +122,31 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
         }}
       >
         <div style={cardStyle}>
-          <div style={kpiLabelStyle}>Total Disputes</div>
+          <div style={kpiLabelStyle}>Total disputes</div>
           <div style={kpiValueStyle}>{counts.total}</div>
           <div style={kpiSubStyle}>Active in merchant queue</div>
         </div>
 
-        <div style={{ ...cardStyle, borderLeft: "4px solid #10b981" }}>
-          <div style={{ ...kpiLabelStyle, color: "#34d399" }}>Defend Queue</div>
+        <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-success)" }}>
+          <div style={{ ...kpiLabelStyle, color: "var(--poi-success)" }}>Defend queue</div>
           <div style={kpiValueStyle}>{counts.defend}</div>
           <div style={kpiSubStyle}>Mandate-compliant orders</div>
         </div>
 
-        <div style={{ ...cardStyle, borderLeft: "4px solid #f59e0b" }}>
-          <div style={{ ...kpiLabelStyle, color: "#fbbf24" }}>Concede Queue</div>
+        <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-warning)" }}>
+          <div style={{ ...kpiLabelStyle, color: "var(--poi-warning)" }}>Concede queue</div>
           <div style={kpiValueStyle}>{counts.concede}</div>
           <div style={kpiSubStyle}>Agent overreach / misread</div>
         </div>
 
-        <div style={{ ...cardStyle, borderLeft: "4px solid #ef4444" }}>
-          <div style={{ ...kpiLabelStyle, color: "#f87171" }}>SLA Urgent (&lt;48h)</div>
-          <div style={{ ...kpiValueStyle, color: "#f87171" }}>{counts.urgent}</div>
+        <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-danger)" }}>
+          <div style={{ ...kpiLabelStyle, color: "var(--poi-danger)" }}>SLA Urgent (&lt;48h)</div>
+          <div style={{ ...kpiValueStyle, color: "var(--poi-danger)" }}>{counts.urgent}</div>
           <div style={kpiSubStyle}>Requires immediate review</div>
         </div>
 
         <div style={cardStyle}>
-          <div style={kpiLabelStyle}>Disputed Volume</div>
+          <div style={kpiLabelStyle}>Disputed volume</div>
           <div style={kpiValueStyle}>{counts.totalAmount}</div>
           <div style={kpiSubStyle}>Aggregated per currency</div>
         </div>
@@ -164,7 +165,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
       >
         {/* Decision Filter Pills */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, color: "#8b949e", fontWeight: 600 }}>Decision:</span>
+          <span style={{ fontSize: 13, color: "var(--poi-text-muted)", fontWeight: 600 }}>Decision:</span>
           {(
             [
               ["all", `All (${counts.total})`],
@@ -181,9 +182,9 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 onClick={() => setFilters((prev) => ({ ...prev, decision: dec }))}
                 style={{
                   ...pillBtnStyle,
-                  background: isActive ? "#238636" : "#21262d",
-                  color: isActive ? "#ffffff" : "#c9d1d9",
-                  borderColor: isActive ? "#2ea043" : "#30363d",
+                  background: isActive ? "var(--poi-blue)" : "var(--poi-surface-muted)",
+                  color: isActive ? "#ffffff" : "var(--poi-text)",
+                  borderColor: isActive ? "var(--poi-blue)" : "var(--poi-border)",
                 }}
               >
                 {label}
@@ -209,9 +210,9 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
             onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
             style={selectStyle}
           >
-            <option value="all">All Statuses</option>
-            <option value="ACTION_REQUIRED">Action Required</option>
-            <option value="UNDER_REVIEW">Under Review</option>
+            <option value="all">All statuses</option>
+            <option value="ACTION_REQUIRED">Action required</option>
+            <option value="UNDER_REVIEW">Under review</option>
             <option value="WAITING_FOR_BUYER_RESPONSE">Waiting for Buyer</option>
             <option value="WAITING_FOR_SELLER_RESPONSE">Waiting for Seller</option>
             <option value="RESOLVED">Resolved</option>
@@ -237,7 +238,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
           justifyContent: "space-between",
           alignItems: "center",
           fontSize: 13,
-          color: "#8b949e",
+          color: "var(--poi-text-muted)",
           padding: "0 4px",
         }}
       >
@@ -276,8 +277,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
       <div style={{ ...cardStyle, padding: 0, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "#1c2128", borderBottom: "1px solid #30363d", color: "#8b949e" }}>
-              <th style={thStyle}>Dispute & Order ID</th>
+            <tr style={{ background: "var(--poi-surface-muted)", borderBottom: "1px solid var(--poi-border)", color: "var(--poi-text-muted)" }}>
+              <th style={thStyle}>Dispute and order ID</th>
               <th style={thStyle}>Platform</th>
               <th style={thStyle}>Decision</th>
               <th style={thStyle}>Status</th>
@@ -297,7 +298,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
           <tbody>
             {displayedDisputes.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 48, textAlign: "center", color: "#8b949e" }}>
+                <td colSpan={9} style={{ padding: 48, textAlign: "center", color: "var(--poi-text-muted)" }}>
                   {loading ? "Loading disputes from API..." : "No disputes match the selected filters."}
                 </td>
               </tr>
@@ -311,14 +312,14 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                     key={item.id}
                     onClick={() => setSelectedDispute(item)}
                     style={{
-                      borderBottom: "1px solid #21262d",
+                      borderBottom: "1px solid var(--poi-surface-muted)",
                       cursor: "pointer",
-                      background: selectedDispute?.id === item.id ? "rgba(56, 139, 253, 0.1)" : "transparent",
+                      background: selectedDispute?.id === item.id ? "var(--poi-info-bg)" : "transparent",
                       transition: "background 0.15s ease",
                     }}
                     onMouseEnter={(e) => {
                       if (selectedDispute?.id !== item.id) {
-                        e.currentTarget.style.background = "#161b22";
+                        e.currentTarget.style.background = "var(--poi-surface)";
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -327,15 +328,15 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                       }
                     }}
                   >
-                    {/* Dispute & Order ID */}
+                    {/* Dispute and order ID */}
                     <td style={tdStyle}>
                       <Link
                         href={`/disputes/${item.id}`}
-                        style={{ fontFamily: "monospace", fontWeight: 600, color: "#58a6ff", textDecoration: "none" }}
+                        style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--poi-blue)", textDecoration: "none" }}
                       >
                         {item.id}
                       </Link>
-                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>{item.orderId}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--poi-text-muted)" }}>{item.orderId}</div>
                     </td>
 
                     {/* Agent Platform */}
@@ -361,7 +362,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                     <td style={{ ...tdStyle, fontWeight: 600 }}>{formatMoney(item.amount)}</td>
 
                     {/* Age */}
-                    <td style={{ ...tdStyle, color: "#8b949e" }}>{age.text}</td>
+                    <td style={{ ...tdStyle, color: "var(--poi-text-muted)" }}>{age.text}</td>
 
                     {/* Response SLA */}
                     <td style={tdStyle}>
@@ -374,8 +375,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                           borderRadius: 4,
                           fontSize: 12,
                           fontWeight: sla.isUrgent ? 600 : 400,
-                          background: sla.isUrgent ? "rgba(239, 68, 68, 0.15)" : "rgba(110, 118, 129, 0.1)",
-                          color: sla.isUrgent ? "#f87171" : "#c9d1d9",
+                          background: sla.isUrgent ? "var(--poi-danger-bg)" : "var(--poi-surface-muted)",
+                          color: sla.isUrgent ? "var(--poi-danger)" : "var(--poi-text)",
                         }}
                       >
                         {sla.isUrgent && "⚠️"} {sla.text}
@@ -387,7 +388,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         <span style={codeBadgeStyle}>{item.disputeClass}</span>
                         {item.reasons.map((r) => (
-                          <span key={r} style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
+                          <span key={r} style={{ ...codeBadgeStyle, color: "var(--poi-danger)", borderColor: "var(--poi-danger-border)" }}>
                             {r}
                           </span>
                         ))}
@@ -404,7 +405,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                           display: "inline-block",
                         }}
                       >
-                        View Details →
+                        View details →
                       </Link>
                     </td>
                   </tr>
@@ -421,10 +422,10 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
           <div style={drawerContentStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: "#f0f6fc" }}>
-                  Dispute Details · <span style={{ fontFamily: "monospace", color: "#58a6ff" }}>{selectedDispute.id}</span>
+                <h3 style={{ margin: 0, fontSize: 18, color: "var(--poi-heading)" }}>
+                  Dispute details · <span style={{ fontFamily: "monospace", color: "var(--poi-blue)" }}>{selectedDispute.id}</span>
                 </h3>
-                <div style={{ fontSize: 12, color: "#8b949e", marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: "var(--poi-text-muted)", marginTop: 4 }}>
                   PayPal Order: <span style={{ fontFamily: "monospace" }}>{selectedDispute.paypalOrderId}</span> · Platform:{" "}
                   <strong>{selectedDispute.agentPlatform}</strong>
                 </div>
@@ -436,7 +437,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div style={detailBoxStyle}>
-                <div style={kpiLabelStyle}>Decision Verdict</div>
+                <div style={kpiLabelStyle}>Decision</div>
                 <div style={{ marginTop: 6 }}>
                   <span style={decisionBadgeStyle(selectedDispute.decision)}>
                     {selectedDispute.decision.toUpperCase()} ({selectedDispute.disputeClass})
@@ -445,26 +446,26 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
               </div>
 
               <div style={detailBoxStyle}>
-                <div style={kpiLabelStyle}>Disputed Amount</div>
-                <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, color: "#f0f6fc" }}>
+                <div style={kpiLabelStyle}>Disputed amount</div>
+                <div style={{ marginTop: 6, fontSize: 18, fontWeight: 700, color: "var(--poi-heading)" }}>
                   {formatMoney(selectedDispute.amount)}
                 </div>
               </div>
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={kpiLabelStyle}>Buyer Claim Reason</div>
-              <div style={{ marginTop: 4, fontFamily: "monospace", fontSize: 13, color: "#e6edf3" }}>
+              <div style={kpiLabelStyle}>Buyer claim reason</div>
+              <div style={{ marginTop: 4, fontFamily: "monospace", fontSize: 13, color: "var(--poi-text)" }}>
                 {selectedDispute.buyerDisputeReason}
               </div>
             </div>
 
             {selectedDispute.reasons.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <div style={kpiLabelStyle}>Reason Codes</div>
+                <div style={kpiLabelStyle}>Reason codes</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                   {selectedDispute.reasons.map((r) => (
-                    <span key={r} style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
+                    <span key={r} style={{ ...codeBadgeStyle, color: "var(--poi-danger)", borderColor: "var(--poi-danger-border)" }}>
                       {r}
                     </span>
                   ))}
@@ -474,8 +475,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
             {selectedDispute.shopperNotes && (
               <div style={{ marginBottom: 16 }}>
-                <div style={kpiLabelStyle}>Audit & Copilot Notes</div>
-                <div style={{ marginTop: 6, fontSize: 13, color: "#c9d1d9", background: "#0d1117", padding: 12, borderRadius: 6, border: "1px solid #30363d" }}>
+                <div style={kpiLabelStyle}>Audit and copilot notes</div>
+                <div style={{ marginTop: 6, fontSize: 13, color: "var(--poi-text)", background: "var(--poi-bg)", padding: 12, borderRadius: 6, border: "1px solid var(--poi-border)" }}>
                   {selectedDispute.shopperNotes}
                 </div>
               </div>
@@ -489,9 +490,9 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 href={`/disputes/${selectedDispute.id}`}
                 style={{
                   ...pillBtnStyle,
-                  background: selectedDispute.decision === "defend" ? "#238636" : selectedDispute.decision === "concede" ? "#d97706" : "#1f6feb",
+                  background: selectedDispute.decision === "defend" ? "var(--poi-blue)" : selectedDispute.decision === "concede" ? "var(--poi-warning)" : "var(--poi-blue)",
                   color: "#fff",
-                  borderColor: selectedDispute.decision === "defend" ? "#2ea043" : selectedDispute.decision === "concede" ? "#f59e0b" : "#388bfd",
+                  borderColor: selectedDispute.decision === "defend" ? "var(--poi-blue)" : selectedDispute.decision === "concede" ? "var(--poi-warning)" : "var(--poi-blue)",
                   textDecoration: "none",
                   display: "inline-flex",
                   alignItems: "center",
@@ -499,10 +500,10 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 }}
               >
                 {selectedDispute.decision === "defend"
-                  ? "Open Review & Submit Evidence →"
+                  ? "Review and submit evidence →"
                   : selectedDispute.decision === "concede"
-                  ? "Open Review & Accept Claim →"
-                  : "View Dispute Details →"}
+                  ? "Review and accept claim →"
+                  : "View dispute details →"}
               </Link>
             </div>
           </div>
@@ -514,42 +515,29 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
 // Styling Constants
 const cardStyle: React.CSSProperties = {
-  background: "#161b22",
-  border: "1px solid #30363d",
-  borderRadius: 8,
+  ...card,
   padding: 16,
 };
 
 const kpiLabelStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "#8b949e",
+  ...kpiLabel,
 };
 
 const kpiValueStyle: React.CSSProperties = {
   fontSize: 24,
   fontWeight: 700,
-  color: "#f0f6fc",
+  color: "var(--poi-heading)",
   marginTop: 4,
 };
 
 const kpiSubStyle: React.CSSProperties = {
   fontSize: 11,
-  color: "#8b949e",
+  color: "var(--poi-text-muted)",
   marginTop: 4,
 };
 
 const pillBtnStyle: React.CSSProperties = {
-  padding: "5px 12px",
-  borderRadius: 20,
-  fontSize: 12,
-  fontWeight: 500,
-  border: "1px solid #30363d",
-  background: "#21262d",
-  color: "#c9d1d9",
-  cursor: "pointer",
+  ...pillButton,
 };
 
 const actionBtnStyle: React.CSSProperties = {
@@ -557,9 +545,9 @@ const actionBtnStyle: React.CSSProperties = {
   borderRadius: 6,
   fontSize: 12,
   fontWeight: 500,
-  border: "1px solid #30363d",
-  background: "#21262d",
-  color: "#58a6ff",
+  border: "1px solid var(--poi-border)",
+  background: "var(--poi-surface-muted)",
+  color: "var(--poi-blue)",
   cursor: "pointer",
 };
 
@@ -568,30 +556,30 @@ const inspectBtnStyle: React.CSSProperties = {
   borderRadius: 6,
   fontSize: 11,
   fontWeight: 500,
-  border: "1px solid #30363d",
-  background: "#21262d",
-  color: "#c9d1d9",
+  border: "1px solid var(--poi-border)",
+  background: "var(--poi-surface-muted)",
+  color: "var(--poi-text)",
   cursor: "pointer",
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "#0d1117",
-  border: "1px solid #30363d",
+  background: "var(--poi-bg)",
+  border: "1px solid var(--poi-border)",
   borderRadius: 6,
   padding: "6px 12px",
   fontSize: 12,
-  color: "#c9d1d9",
+  color: "var(--poi-text)",
   outline: "none",
   minWidth: 220,
 };
 
 const selectStyle: React.CSSProperties = {
-  background: "#0d1117",
-  border: "1px solid #30363d",
+  background: "var(--poi-bg)",
+  border: "1px solid var(--poi-border)",
   borderRadius: 6,
   padding: "6px 10px",
   fontSize: 12,
-  color: "#c9d1d9",
+  color: "var(--poi-text)",
   outline: "none",
 };
 
@@ -601,7 +589,7 @@ const sortLinkStyle = (active: boolean): React.CSSProperties => ({
   padding: 0,
   fontSize: 13,
   fontWeight: active ? 600 : 400,
-  color: active ? "#58a6ff" : "#8b949e",
+  color: active ? "var(--poi-blue)" : "var(--poi-text-muted)",
   cursor: "pointer",
 });
 
@@ -623,9 +611,9 @@ const platformBadgeStyle: React.CSSProperties = {
   borderRadius: 4,
   fontSize: 11,
   fontWeight: 500,
-  background: "#21262d",
-  color: "#c9d1d9",
-  border: "1px solid #30363d",
+  background: "var(--poi-surface-muted)",
+  color: "var(--poi-text)",
+  border: "1px solid var(--poi-border)",
 };
 
 const decisionBadgeStyle = (dec: string): React.CSSProperties => {
@@ -637,9 +625,9 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
       borderRadius: 4,
       fontSize: 11,
       fontWeight: 600,
-      background: "rgba(16, 185, 129, 0.15)",
-      color: "#34d399",
-      border: "1px solid rgba(16, 185, 129, 0.4)",
+      background: "var(--poi-success-bg)",
+      color: "var(--poi-success)",
+      border: "1px solid var(--poi-success-border)",
     };
   }
   if (dec === "concede") {
@@ -650,9 +638,9 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
       borderRadius: 4,
       fontSize: 11,
       fontWeight: 600,
-      background: "rgba(245, 158, 11, 0.15)",
-      color: "#fbbf24",
-      border: "1px solid rgba(245, 158, 11, 0.4)",
+      background: "var(--poi-warning-bg)",
+      color: "var(--poi-warning)",
+      border: "1px solid var(--poi-warning-border)",
     };
   }
   return {
@@ -662,9 +650,9 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
     borderRadius: 4,
     fontSize: 11,
     fontWeight: 600,
-    background: "rgba(100, 116, 139, 0.15)",
-    color: "#94a3b8",
-    border: "1px solid rgba(100, 116, 139, 0.4)",
+    background: "var(--poi-surface-muted)",
+    color: "var(--poi-text-muted)",
+    border: "1px solid var(--poi-border)",
   };
 };
 
@@ -676,9 +664,9 @@ const statusBadgeStyle = (status: string): React.CSSProperties => {
     borderRadius: 4,
     fontSize: 10,
     fontWeight: 600,
-    background: isActionRequired ? "rgba(248, 81, 73, 0.15)" : "#21262d",
-    color: isActionRequired ? "#f85149" : "#8b949e",
-    border: isActionRequired ? "1px solid rgba(248, 81, 73, 0.3)" : "1px solid #30363d",
+    background: isActionRequired ? "var(--poi-danger-bg)" : "var(--poi-surface-muted)",
+    color: isActionRequired ? "var(--poi-danger)" : "var(--poi-text-muted)",
+    border: isActionRequired ? "1px solid var(--poi-danger-border)" : "1px solid var(--poi-border)",
   };
 };
 
@@ -687,9 +675,9 @@ const codeBadgeStyle: React.CSSProperties = {
   fontSize: 10,
   padding: "2px 6px",
   borderRadius: 3,
-  background: "#0d1117",
-  border: "1px solid #30363d",
-  color: "#c9d1d9",
+  background: "var(--poi-bg)",
+  border: "1px solid var(--poi-border)",
+  color: "var(--poi-text)",
 };
 
 const drawerOverlayStyle: React.CSSProperties = {
@@ -698,7 +686,7 @@ const drawerOverlayStyle: React.CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(0, 0, 0, 0.7)",
+  background: "var(--poi-overlay)",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
@@ -707,18 +695,18 @@ const drawerOverlayStyle: React.CSSProperties = {
 };
 
 const drawerContentStyle: React.CSSProperties = {
-  background: "#161b22",
-  border: "1px solid #30363d",
+  background: "var(--poi-surface)",
+  border: "1px solid var(--poi-border)",
   borderRadius: 8,
   width: "100%",
   maxWidth: 600,
   padding: 24,
-  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+  boxShadow: "var(--poi-shadow-lg)",
 };
 
 const detailBoxStyle: React.CSSProperties = {
-  background: "#0d1117",
-  border: "1px solid #30363d",
+  background: "var(--poi-bg)",
+  border: "1px solid var(--poi-border)",
   borderRadius: 6,
   padding: 12,
 };
@@ -727,7 +715,7 @@ const closeBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   fontSize: 16,
-  color: "#8b949e",
+  color: "var(--poi-text-muted)",
   cursor: "pointer",
   padding: 4,
 };

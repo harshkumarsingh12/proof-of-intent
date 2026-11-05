@@ -33,13 +33,13 @@ export default async function DisputeDetailPage({ params }: PageProps) {
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            color: "#58a6ff",
+            color: "var(--poi-blue)",
             textDecoration: "none",
             fontSize: 13,
             fontWeight: 500,
           }}
         >
-          ← Back to Dispute Queue
+          ← Back to dispute queue
         </Link>
       </div>
 
