@@ -399,6 +399,15 @@ describe.runIf(process.env.DATABASE_URL)("POST /checkout with Postgres", () => {
     } finally {
       await raw.end();
       await db.close().catch(() => {});
+      // pool.end() resolves before its sockets close; force-dropping under them makes Postgres kill those
+      // connections, which pg reports as an unhandled error. Let them go first.
+      for (let i = 0; i < 50; i++) {
+        const left = await admin.query("select count(*)::int as n from pg_stat_activity where datname = $1", [
+          name,
+        ]);
+        if (left.rows[0].n === 0) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
       await admin.query(`drop database if exists ${name} with (force)`);
       await admin.end();
     }
