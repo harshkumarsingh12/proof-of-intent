@@ -1,0 +1,55 @@
+{
+  "status": 200,
+  "body": {
+    "id": "2KY15744B4631653C",
+    "amount": {
+      "currency_code": "USD",
+      "value": "74.00"
+    },
+    "final_capture": true,
+    "seller_protection": {
+      "status": "NOT_ELIGIBLE"
+    },
+    "seller_receivable_breakdown": {
+      "gross_amount": {
+        "currency_code": "USD",
+        "value": "74.00"
+      },
+      "paypal_fee": {
+        "currency_code": "USD",
+        "value": "2.41"
+      },
+      "net_amount": {
+        "currency_code": "USD",
+        "value": "71.59"
+      },
+      "exchange_rate": {}
+    },
+    "invoice_id": "ord_fixture_mw2fszq3_b",
+    "custom_id": "poi:0192f3a0-0000-7000-8000-000000000001:0123456789abcdef",
+    "status": "COMPLETED",
+    "create_time": "2026-11-04T18:15:34Z",
+    "update_time": "2026-11-04T18:15:34Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v2/payments/captures/2KY15744B4631653C",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v2/payments/captures/2KY15744B4631653C/refund",
+        "rel": "refund",
+        "method": "POST"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v2/payments/authorizations/3FK47259PJ256702N",
+        "rel": "up",
+        "method": "GET"
+      }
+    ],
+    "network_transaction_reference": {
+      "id": "656578878689313",
+      "network": "VISA"
+    }
+  }
+}

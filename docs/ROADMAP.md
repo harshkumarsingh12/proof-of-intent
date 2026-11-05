@@ -12,7 +12,7 @@ of every `ci` run.
 | Team server: Docker, Compose, Postgres up | Harsh | Pending |
 | Public HTTPS and webhook endpoint (D6, D7) | Harsh | Pending |
 | PayPal sandbox app and accounts (incl. judge accounts) | Harsh | Pending |
-| `PAYPAL_MODE=mock` | Harsh | Pending |
+| `PAYPAL_MODE=mock` | Harsh | ✅ Done |
 | All four registered on Devpost; Representative named | Sumedha | Pending |
 | AG Studio trial key and watermark check | Sikruti | Pending |
 | LLM provider chosen (D1) | Sumedha | Pending |
@@ -24,11 +24,11 @@ of every `ci` run.
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Orders create/authorize/capture/void in sandbox | Harsh | Pending |
+| Orders create/authorize/capture/void in sandbox | Harsh | ✅ Done (authorize after a real approval: integration day) |
 | Vault v3 spike | Harsh | Pending |
-| DB schema, migrations, nonce table | Harsh | Pending |
-| Checkout route end to end | Harsh + Sristee | Pending |
-| Webhook receiver with verification | Harsh | Pending |
+| DB schema, migrations, nonce table | Harsh | ✅ Done |
+| Checkout route end to end | Harsh + Sristee | ✅ Done (stage 2 live run on integration day) |
+| Webhook receiver with verification | Harsh | Built; live sandbox delivery check pending a public URL |
 | Remaining hard rules (budget, recurrence, address, attributes, SKU) | Sristee | Pending |
 | Key registry with retirement | Sristee | Pending |
 | Buyer app: intent form, browser key, signing, PayPal button | Sristee | Pending |
@@ -43,15 +43,15 @@ of every `ci` run.
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Sandbox dispute recipe script | Harsh | Pending |
-| require-evidence, provide-evidence, send-message | Harsh | Pending |
+| Sandbox dispute recipe script | Harsh | ✅ Done (live run Nov 5: dispute `PP-R-NSZ-10196423`) |
+| require-evidence, provide-evidence, send-message | Harsh | provide-evidence + send-message ✅; require-evidence lives in the recipe script (sandbox-only) |
 | Agent Toolkit dispute tools in the worker | Sikruti | Pending |
 | Evidence package (PDF + JSON) | Sikruti | Pending |
 | Recommendation endpoint + operator actions | Sikruti + Harsh | Pending |
 | Dispute workspace, mandate diff widget, evidence preview widget | Sikruti | Pending |
 | J2 classification, J3 drafting | Sumedha | Pending |
 | Step-up links; agent-alone flow with vault; buyer agent | Sristee | Pending |
-| Uptime monitor, backups, rate limits | Harsh | Pending |
+| Uptime monitor, backups, rate limits | Harsh | Rate limits + backups ✅; external monitor pending (needs the public URLs) |
 
 **Done when:** a real `CUSTOMER.DISPUTE.CREATED` is classified, evidence is submitted and a claim is accepted in
 sandbox through the UI.

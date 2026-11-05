@@ -2,6 +2,8 @@
 #   cp .env.example .env && docker compose up --build
 # On the team server, also start the HTTPS proxy:
 #   docker compose --profile server up -d --build
+# Host ports bind to 127.0.0.1 only. If 3000-3002 are taken on the host (for example on a shared
+# Dokploy server), set API_HOST_PORT, SHOP_HOST_PORT and OPS_HOST_PORT in .env.
 # Spec: docs/specs/0008-hosting-and-deploy.md
 
 x-app: &app
@@ -24,13 +26,22 @@ services:
     restart: unless-stopped
     networks: [poi]
 
+  # One-shot: applies pending migrations (packages/db/migrations), then exits. Uses the api image.
+  migrate:
+    <<: *app
+    build: { context: ., args: { APP: api } }
+    image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
+    command: ["pnpm", "--filter", "@poi/db", "migrate"]
+    restart: "no"
+    depends_on: { postgres: { condition: service_healthy } }
+
   api:
     <<: *app
     build: { context: ., args: { APP: api } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
     environment: { PORT: "3000" }
-    ports: ["127.0.0.1:3000:3000"]
-    depends_on: { postgres: { condition: service_healthy } }
+    ports: ["127.0.0.1:${API_HOST_PORT:-3000}:3000"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz || exit 1"]
       interval: 10s
@@ -40,13 +51,13 @@ services:
     <<: *app
     build: { context: ., args: { APP: worker } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-worker:${IMAGE_TAG:-local}
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { migrate: { condition: service_completed_successfully } }
 
   buyer:
     <<: *app
     build: { context: ., args: { APP: buyer } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-buyer:${IMAGE_TAG:-local}
-    ports: ["127.0.0.1:3001:3001"]
+    ports: ["127.0.0.1:${SHOP_HOST_PORT:-3001}:3001"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/healthz || exit 1"]
       interval: 10s
@@ -57,11 +68,34 @@ services:
     build: { context: ., args: { APP: dashboard } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-dashboard:${IMAGE_TAG:-local}
     environment: { API_INTERNAL_URL: "http://api:3000" }
-    ports: ["127.0.0.1:3002:3002"]
+    ports: ["127.0.0.1:${OPS_HOST_PORT:-3002}:3002"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/healthz || exit 1"]
       interval: 10s
       retries: 5
+
+  # Server only: pg_dump every 24 h into ./backups, keeping 7 days (spec 0008). Restore: docs/SETUP.md.
+  # A failed dump never replaces a good file: it's written to .tmp and renamed only on success.
+  backup:
+    image: postgres:16-alpine
+    profiles: [server]
+    environment: { PGPASSWORD: "${POSTGRES_PASSWORD:-poi}" }
+    volumes: ["./backups:/backups"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -o pipefail
+        while true; do
+          f=/backups/poi-$$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+          if pg_dump -h postgres -U poi -d poi | gzip > "$$f.tmp"; then mv "$$f.tmp" "$$f"; echo "backup ok $$f"
+          else rm -f "$$f.tmp"; echo "backup FAILED" >&2; fi
+          find /backups -name 'poi-*.sql.gz' -mtime +6 -delete
+          sleep 86400
+        done
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+    networks: [poi]
 
   caddy:
     image: caddy:2-alpine

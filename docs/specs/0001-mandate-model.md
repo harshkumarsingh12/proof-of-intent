@@ -31,7 +31,9 @@ Intent, compact JWS signatures (ES256).
 - **Key registry:** public keys by `kid`, with `retired_at`. A retired key still verifies mandates created before
   it was retired; new mandates with it are rejected.
 - **On PayPal:** `custom_id = poi:<mandate_id>:<first 16 hex of mandate_hash>` (57 characters; cap is 127).
-- Human-present approval adds a shopper countersignature over the cart hash.
+- Human-present approval adds a shopper countersignature over the cart hash: a compact JWS by the **same key as the
+  Intent Mandate** over `CartApproval { order_id, cart_mandate_hash, approved_at }` (`packages/contracts`). The buyer
+  app signs it in PayPal's `onApprove` and posts it to `/checkout/:id/approve` (spec 0003 stage 2).
 
 ## Interfaces
 
