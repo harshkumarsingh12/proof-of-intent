@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { AnalyticsSummary } from "../../src/analytics-types";
 import { fetchAnalytics, formatMoney } from "../../src/api";
 import { card, kpiLabel } from "../../src/theme";
+import { SampleDataNotice } from "../SampleDataNotice";
 
 export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary }) {
   const [data, setData] = useState<AnalyticsSummary | undefined>(initialData);
@@ -28,7 +29,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
   if (loading && !data) {
     return (
       <div style={{ padding: 48, textAlign: "center", color: "var(--poi-text-muted)" }}>
-        Loading merchant analytics from API...
+        Loading analytics…
       </div>
     );
   }
@@ -48,59 +49,22 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Sample Data Banner */}
-      <div
-        data-testid="sample-data-banner"
-        style={{
-          background: "var(--poi-warning-bg)",
-          border: "1px solid var(--poi-warning-border)",
-          borderRadius: 8,
-          padding: "10px 16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          color: "var(--poi-warning)",
-          fontSize: 13,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>ℹ️</span>
-          <span>
-            <strong>Sample data:</strong> Showing seeded metrics across 300 checkout orders and 24 dispute scenarios per spec 0007.
-          </span>
-        </div>
-        <span
-          data-testid="sample-data-label"
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            background: "var(--poi-warning-bg)",
-            padding: "2px 8px",
-            borderRadius: 4,
-            border: "1px solid var(--poi-warning-border)",
-          }}
-        >
-          Sample Data
-        </span>
-      </div>
+      {data.isSample && (
+        <SampleDataNotice>
+          These numbers come from the built-in demo set (300 checkout orders, 24 disputes). Live figures appear here once
+          the merchant API serves them.
+        </SampleDataNotice>
+      )}
 
       {/* Overview Cards: Defended vs Conceded, Amount Protected, Blocked Overreach Carts */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: 16,
-        }}
-      >
+      <div className="poi-grid-4" style={{ display: "grid", gap: 16 }}>
         {/* Card 1: Disputes Defended vs Conceded */}
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-success)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ ...kpiLabelStyle, color: "var(--poi-success)" }}>Disputes defended vs. conceded</div>
-            <span style={{ fontSize: 18 }}>🛡️</span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 12px", marginTop: 8 }}>
             <span style={{ fontSize: 32, fontWeight: 700, color: "var(--poi-heading)" }}>
               {data.disputes.defended}
             </span>
@@ -132,7 +96,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 12, color: "var(--poi-text-muted)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginTop: 8, fontSize: 12, color: "var(--poi-text-muted)" }}>
             <span>Defense win rate (resolved): <strong style={{ color: "var(--poi-success)" }}>{data.disputes.defenseRate}%</strong></span>
             <span>Total: {data.disputes.total}</span>
           </div>
@@ -142,7 +106,6 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-blue)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ ...kpiLabelStyle, color: "var(--poi-blue)" }}>Amount protected</div>
-            <span style={{ fontSize: 18 }}>💰</span>
           </div>
 
           <div style={{ fontSize: 32, fontWeight: 700, color: "var(--poi-heading)", marginTop: 8 }}>
@@ -162,10 +125,9 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-danger)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ ...kpiLabelStyle, color: "var(--poi-danger)" }}>Blocked overreach carts</div>
-            <span style={{ fontSize: 18 }}>🚫</span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 10px", marginTop: 8 }}>
             <span style={{ fontSize: 32, fontWeight: 700, color: "var(--poi-danger)" }}>
               {data.blockedOverreachCarts.totalBlocked}
             </span>
@@ -190,10 +152,9 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-blue-light)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ ...kpiLabelStyle, color: "var(--poi-navy)" }}>Median response window</div>
-            <span style={{ fontSize: 18 }}>⚡</span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 8px", marginTop: 8 }}>
             <span style={{ fontSize: 32, fontWeight: 700, color: "var(--poi-heading)" }}>
               {data.performance.medianResponseHours}
             </span>
@@ -215,7 +176,6 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>📊</span>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
                 Disputes by agent platform · defended vs. conceded
               </h2>
@@ -247,13 +207,13 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
             return (
               <div key={item.platform} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {/* Platform Label & Stats */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <strong style={{ color: "var(--poi-heading)", minWidth: 120 }}>{item.platform}</strong>
                     <span style={{ fontSize: 11, color: "var(--poi-text-muted)" }}>({item.totalOrders} total orders)</span>
                   </div>
 
-                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--poi-text-muted)" }}>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "var(--poi-text-muted)" }}>
                     <span>
                       Defended: <strong style={{ color: "var(--poi-success)" }}>{item.defendedDisputes}</strong> ({formatMoney(item.defendedAmount)})
                     </span>
@@ -261,7 +221,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
                       Conceded: <strong style={{ color: "var(--poi-warning)" }}>{item.concededDisputes}</strong> ({formatMoney(item.concededAmount)})
                     </span>
                     <span style={{ color: item.overreachRate > 40 ? "var(--poi-danger)" : "var(--poi-text)" }}>
-                      Overreach Rate: <strong>{item.overreachRate}%</strong>
+                      Overreach rate: <strong>{item.overreachRate}%</strong>
                     </span>
                   </div>
                 </div>
@@ -312,7 +272,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         </div>
       </div>
 
-      {/* Chart 2: Disputes by Class per Week per docs/specs/0007 */}
+      {/* Chart 2: Disputes by class per week per docs/specs/0007 */}
       <div style={cardStyle}>
         <div
           style={{
@@ -326,9 +286,8 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         >
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>📈</span>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
-                Disputes by Class per Week
+                Disputes by class per week
               </h2>
             </div>
             <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "var(--poi-text-muted)" }}>
@@ -383,12 +342,12 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
 
             return (
               <div key={item.week} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, fontSize: 13 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <strong style={{ color: "var(--poi-heading)", minWidth: 140 }}>{item.week}</strong>
                     <span style={{ fontSize: 11, color: "var(--poi-text-muted)" }}>({item.total} disputes)</span>
                   </div>
-                  <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--poi-text-muted)" }}>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12, color: "var(--poi-text-muted)" }}>
                     <span>
                       Compliant: <strong style={{ color: "var(--poi-success)" }}>{item.mandateCompliant}</strong>
                     </span>
@@ -399,7 +358,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
                       Misread: <strong style={{ color: "var(--poi-navy)" }}>{item.intentMisread}</strong>
                     </span>
                     <span>
-                      No Mandate: <strong style={{ color: "var(--poi-text-subtle)" }}>{item.noMandate}</strong>
+                      No mandate: <strong style={{ color: "var(--poi-text-subtle)" }}>{item.noMandate}</strong>
                     </span>
                   </div>
                 </div>

@@ -97,8 +97,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .poi-skeleton { animation: none; }
   .poi-tile, .poi-tile:hover { transition: none; transform: none; }
 }
+.poi-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+/* Four cards: 2x2 by default, one row only on very wide screens, stacked on phones. Never a lone card on a row. */
+.poi-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1600px) { .poi-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.poi-quick-links { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1200px) {
+  .poi-quick-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 900px) {
+  .poi-sidebar:not([data-ready]) { width: 72px !important; }
+  .poi-sidebar:not([data-ready]) .poi-nav-label, .poi-sidebar:not([data-ready]) .poi-sidebar-extra { display: none !important; }
   .poi-search { display: none !important; }
+  .poi-header-link { display: none !important; }
+  .poi-header { padding: 0 16px !important; gap: 12px !important; height: 64px !important; }
+  .poi-merchant { font-size: 18px !important; }
+  .poi-mode-banner { justify-content: flex-start !important; padding: 8px 44px 8px 16px !important; font-size: 13px !important; }
+  .poi-main { padding: 24px 16px 48px !important; }
+  .poi-page-head { flex-direction: column; align-items: flex-start !important; }
+  .poi-page-head h1 { font-size: 32px !important; }
+  .poi-card-pad { padding: 20px !important; }
+}
+@media (max-width: 640px) {
+  .poi-grid-4 { grid-template-columns: minmax(0, 1fr); }
+  .poi-quick-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .poi-sidebar[data-collapsed="false"] { position: fixed !important; left: 0; z-index: 40; box-shadow: var(--poi-shadow-lg); }
 }
 `;
 

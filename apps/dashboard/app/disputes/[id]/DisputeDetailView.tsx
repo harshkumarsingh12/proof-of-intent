@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { DisputeDetail } from "../../../src/dispute-types";
 import { calculateAge, calculateSla, executeDisputeAction, formatMoney } from "../../../src/api";
 import { card, kpiLabel, pillButton } from "../../../src/theme";
+import { SampleDataNotice } from "../../SampleDataNotice";
 
 export function DisputeDetailView({
   dispute,
@@ -78,39 +79,10 @@ export function DisputeDetailView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Fallback Demo Data Banner */}
       {isDemoData && (
-        <div
-          data-testid="demo-data-banner"
-          style={{
-            background: "var(--poi-warning-bg)",
-            border: "1px solid var(--poi-warning)",
-            borderRadius: 8,
-            padding: "12px 16px",
-            color: "var(--poi-warning)",
-            fontSize: 13,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <span
-            style={{
-              padding: "2px 8px",
-              background: "var(--poi-warning)",
-              color: "#ffffff",
-              fontWeight: 700,
-              borderRadius: 4,
-              fontSize: 11,
-              letterSpacing: "0.5px",
-            }}
-          >
-            DEMO DATA
-          </span>
-          <span>
-            API endpoint (<code>/disputes/:id/recommendation</code>) is unavailable or returned 501. Showing local demo dispute data.
-          </span>
-        </div>
+        <SampleDataNotice>
+          This dispute comes from the built-in demo set. Live disputes appear here once the merchant API serves them.
+        </SampleDataNotice>
       )}
 
       {/* Header Bar */}
@@ -122,29 +94,10 @@ export function DisputeDetailView({
                 {dispute.id}
               </h1>
               <span style={decisionBadgeStyle(dispute.decision)}>
-                {dispute.decision === "defend" && "🛡️ "}
-                {dispute.decision === "concede" && "↩️ "}
                 {dispute.decision.toUpperCase()}
               </span>
               <span style={statusBadgeStyle(dispute.status)}>{dispute.status.replace(/_/g, " ")}</span>
               <span style={platformBadgeStyle}>{dispute.agentPlatform}</span>
-              {isDemoData && (
-                <span
-                  data-testid="demo-data-badge"
-                  style={{
-                    padding: "3px 8px",
-                    background: "var(--poi-warning-bg)",
-                    color: "var(--poi-warning)",
-                    border: "1px solid var(--poi-warning)",
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  DEMO DATA
-                </span>
-              )}
             </div>
 
             <div style={{ marginTop: 8, fontSize: 13, color: "var(--poi-text-muted)", display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -180,7 +133,6 @@ export function DisputeDetailView({
             >
               <div style={{ ...kpiLabelStyle, color: sla.isUrgent ? "var(--poi-danger)" : "var(--poi-text-muted)" }}>Response deadline</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: sla.isUrgent ? "var(--poi-danger)" : "var(--poi-text)", marginTop: 2 }}>
-                {sla.isUrgent && "⚠️ "}
                 {sla.text}
               </div>
             </div>
@@ -192,7 +144,6 @@ export function DisputeDetailView({
       <div style={cardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📜</span>
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>Shopper intent mandate</h2>
           </div>
           <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--poi-text-muted)" }}>
@@ -255,7 +206,6 @@ export function DisputeDetailView({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16 }}>⚖️</span>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
                 Mandate diff · cart vs. intent constraints
               </h2>
@@ -321,7 +271,7 @@ export function DisputeDetailView({
             }}
           >
             <div style={{ ...kpiLabelStyle, color: failingCount > 0 ? "var(--poi-danger)" : "var(--poi-success)", marginBottom: 8 }}>
-              Cart Mandate Contents (Right)
+              Cart mandate contents
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
               <div>
@@ -394,7 +344,7 @@ export function DisputeDetailView({
                           border: isFail ? "1px solid var(--poi-danger-border)" : "1px solid var(--poi-success-border)",
                         }}
                       >
-                        {check.status === "FAIL" ? "❌ FAIL" : "✅ PASS"}
+                        {check.status === "FAIL" ? "FAIL" : "PASS"}
                       </span>
                     </td>
                     <td style={tdStyle}>
@@ -418,7 +368,6 @@ export function DisputeDetailView({
       {/* Copilot Classification & Recommendation */}
       <div style={cardStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-          <span style={{ fontSize: 16 }}>🤖</span>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
             Copilot recommendation and classification
           </h2>
@@ -470,7 +419,6 @@ export function DisputeDetailView({
       <div style={cardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📑</span>
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
               Evidence package and operator actions
             </h2>
@@ -529,7 +477,7 @@ export function DisputeDetailView({
                       cursor: "pointer",
                     }}
                   >
-                    📄 {hasBeenPreviewed ? "Re-open PDF Preview" : "Preview evidence PDF"}
+                    {hasBeenPreviewed ? "Re-open PDF Preview" : "Preview evidence PDF"}
                   </button>
 
                   {hasBeenPreviewed && (
@@ -566,7 +514,7 @@ export function DisputeDetailView({
                   gap: 12,
                 }}
               >
-                <span>⚠️ {actionError}</span>
+                <span>{actionError}</span>
                 <button
                   type="button"
                   onClick={() => setActionError(null)}
@@ -581,7 +529,7 @@ export function DisputeDetailView({
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center", borderTop: "1px solid var(--poi-border)", paddingTop: 16 }}>
               {!hasBeenPreviewed && (
                 <span style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
-                  ⚠️ Open PDF preview above to unlock Submit Evidence
+                  Open the PDF preview above to unlock Submit evidence
                 </span>
               )}
               <button
@@ -645,7 +593,7 @@ export function DisputeDetailView({
                   gap: 12,
                 }}
               >
-                <span>⚠️ {actionError}</span>
+                <span>{actionError}</span>
                 <button
                   type="button"
                   onClick={() => setActionError(null)}
@@ -688,7 +636,6 @@ export function DisputeDetailView({
           <div style={modalContentStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 18 }}>📄</span>
                 <h3 style={{ margin: 0, fontSize: 16, color: "var(--poi-heading)" }}>
                   Evidence Attestation PDF Preview · {dispute.id}
                 </h3>
