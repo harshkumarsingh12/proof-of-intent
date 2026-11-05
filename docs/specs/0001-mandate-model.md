@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | In Progress |
 | **Owner** | @srshriv |
 | **Reviewers** | @harshkumarsingh12 |
 | **Milestone** | M0 (model), M1 (browser signing, key registry) |

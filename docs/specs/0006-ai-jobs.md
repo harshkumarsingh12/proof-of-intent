@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Owner** | @sumedhag28 |
 | **Reviewers** | @hoursgotviral-dev, @srshriv |
 | **Milestone** | M1 (J1, replay), M2 (J2, J3), M3 (J4, full evals) |
@@ -48,6 +48,15 @@ schema validity 100% after retry.
 4. Stack runs end to end with no API key in replay mode.
 5. Eval report committed with numbers quoted in the README. *(M3)*
 
-## Open questions
+## Decisions
 
-- D1 provider and model. @sumedhag28, Oct 31.
+- **D1 (Nov 5): NVIDIA API catalog, `nvidia/nemotron-3.5-lightning-30b-a3b`.** OpenAI-compatible endpoint
+  `https://integrate.api.nvidia.com/v1`, so it plugs into the Vercel AI SDK's OpenAI-compatible provider.
+  `AI_PROVIDER=nvidia`, `AI_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b`.
+- **Thinking must be off on every call:** send `chat_template_kwargs: { enable_thinking: false }`. With thinking on, the
+  model spent a full 1024-token budget reasoning (about 10 s) and returned no answer, which breaks J1's 2 s budget.
+  With it off, it answered a J1-style check in under 1 s.
+- Mini-eval of 6 J1 cases (Nov 5): lightning 5/6 correct, valid JSON 6/6, ~0.7 s; `nemotron-3-ultra-550b-a55b` also 5/6
+  at ~1.1 s and is the fallback. Every model missed the "partial" case (a rain shell for a running jacket), which is
+  a prompt problem: give "partial" a definition with examples. Other catalog models either returned no usable JSON
+  or weren't available to our key.

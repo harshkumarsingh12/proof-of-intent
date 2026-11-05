@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | In Progress |
 | **Owner** | @hoursgotviral-dev |
 | **Reviewers** | @sumedhag28, @harshkumarsingh12 |
 | **Milestone** | M1 (shell), M2 (workspace + widgets), M3 (agent, analytics) |

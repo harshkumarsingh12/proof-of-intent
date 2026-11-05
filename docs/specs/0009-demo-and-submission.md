@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Owner** | @sumedhag28 |
 | **Reviewers** | everyone |
 | **Milestone** | M0 (registration), M3 (seed data), M4 (video, submission) |

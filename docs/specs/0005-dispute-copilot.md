@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | In Progress |
 | **Owner** | @hoursgotviral-dev |
 | **Reviewers** | @sumedhag28, @harshkumarsingh12 |
 | **Milestone** | M1 (skeleton), M2 (full cycle) |
