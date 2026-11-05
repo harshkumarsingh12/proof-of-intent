@@ -24,7 +24,7 @@ export default async function DisputeDetailPage({ params }: PageProps) {
   }
 
   return (
-    <main style={{ maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       {/* Breadcrumb Navigation */}
       <div style={{ marginBottom: 20 }}>
         <Link
@@ -45,6 +45,6 @@ export default async function DisputeDetailPage({ params }: PageProps) {
 
       {/* Main Dispute Detail View */}
       <DisputeDetailView dispute={dispute} isDemoData={isFallback} />
-    </main>
+    </div>
   );
 }

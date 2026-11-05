@@ -33,6 +33,21 @@ export const palette = {
   dangerBorder: "#f2b8bf",
   infoBg: "#e8f1fc",
 
+  // App shell
+  sidebarBg: "#ffffff",
+  navActiveBg: "#d6e6fb",
+  navHoverBg: "#eef3fb",
+  modeBg: "#e7e1ff",
+  modeText: "#2a1a7a",
+  noticeBg: "#ece9e4",
+
+  // Flat color bands on the home tiles (our own, not PayPal's illustrations)
+  bandConcede: "#f6c453",
+  bandDefend: "#2f6fd6",
+  bandResolved: "#7cc242",
+  bandStandard: "#cfd5dd",
+  skeleton: "#e6e9ee",
+
   overlay: "rgba(0, 20, 53, 0.45)",
   shadow: "0 1px 4px rgba(0, 20, 53, 0.08)",
   shadowLg: "0 8px 28px rgba(0, 20, 53, 0.18)",
@@ -52,16 +67,63 @@ export function themeCss(): string {
   const vars = Object.entries(palette)
     .map(([k, val]) => `  --poi-${kebab(k)}: ${val};`)
     .join("\n");
-  return `:root {\n${vars}\n}\n*, *::before, *::after { box-sizing: border-box; }\na { color: var(--poi-blue); }\na:hover { color: var(--poi-blue-dark); }\nbutton:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {\n  outline: 2px solid var(--poi-blue-light);\n  outline-offset: 2px;\n}\n`;
+  return `:root {\n${vars}\n}\n${BASE_CSS}`;
 }
+
+/** Global rules that inline styles can't express: hover, focus, animation, small screens. */
+const BASE_CSS = `
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--poi-blue); }
+a:hover { color: var(--poi-blue-dark); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--poi-blue-light);
+  outline-offset: 2px;
+}
+.poi-nav-item:hover { background: var(--poi-nav-hover-bg); }
+.poi-nav-item[aria-current="page"], .poi-nav-item[aria-current="page"]:hover { background: var(--poi-nav-active-bg); }
+.poi-tile { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.poi-tile:hover { box-shadow: var(--poi-shadow-lg); transform: translateY(-2px); }
+.poi-quick:hover .poi-quick-circle { background: var(--poi-nav-active-bg); color: var(--poi-navy); }
+.poi-tab:hover { color: var(--poi-navy); }
+.poi-suggestion[aria-selected="true"] { background: var(--poi-nav-hover-bg); }
+@keyframes poi-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.poi-skeleton {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--poi-skeleton) 0px, var(--poi-surface-muted) 80px, var(--poi-skeleton) 160px);
+  background-size: 800px 100%;
+  animation: poi-shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .poi-skeleton { animation: none; }
+  .poi-tile, .poi-tile:hover { transition: none; transform: none; }
+}
+@media (max-width: 900px) {
+  .poi-search { display: none !important; }
+}
+`;
 
 /** Shared shapes. Screens spread these and adjust padding or size locally. */
 export const card = {
   background: v("surface"),
-  border: "none",
-  borderRadius: 12,
+  border: `1px solid ${v("border")}`,
+  borderRadius: 16,
   boxShadow: v("shadow"),
   padding: 20,
+} as const;
+
+/** Large page title and subtitle, as on the Home page. */
+export const pageTitle = {
+  fontSize: 36,
+  fontWeight: 700,
+  letterSpacing: "-0.02em",
+  color: v("text"),
+  margin: "0 0 8px 0",
+} as const;
+
+export const pageSubtitle = {
+  fontSize: 16,
+  color: v("textMuted"),
+  margin: 0,
 } as const;
 
 export const kpiLabel = {
