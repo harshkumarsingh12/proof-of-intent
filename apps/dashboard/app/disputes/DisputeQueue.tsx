@@ -5,11 +5,18 @@ import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
 import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, sortDisputes } from "../../src/api";
 import { card, kpiLabel, pillButton } from "../../src/theme";
+import { SampleDataNotice } from "../SampleDataNotice";
 
-export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: DisputeItem[] }) {
+export function DisputeQueue({
+  initialDisputes = [],
+  initialIsDemo = false,
+}: {
+  initialDisputes?: DisputeItem[];
+  initialIsDemo?: boolean;
+}) {
   const [disputes, setDisputes] = useState<DisputeItem[]>(initialDisputes);
   const [loading, setLoading] = useState(initialDisputes.length === 0);
-  const [isDemoData, setIsDemoData] = useState(false);
+  const [isDemoData, setIsDemoData] = useState(initialIsDemo);
   const [selectedDispute, setSelectedDispute] = useState<DisputeItem | null>(null);
 
   // Filter state
@@ -37,6 +44,13 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!selectedDispute) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSelectedDispute(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedDispute]);
 
   useEffect(() => {
     if (initialDisputes.length === 0) {
@@ -78,53 +92,24 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Fallback Demo Data Banner */}
       {isDemoData && (
-        <div
-          data-testid="demo-data-banner"
-          style={{
-            background: "var(--poi-warning-bg)",
-            border: "1px solid var(--poi-warning)",
-            borderRadius: 8,
-            padding: "12px 16px",
-            color: "var(--poi-warning)",
-            fontSize: 13,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <span
-            style={{
-              padding: "2px 8px",
-              background: "var(--poi-warning)",
-              color: "#ffffff",
-              fontWeight: 700,
-              borderRadius: 4,
-              fontSize: 11,
-              letterSpacing: "0.5px",
-            }}
-          >
-            DEMO DATA
-          </span>
-          <span>
-            API endpoint (<code>/disputes</code>) is unavailable or returned 501. Showing local demo disputes (canonical seed data).
-          </span>
-        </div>
+        <SampleDataNotice>
+          These disputes come from the built-in demo set. Live disputes appear here once the merchant API serves them.
+        </SampleDataNotice>
       )}
 
       {/* KPI / Summary Tiles */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))",
           gap: 16,
         }}
       >
         <div style={cardStyle}>
           <div style={kpiLabelStyle}>Total disputes</div>
           <div style={kpiValueStyle}>{counts.total}</div>
-          <div style={kpiSubStyle}>Active in merchant queue</div>
+          <div style={kpiSubStyle}>All statuses</div>
         </div>
 
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-success)" }}>
@@ -224,9 +209,9 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
             onClick={() => void loadData()}
             disabled={loading}
             style={actionBtnStyle}
-            title="Reload from API"
+            title="Reload disputes"
           >
-            {loading ? "Loading..." : "Refresh API"}
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -237,6 +222,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 8,
           fontSize: 13,
           color: "var(--poi-text-muted)",
           padding: "0 4px",
@@ -245,14 +232,14 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
         <div>
           Showing <strong>{displayedDisputes.length}</strong> of <strong>{disputes.length}</strong> disputes
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span>Sort by:</span>
           <button
             type="button"
             onClick={() => toggleSort("dueDate")}
             style={sortLinkStyle(sorting.field === "dueDate")}
           >
-            Response Due Date {sorting.field === "dueDate" ? (sorting.direction === "asc" ? "↑" : "↓") : ""}
+            Response due {sorting.field === "dueDate" ? (sorting.direction === "asc" ? "↑" : "↓") : ""}
           </button>
           <span>·</span>
           <button
@@ -289,22 +276,22 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                 Age {sorting.field === "age" ? (sorting.direction === "asc" ? "↑" : "↓") : ""}
               </th>
               <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("dueDate")}>
-                Response SLA {sorting.field === "dueDate" ? (sorting.direction === "asc" ? "↑" : "↓") : ""}
+                Respond within {sorting.field === "dueDate" ? (sorting.direction === "asc" ? "↑" : "↓") : ""}
               </th>
-              <th style={thStyle}>Reasons / Class</th>
-              <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
+              <th style={thStyle}>Class and reasons</th>
             </tr>
           </thead>
           <tbody>
             {displayedDisputes.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 48, textAlign: "center", color: "var(--poi-text-muted)" }}>
-                  {loading ? "Loading disputes from API..." : "No disputes match the selected filters."}
+                <td colSpan={8} style={{ padding: 48, textAlign: "center", color: "var(--poi-text-muted)" }}>
+                  {loading ? "Loading disputes…" : "No disputes match the selected filters."}
                 </td>
               </tr>
             ) : (
               displayedDisputes.map((item) => {
-                const sla = calculateSla(item.sellerResponseDueDate);
+                const resolved = item.status === "RESOLVED";
+                const sla = resolved ? { isUrgent: false, text: "Closed" } : calculateSla(item.sellerResponseDueDate);
                 const age = calculateAge(item.createdAt);
 
                 return (
@@ -319,7 +306,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                     }}
                     onMouseEnter={(e) => {
                       if (selectedDispute?.id !== item.id) {
-                        e.currentTarget.style.background = "var(--poi-surface)";
+                        e.currentTarget.style.background = "var(--poi-nav-hover-bg)";
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -332,6 +319,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                     <td style={tdStyle}>
                       <Link
                         href={`/disputes/${item.id}`}
+                        onClick={(e) => e.stopPropagation()}
                         style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--poi-blue)", textDecoration: "none" }}
                       >
                         {item.id}
@@ -347,8 +335,6 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                     {/* Decision Chip */}
                     <td style={tdStyle}>
                       <span style={decisionBadgeStyle(item.decision)}>
-                        {item.decision === "defend" && "🛡️ "}
-                        {item.decision === "concede" && "↩️ "}
                         {item.decision.toUpperCase()}
                       </span>
                     </td>
@@ -376,15 +362,15 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                           fontSize: 12,
                           fontWeight: sla.isUrgent ? 600 : 400,
                           background: sla.isUrgent ? "var(--poi-danger-bg)" : "var(--poi-surface-muted)",
-                          color: sla.isUrgent ? "var(--poi-danger)" : "var(--poi-text)",
+                          color: sla.isUrgent ? "var(--poi-danger)" : resolved ? "var(--poi-text-muted)" : "var(--poi-text)",
                         }}
                       >
-                        {sla.isUrgent && "⚠️"} {sla.text}
+                        {sla.text}
                       </span>
                     </td>
 
                     {/* Reasons / Class */}
-                    <td style={tdStyle}>
+                    <td style={{ ...tdStyle, whiteSpace: "normal", minWidth: 240 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         <span style={codeBadgeStyle}>{item.disputeClass}</span>
                         {item.reasons.map((r) => (
@@ -395,19 +381,6 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                       </div>
                     </td>
 
-                    {/* Action */}
-                    <td style={{ ...tdStyle, textAlign: "right" }}>
-                      <Link
-                        href={`/disputes/${item.id}`}
-                        style={{
-                          ...inspectBtnStyle,
-                          textDecoration: "none",
-                          display: "inline-block",
-                        }}
-                      >
-                        View details →
-                      </Link>
-                    </td>
                   </tr>
                 );
               })
@@ -418,8 +391,8 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
 
       {/* Selected Dispute Detail Drawer / Modal */}
       {selectedDispute && (
-        <div style={drawerOverlayStyle}>
-          <div style={drawerContentStyle}>
+        <div style={drawerOverlayStyle} onClick={() => setSelectedDispute(null)}>
+          <div style={drawerContentStyle} role="dialog" aria-modal="true" aria-label={`Dispute ${selectedDispute.id}`} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 18, color: "var(--poi-heading)" }}>
@@ -430,7 +403,7 @@ export function DisputeQueue({ initialDisputes = [] }: { initialDisputes?: Dispu
                   <strong>{selectedDispute.agentPlatform}</strong>
                 </div>
               </div>
-              <button type="button" onClick={() => setSelectedDispute(null)} style={closeBtnStyle}>
+              <button type="button" onClick={() => setSelectedDispute(null)} style={closeBtnStyle} aria-label="Close quick view">
                 ✕
               </button>
             </div>
@@ -551,17 +524,6 @@ const actionBtnStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const inspectBtnStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  borderRadius: 6,
-  fontSize: 11,
-  fontWeight: 500,
-  border: "1px solid var(--poi-border)",
-  background: "var(--poi-surface-muted)",
-  color: "var(--poi-text)",
-  cursor: "pointer",
-};
-
 const inputStyle: React.CSSProperties = {
   background: "var(--poi-bg)",
   border: "1px solid var(--poi-border)",
@@ -594,15 +556,17 @@ const sortLinkStyle = (active: boolean): React.CSSProperties => ({
 });
 
 const thStyle: React.CSSProperties = {
-  padding: "12px 16px",
+  padding: "12px 14px",
+  whiteSpace: "nowrap",
   fontSize: 12,
   fontWeight: 600,
   userSelect: "none",
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: "12px 16px",
+  padding: "12px 14px",
   verticalAlign: "middle",
+  whiteSpace: "nowrap",
 };
 
 const platformBadgeStyle: React.CSSProperties = {
@@ -671,6 +635,7 @@ const statusBadgeStyle = (status: string): React.CSSProperties => {
 };
 
 const codeBadgeStyle: React.CSSProperties = {
+  whiteSpace: "nowrap",
   fontFamily: "monospace",
   fontSize: 10,
   padding: "2px 6px",

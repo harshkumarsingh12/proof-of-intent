@@ -11,10 +11,8 @@ import {
   ExternalIcon,
   HelpIcon,
   HomeIcon,
-  HourglassIcon,
   InfoIcon,
   MenuIcon,
-  ReceiptIcon,
   ScaleIcon,
 } from "./icons";
 import { MERCHANT_NAME, merchantInitials, REPO_URL, type PayPalMode } from "../src/merchant";
@@ -24,14 +22,12 @@ import { DisputeSearch } from "./DisputeSearch";
 const COLLAPSED_KEY = "poi.sidebar.collapsed";
 const BANNER_KEY = "poi.modeBanner.dismissed";
 
-type NavItem = { label: string; icon: ReactNode; href?: string; external?: boolean; soon?: boolean };
+type NavItem = { label: string; icon: ReactNode; href?: string; external?: boolean };
 
 const PRIMARY: NavItem[] = [
   { label: "Home", icon: <HomeIcon />, href: "/" },
   { label: "Disputes", icon: <ScaleIcon />, href: "/disputes" },
   { label: "Analytics", icon: <ChartIcon />, href: "/analytics" },
-  { label: "Verification queue", icon: <HourglassIcon />, soon: true },
-  { label: "Agent orders", icon: <ReceiptIcon />, soon: true },
 ];
 
 const SECONDARY: NavItem[] = [
@@ -43,6 +39,8 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
   const pathname = usePathname() ?? "/";
   const [collapsed, setCollapsed] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
+  // Animate width only for the user's own toggles, not when the saved state is restored on load.
+  const [ready, setReady] = useState(false);
 
   // Restore preferences after hydration so the server and first client render match.
   useEffect(() => {
@@ -50,6 +48,7 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
     // No saved choice yet: start collapsed on narrow screens.
     setCollapsed(saved === null ? window.matchMedia("(max-width: 900px)").matches : saved === "1");
     setBannerOpen(sessionStorage.getItem(BANNER_KEY) !== "1");
+    requestAnimationFrame(() => setReady(true));
   }, []);
 
   const toggleSidebar = () => {
@@ -71,6 +70,8 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <aside
         className="poi-sidebar"
+        data-collapsed={collapsed}
+        data-ready={ready ? "" : undefined}
         aria-label="Main navigation"
         style={{
           width,
@@ -82,7 +83,7 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
           top: 0,
           height: "100vh",
           overflowY: "auto",
-          transition: "width 0.15s ease",
+          transition: ready ? "width 0.15s ease" : "none",
         }}
       >
         <Link
@@ -91,10 +92,28 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
           style={{ display: "block", textDecoration: "none", textAlign: "center", marginBottom: 16 }}
         >
           {collapsed ? (
-            <span style={{ fontSize: 20, fontWeight: 800, color: v("navy") }}>PoI</span>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                background: v("navy"),
+                color: "#ffffff",
+                fontSize: 15,
+                fontWeight: 800,
+              }}
+            >
+              PI
+            </span>
           ) : (
             <>
-              <span style={{ display: "block", fontSize: 24, fontWeight: 800, color: v("navy"), letterSpacing: "-0.02em" }}>
+              <span
+                className="poi-sidebar-extra"
+                style={{ display: "block", fontSize: 24, fontWeight: 800, color: v("navy"), letterSpacing: "-0.02em" }}
+              >
                 Proof of Intent
               </span>
               <span className="poi-sidebar-extra" style={{ fontSize: 12, color: v("textMuted") }}>
@@ -119,6 +138,7 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <header
+          className="poi-header"
           style={{
             height: 72,
             display: "flex",
@@ -141,16 +161,25 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
           >
             <MenuIcon size={24} />
           </button>
-          <span style={{ fontSize: 22, fontWeight: 700, color: v("text"), whiteSpace: "nowrap" }}>{MERCHANT_NAME}</span>
+          <span
+            className="poi-merchant"
+            style={{ fontSize: 22, fontWeight: 700, color: v("text"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+          >
+            {MERCHANT_NAME}
+          </span>
 
           <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
             <DisputeSearch />
           </div>
 
-          <Link href="/disputes" style={{ fontSize: 15, color: v("text"), textDecoration: "none", whiteSpace: "nowrap" }}>
+          <Link
+            href="/disputes"
+            className="poi-header-link"
+            style={{ fontSize: 15, color: v("text"), textDecoration: "none", whiteSpace: "nowrap" }}
+          >
             Dispute queue
           </Link>
-          <span style={{ width: 1, height: 32, background: v("border") }} aria-hidden="true" />
+          <span className="poi-header-link" style={{ width: 1, height: 32, background: v("border") }} aria-hidden="true" />
           <span
             title={MERCHANT_NAME}
             aria-label={`Merchant: ${MERCHANT_NAME}`}
@@ -175,6 +204,7 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
         {bannerOpen && (
           <div
             role="status"
+            className="poi-mode-banner"
             style={{
               display: "flex",
               alignItems: "center",
@@ -213,47 +243,36 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
           </div>
         )}
 
-        <main style={{ flex: 1, padding: "40px 48px 64px", minWidth: 0 }}>{children}</main>
+        <main className="poi-main" style={{ flex: 1, padding: "40px 48px 64px", minWidth: 0 }}>
+          {children}
+        </main>
       </div>
     </div>
   );
 }
 
 function ModeBadge({ mode }: { mode: PayPalMode }) {
-  const segment = (value: PayPalMode, label: string) => {
-    const on = mode === value;
-    return (
-      <span
-        style={{
-          padding: "6px 14px",
-          borderRadius: 9999,
-          fontSize: 14,
-          fontWeight: on ? 700 : 500,
-          background: on ? v("text") : "transparent",
-          color: on ? "#ffffff" : v("textMuted"),
-        }}
-      >
-        {label}
-      </span>
-    );
-  };
+  const sandbox = mode === "sandbox";
   return (
     <div className="poi-sidebar-extra" style={{ display: "flex", justifyContent: "center" }}>
-      <div
-        role="img"
-        aria-label={`PayPal mode: ${mode}. Set on the server with PAYPAL_MODE.`}
+      <span
         title="Set on the server with PAYPAL_MODE"
         style={{
           display: "inline-flex",
-          padding: 3,
+          alignItems: "center",
+          gap: 8,
+          padding: "5px 12px",
           borderRadius: 9999,
-          border: `1px solid ${v("border")}`,
-          background: v("surface"),
+          fontSize: 13,
+          fontWeight: 600,
+          background: sandbox ? v("successBg") : v("surfaceMuted"),
+          color: sandbox ? v("success") : v("textMuted"),
+          border: `1px solid ${sandbox ? v("successBorder") : v("border")}`,
         }}
       >
-        {segment("mock", "Mock")}
-        {segment("sandbox", "Sandbox")}
-      </div>
+        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 9999, background: "currentColor" }} />
+        {sandbox ? "PayPal sandbox" : "Mock mode"}
+      </span>
     </div>
   );
 }
@@ -277,35 +296,10 @@ function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; 
       <span style={{ display: "flex", flexShrink: 0 }}>{item.icon}</span>
       {!collapsed && <span className="poi-nav-label" style={{ flex: 1 }}>{item.label}</span>}
       {!collapsed && item.external && <ExternalIcon size={14} className="poi-nav-label" />}
-      {!collapsed && item.soon && (
-        <span
-          className="poi-nav-label"
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            padding: "2px 8px",
-            borderRadius: 9999,
-            background: v("surfaceMuted"),
-            color: v("textMuted"),
-          }}
-        >
-          Soon
-        </span>
-      )}
     </>
   );
 
-  if (item.soon || !item.href) {
-    return (
-      <span
-        aria-disabled="true"
-        title={`${item.label}: not built yet`}
-        style={{ ...style, color: v("textSubtle"), cursor: "default" }}
-      >
-        {content}
-      </span>
-    );
-  }
+  if (!item.href) return null;
   if (item.external) {
     return (
       <a href={item.href} target="_blank" rel="noreferrer" className="poi-nav-item" title={collapsed ? item.label : undefined} style={style}>

@@ -12,10 +12,18 @@ export {
 } from "./analytics-data";
 export type { AnalyticsSummary, PlatformBreakdown, WeeklyDisputesByClass } from "./analytics-types";
 import { computeAnalyticsSummary } from "./analytics-data";
-import { SEED_DISPUTES } from "./seed-disputes";
+import { generateSeedDisputes } from "./seed-disputes";
 
 /** Same-origin proxy (app/api/[...path]/route.ts), so the browser needs neither the API's URL nor CORS. */
 export const DEFAULT_API_BASE_URL = "/api";
+
+/**
+ * Base URL for server components. "/api" only resolves in a browser, so on the server we call the API
+ * container directly (compose sets API_INTERNAL_URL=http://api:3000). Unset: the fetch fails and pages fall back to seed data.
+ */
+export function serverApiBaseUrl(): string {
+  return process.env.API_INTERNAL_URL ?? DEFAULT_API_BASE_URL;
+}
 
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
@@ -55,7 +63,8 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
     // API server not reachable in dev or standalone mode; fallback to canonical seed data
   }
 
-  return { disputes: SEED_DISPUTES, isFallback: true };
+  // Fresh per call: seed times are relative to now, and a long-running server must not serve stale deadlines.
+  return { disputes: generateSeedDisputes(), isFallback: true };
 }
 
 /**
@@ -210,16 +219,16 @@ export async function fetchAnalytics(
     // API server not reachable; fallback to canonical seed analytics
   }
 
-  return computeAnalyticsSummary();
+  return { ...computeAnalyticsSummary(generateSeedDisputes()), isSample: true };
 }
 
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
 export function formatMoney(money: Money): string {
-  const dollars = (money.value / 100).toFixed(2);
+  const amount = (money.value / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (money.currency === "USD") {
-    return `$${dollars}`;
+    return `$${amount}`;
   }
-  return `${dollars} ${money.currency}`;
+  return `${amount} ${money.currency}`;
 }
 
 /** Aggregates dispute amounts per currency without summing distinct currencies together. */

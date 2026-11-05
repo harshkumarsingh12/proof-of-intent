@@ -45,7 +45,7 @@ export function HomeView({ disputes, nowIso }: { disputes: DisputeItem[]; nowIso
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, marginBottom: 32 }}>
+      <div className="poi-page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, marginBottom: 32 }}>
         <div>
           <h1 style={{ ...pageTitle, fontSize: 44 }}>Welcome back</h1>
           <p style={{ ...pageSubtitle, fontSize: 18 }}>{dueSubtitle(dueSoon.length)}</p>
@@ -53,8 +53,8 @@ export function HomeView({ disputes, nowIso }: { disputes: DisputeItem[]; nowIso
         <RangeSelect value={range} onChange={setRange} />
       </div>
 
-      <section aria-labelledby="needs-you" style={{ ...card, padding: "32px 40px 36px", marginBottom: 40 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}>
+      <section aria-labelledby="needs-you" className="poi-card-pad" style={{ ...card, padding: "32px 40px 36px", marginBottom: 40 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "8px 16px" }}>
           <h2 id="needs-you" style={{ margin: 0, fontSize: 22, fontWeight: 700, color: v("text") }}>
             Which disputes need you?
           </h2>
@@ -104,7 +104,7 @@ export function HomeView({ disputes, nowIso }: { disputes: DisputeItem[]; nowIso
               Nothing here for this range.
             </p>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 28 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: 28 }}>
               {tiles.map((d) => (
                 <DisputeTile key={d.id} dispute={d} now={now} />
               ))}
@@ -113,7 +113,7 @@ export function HomeView({ disputes, nowIso }: { disputes: DisputeItem[]; nowIso
         </div>
       </section>
 
-      <nav aria-label="Quick links" style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+      <nav aria-label="Quick links" className="poi-quick-links">
         <QuickLink href="/disputes" icon={<ScaleIcon size={28} />} label="Dispute queue" />
         <QuickLink href="/analytics" icon={<ChartIcon size={28} />} label="Analytics" />
         <QuickLink href="/disputes/PP-D-1001" icon={<FileCheckIcon size={28} />} label="Evidence sample" />
@@ -182,15 +182,14 @@ function DisputeTile({ dispute: d, now }: { dispute: DisputeItem; now: Date }) {
       </div>
       <div style={{ padding: "14px 2px 0" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-          <span style={{ fontSize: 18, color: v("text") }}>
-            {d.id} · {classLabel(d.disputeClass)}
-          </span>
+          <span style={{ fontSize: 17, fontWeight: 600, color: v("text"), fontVariantNumeric: "tabular-nums" }}>{d.id}</span>
           {d.status !== "RESOLVED" && (
             <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", color: sla.isUrgent ? v("danger") : v("textMuted") }}>
               {sla.text}
             </span>
           )}
         </div>
+        <div style={{ marginTop: 2, fontSize: 14, fontWeight: 600, color: v("textMuted") }}>{classLabel(d.disputeClass)}</div>
         {d.shopperNotes && (
           <p
             style={{
@@ -241,8 +240,8 @@ function QuickLink({ href, icon, label, external }: { href: string; icon: ReactN
     flexDirection: "column",
     alignItems: "center",
     gap: 10,
-    width: 128,
     textDecoration: "none",
+    textAlign: "center",
   };
   return external ? (
     <a href={href} target="_blank" rel="noreferrer" className="poi-quick" style={style}>

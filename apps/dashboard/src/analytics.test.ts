@@ -39,7 +39,7 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     // Blocked overreach carts
     expect(summary.blockedOverreachCarts.totalBlocked).toBe(38);
     expect(summary.blockedOverreachCarts.preventedSpend.value).toBe(342000); // $3,420.00
-    expect(formatMoney(summary.blockedOverreachCarts.preventedSpend)).toBe("$3420.00");
+    expect(formatMoney(summary.blockedOverreachCarts.preventedSpend)).toBe("$3,420.00");
 
     const reasonCodes = summary.blockedOverreachCarts.topReasonCodes;
     expect(reasonCodes).toHaveLength(3);
@@ -198,6 +198,7 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     const liveData = await fetchAnalytics({ apiBaseUrl: "http://example.test", fetchFn: mockFetchSuccess });
     expect(liveData.disputes.defenseRate).toBe(70);
     expect(liveData.disputes.total).toBe(10);
+    expect(liveData.isSample).toBeUndefined();
 
     // Fallback on 501 or network error
     const mockFetchError = (async () => {
@@ -206,6 +207,7 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
 
     const fallbackData = await fetchAnalytics({ apiBaseUrl: "http://example.test", fetchFn: mockFetchError });
     expect(fallbackData.disputes.total).toBe(24);
+    expect(fallbackData.isSample).toBe(true);
     expect(fallbackData.disputes.defended).toBe(14);
     expect(fallbackData.amountProtected.defendedTotal.value).toBe(16300);
   });

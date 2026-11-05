@@ -213,14 +213,14 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     })) as unknown as typeof fetch;
 
     const fallbackData = await fetchDisputes({ apiBaseUrl: "http://example.test", fetchFn: mockFetch501 });
-    expect(fallbackData).toEqual(SEED_DISPUTES);
+    expect(fallbackData.map((d) => d.id)).toEqual(SEED_DISPUTES.map((d) => d.id));
 
     const detailed501 = await fetchDisputesDetailed({
       apiBaseUrl: "http://example.test",
       fetchFn: mockFetch501,
     });
     expect(detailed501.isFallback).toBe(true);
-    expect(detailed501.disputes).toEqual(SEED_DISPUTES);
+    expect(detailed501.disputes.map((d) => d.id)).toEqual(SEED_DISPUTES.map((d) => d.id));
 
     // Mock network throw -> falls back to seed data
     const mockFetchError = (async () => {
@@ -231,14 +231,14 @@ describe("dispute queue data & helpers (spec 0007)", () => {
       apiBaseUrl: "http://example.test",
       fetchFn: mockFetchError,
     });
-    expect(networkFallbackData).toEqual(SEED_DISPUTES);
+    expect(networkFallbackData.map((d) => d.id)).toEqual(SEED_DISPUTES.map((d) => d.id));
 
     const detailedError = await fetchDisputesDetailed({
       apiBaseUrl: "http://example.test",
       fetchFn: mockFetchError,
     });
     expect(detailedError.isFallback).toBe(true);
-    expect(detailedError.disputes).toEqual(SEED_DISPUTES);
+    expect(detailedError.disputes.map((d) => d.id)).toEqual(SEED_DISPUTES.map((d) => d.id));
   });
 
   it("contains 24 canonical seeded disputes with scripted disputes pinned on top per spec 0007", () => {
