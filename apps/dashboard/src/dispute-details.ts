@@ -1,12 +1,12 @@
 import { greyJacketIntent } from "@poi/contracts/fixtures";
 import type { ConstraintCheck, DisputeDetail } from "./dispute-types";
-import { SEED_DISPUTES } from "./seed-disputes";
+import { generateSeedDisputes } from "./seed-disputes";
 
 /**
  * Builds canonical DisputeDetail for a dispute ID, matching specs 0005 and 0007.
  */
 export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
-  const base = SEED_DISPUTES.find((d) => d.id === disputeId);
+  const base = generateSeedDisputes().find((d) => d.id === disputeId);
   if (!base) return undefined;
 
   // Pinned Scripted Dispute 1: Compliant grey jacket order ($74) -> Defend

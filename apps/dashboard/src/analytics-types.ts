@@ -42,4 +42,6 @@ export interface AnalyticsSummary {
   };
   byPlatform: PlatformBreakdown[];
   disputesByClassPerWeek: WeeklyDisputesByClass[];
+  /** Set when the API was unreachable and these numbers are the built-in demo set. */
+  isSample?: boolean;
 }

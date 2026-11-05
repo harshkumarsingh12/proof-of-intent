@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchDisputeDetailDetailed } from "../../../src/api";
+import { fetchDisputeDetailDetailed, serverApiBaseUrl } from "../../../src/api";
 import { DisputeDetailView } from "./DisputeDetailView";
 
 interface PageProps {
@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function DisputeDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const { dispute, isFallback } = await fetchDisputeDetailDetailed(id);
+  const { dispute, isFallback } = await fetchDisputeDetailDetailed(id, { apiBaseUrl: serverApiBaseUrl() });
 
   if (!dispute) {
     notFound();

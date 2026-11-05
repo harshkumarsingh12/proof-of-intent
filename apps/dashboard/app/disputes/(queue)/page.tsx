@@ -1,3 +1,4 @@
+import { fetchDisputesDetailed, serverApiBaseUrl } from "../../../src/api";
 import { DisputeQueue } from "../DisputeQueue";
 import { pageSubtitle, pageTitle } from "../../../src/theme";
 
@@ -6,16 +7,23 @@ export const metadata = {
   description: "Dispute resolution queue sorted by response deadline with defend/concede copilot decisions",
 };
 
-export default function DisputesPage() {
+// Load on the server so the page arrives with its disputes instead of a row of zeros.
+export const dynamic = "force-dynamic";
+
+export default async function DisputesPage() {
+  const { disputes, isFallback } = await fetchDisputesDetailed({ apiBaseUrl: serverApiBaseUrl() });
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       {/* Navigation header */}
       <div
+        className="poi-page-head"
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 32,
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: 16,
+          marginBottom: 24,
         }}
       >
         <div>
@@ -23,30 +31,15 @@ export default function DisputesPage() {
             Dispute queue
           </h1>
           <p style={pageSubtitle}>
-            Disputes from the merchant API, sorted by seller response deadline with copilot defend/concede
-            recommendations.
+            Every dispute, soonest response deadline first, with the copilot&apos;s defend or concede
+            recommendation.
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <span
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              fontSize: 12,
-              background: "var(--poi-surface)",
-              border: "1px solid var(--poi-border)",
-              color: "var(--poi-text-muted)",
-              fontFamily: "monospace",
-            }}
-          >
-            API: GET /disputes
-          </span>
-        </div>
       </div>
 
       {/* Interactive Dispute Queue Table */}
-      <DisputeQueue />
+      <DisputeQueue initialDisputes={disputes} initialIsDemo={isFallback} />
     </div>
   );
 }
