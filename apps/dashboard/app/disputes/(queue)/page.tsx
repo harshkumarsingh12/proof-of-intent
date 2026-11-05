@@ -1,5 +1,5 @@
-import Link from "next/link";
-import { DisputeQueue } from "./DisputeQueue";
+import { DisputeQueue } from "../DisputeQueue";
+import { pageSubtitle, pageTitle } from "../../../src/theme";
 
 export const metadata = {
   title: "Dispute queue · Proof of Intent operations",
@@ -8,38 +8,21 @@ export const metadata = {
 
 export default function DisputesPage() {
   return (
-    <main style={{ maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       {/* Navigation header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 24,
-          paddingBottom: 16,
-          borderBottom: "1px solid var(--poi-border)",
+          marginBottom: 32,
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <Link
-              href="/"
-              style={{
-                color: "var(--poi-blue)",
-                textDecoration: "none",
-                fontSize: 13,
-                fontWeight: 500,
-              }}
-            >
-              ← Back to overview
-            </Link>
-            <span style={{ color: "var(--poi-text-subtle)" }}>|</span>
-            <span style={{ color: "var(--poi-text-muted)", fontSize: 13 }}>apps/dashboard · AG Studio</span>
-          </div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: "10px 0 4px 0", color: "var(--poi-heading)" }}>
+          <h1 style={pageTitle}>
             Dispute queue
           </h1>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--poi-text-muted)" }}>
+          <p style={pageSubtitle}>
             Disputes from the merchant API, sorted by seller response deadline with copilot defend/concede
             recommendations.
           </p>
@@ -64,6 +47,6 @@ export default function DisputesPage() {
 
       {/* Interactive Dispute Queue Table */}
       <DisputeQueue />
-    </main>
+    </div>
   );
 }
