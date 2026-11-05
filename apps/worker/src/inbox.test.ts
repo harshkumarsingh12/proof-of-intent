@@ -6,7 +6,8 @@ import { compliantCart, greyJacketIntent, NOW, overreachingCart } from "@poi/con
 import { createDb, type Db } from "@poi/db";
 import { canonicalJson, customId, generateSigningKeyPair, mandateHash, signMandate } from "@poi/mandates";
 import { exportJWK } from "jose";
-import { processDisputeEvents } from "./inbox";
+import { createMockClient, type PayPalDispute } from "@poi/paypal";
+import { processDisputeEvents, syncDisputes } from "./inbox";
 
 // Real Postgres, like packages/db: the inbox is a query, so a fake would test nothing. CI provides one.
 const ADMIN_URL = process.env.DATABASE_URL;
@@ -192,6 +193,44 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
     });
     expect(await processDisputeEvents(deps())).toBe(1);
     expect((await db.getDispute("PP-D-COMPLIANT"))!.status).toBe("WAITING_FOR_SELLER_RESPONSE");
+  });
+
+  /** The full PayPal object for a dispute on one of our orders, as get_dispute returns it. */
+  const fullDispute = (id: string, orderId: string, update: string): PayPalDispute => ({
+    dispute_id: id,
+    create_time: "2026-11-06T08:00:00.000Z",
+    update_time: update,
+    status: "WAITING_FOR_SELLER_RESPONSE",
+    reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+    dispute_amount: { currency_code: "USD", value: "74.00" },
+    seller_response_due_date: "2026-11-16T08:00:00.000Z",
+    disputed_transactions: [{ invoice_number: orderId, custom: pointer }],
+  });
+
+  test("with PayPal available, a partial webhook is completed from get_dispute before classifying", async () => {
+    const paypal = createMockClient();
+    paypal.seedDispute(fullDispute("PP-D-PARTIAL", "ord_compliant", "2026-11-06T08:00:00.000Z"));
+    await db.recordWebhookEvent({
+      eventId: "WH-PARTIAL",
+      eventType: "CUSTOMER.DISPUTE.UPDATED",
+      payload: { resource: { dispute_id: "PP-D-PARTIAL" } }, // no transactions: alone it would be NO_MANDATE
+    });
+    expect(await processDisputeEvents({ ...deps(), paypal })).toBe(1);
+    expect(await db.getDispute("PP-D-PARTIAL")).toMatchObject({
+      orderId: "ord_compliant",
+      sellerResponseDueDate: "2026-11-16T08:00:00.000Z",
+      recommendation: { class: "MANDATE_COMPLIANT" },
+    });
+  });
+
+  test("list_disputes catch-up handles disputes we never got a webhook for, and skips up-to-date ones", async () => {
+    const paypal = createMockClient();
+    paypal.seedDispute(fullDispute("PP-D-MISSED", "ord_overreach", "2026-11-06T09:00:00.000Z"));
+    paypal.seedDispute(fullDispute("PP-D-PARTIAL", "ord_compliant", "2026-11-06T08:00:00.000Z")); // already held
+    expect(await syncDisputes({ ...deps(), paypal })).toBe(1);
+    expect((await db.getDispute("PP-D-MISSED"))!.recommendation).toMatchObject({ class: "AGENT_OVERREACH" });
+    expect(await syncDisputes({ ...deps(), paypal })).toBe(0); // nothing changed since
+    expect(await syncDisputes(deps())).toBe(0); // no PayPal client (mock without a reader): nothing to list
   });
 
   test("a malformed event stays in the inbox and is reported, never dropped", async () => {

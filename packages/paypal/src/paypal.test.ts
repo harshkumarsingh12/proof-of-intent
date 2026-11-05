@@ -12,6 +12,7 @@ import {
   type CreateOrderInput,
   type WebhookHeaders,
 } from "./index";
+import { toolkitDisputes, type ToolkitTool } from "./agent-toolkit";
 import { orderBody, verifyBody } from "./sandbox";
 
 const order: CreateOrderInput = {
@@ -396,15 +397,6 @@ describe("sandbox disputes", () => {
     });
   });
 
-  test("accept-claim posts the operator's note as JSON", async () => {
-    const { client, requests } = fakePayPal({ "/accept-claim": { status: 200, body: { links: [] } } });
-    await client.acceptClaim("PP-D-1", "The agent bought outside the signed budget; refunding.");
-    expect(requests[0]!.path).toBe("/v1/customer/disputes/PP-D-1/accept-claim");
-    expect(JSON.parse(requests[0]!.body as string)).toEqual({
-      note: "The agent bought outside the signed budget; refunding.",
-    });
-  });
-
   test("a refused dispute action surfaces PayPal's issue", async () => {
     const { client } = fakePayPal({
       "/provide-evidence": {
@@ -425,5 +417,116 @@ describe("sandbox disputes", () => {
     expect(evidenceTypeFor("CREDIT_NOT_PROCESSED")).toBe("PROOF_OF_REFUND");
     expect(evidenceTypeFor("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED")).toBe("OTHER");
     expect(evidenceTypeFor("UNAUTHORISED")).toBe("OTHER");
+  });
+});
+
+/** Fake Agent Toolkit tools with the real contract: execute resolves to a JSON string, errors included. */
+function fakeToolkit(answers: Record<string, unknown>) {
+  const calls: { name: string; args: unknown }[] = [];
+  const tools: Record<string, ToolkitTool> = {};
+  for (const [name, answer] of Object.entries(answers)) {
+    tools[name] = {
+      execute: (async (args: unknown) => {
+        calls.push({ name, args });
+        return JSON.stringify(answer);
+      }) as ToolkitTool["execute"],
+    };
+  }
+  return { disputes: toolkitDisputes(tools), calls };
+}
+
+describe("Agent Toolkit transport (sandbox disputes and tracking)", () => {
+  test("the sandbox client sends accept-claim, dispute reads and tracking through the toolkit", async () => {
+    const { disputes, calls } = fakeToolkit({
+      get_dispute: { dispute_id: "PP-D-1", status: "UNDER_REVIEW" },
+      list_disputes: { items: [{ dispute_id: "PP-D-1", update_time: "2026-11-06T00:00:00Z" }] },
+      accept_dispute_claim: { links: [] },
+      create_shipment_tracking: { tracker_identifiers: [{ transaction_id: "CAP-1" }], errors: [] },
+    });
+    const client = createPayPalClient("sandbox", {
+      clientId: "id",
+      clientSecret: "secret",
+      webhookId: "WH-1",
+      fetch: async () => new Response("no fetch expected", { status: 599 }),
+      toolkit: disputes,
+    });
+    expect(await client.getDispute("PP-D-1")).toEqual({ dispute_id: "PP-D-1", status: "UNDER_REVIEW" });
+    expect(await client.listDisputes()).toEqual([
+      { dispute_id: "PP-D-1", update_time: "2026-11-06T00:00:00Z" },
+    ]);
+    await client.acceptClaim("PP-D-1", "Agent bought outside the signed budget; refunding.");
+    await client.addTracking({
+      captureId: "CAP-1",
+      trackingNumber: "9400100000000000000000",
+      carrier: "USPS",
+    });
+    expect(calls).toEqual([
+      { name: "get_dispute", args: { dispute_id: "PP-D-1" } },
+      { name: "list_disputes", args: { page_size: 50 } },
+      {
+        name: "accept_dispute_claim",
+        args: { dispute_id: "PP-D-1", note: "Agent bought outside the signed budget; refunding." },
+      },
+      {
+        name: "create_shipment_tracking",
+        args: {
+          transaction_id: "CAP-1",
+          tracking_number: "9400100000000000000000",
+          carrier: "USPS",
+          status: "SHIPPED",
+        },
+      },
+    ]);
+  });
+
+  test("a PayPal error inside the toolkit's JSON becomes a PayPalError with its status", async () => {
+    const { disputes } = fakeToolkit({
+      accept_dispute_claim: {
+        ok: false,
+        status: 422,
+        code: "PAYPAL_API_HTTP_ERROR",
+        message: "Unprocessable Entity: NOT_ELIGIBLE",
+      },
+      get_dispute: { error: { message: "boom", type: "paypal_error" } },
+    });
+    await expect(disputes.acceptClaim("PP-D-1", "n")).rejects.toMatchObject({
+      status: 422,
+      issue: "NOT_ELIGIBLE",
+    });
+    await expect(disputes.getDispute("PP-D-1")).rejects.toBeInstanceOf(PayPalError);
+  });
+
+  test("a tracker refused inside a 200 batch answer is an error, not a success", async () => {
+    const { disputes } = fakeToolkit({
+      create_shipment_tracking: {
+        tracker_identifiers: [],
+        errors: [{ message: "Invalid transaction", details: [{ issue: "INVALID_TRANSACTION_ID" }] }],
+      },
+    });
+    await expect(
+      disputes.addTracking({ captureId: "CAP-X", trackingNumber: "1", carrier: "USPS" }),
+    ).rejects.toMatchObject({ status: 422, issue: "INVALID_TRANSACTION_ID" });
+  });
+
+  test("a tool that isn't enabled fails loudly", async () => {
+    await expect(toolkitDisputes({}).getDispute("PP-D-1")).rejects.toThrow("not enabled");
+  });
+
+  test("mock: seeded disputes are readable, unknown ones are 404, tracking is recorded", async () => {
+    const mock = createMockClient();
+    await expect(mock.getDispute("PP-D-9")).rejects.toMatchObject({ status: 404 });
+    mock.seedDispute({ dispute_id: "PP-D-9", status: "OPEN", update_time: "2026-11-06T00:00:00Z" });
+    expect(await mock.getDispute("PP-D-9")).toMatchObject({ status: "OPEN" });
+    expect(await mock.listDisputes()).toEqual([
+      { dispute_id: "PP-D-9", status: "OPEN", update_time: "2026-11-06T00:00:00Z" },
+    ]);
+    await mock.addTracking({ captureId: "CAP-1", trackingNumber: "T1", carrier: "UPS" });
+    expect(mock.disputeActions.at(-1)).toEqual({
+      kind: "add-tracking",
+      captureId: "CAP-1",
+      trackingNumber: "T1",
+      carrier: "UPS",
+      status: "SHIPPED",
+    });
   });
 });

@@ -32,7 +32,7 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 | Vault v3 | One-time wallet save so an agent can buy later without the shopper online |
 | Webhooks | Signed dispute and capture events, verified, persisted, idempotent |
 | Disputes API | Provide evidence, send message, sandbox test harness |
-| Agent Toolkit | Dispute copilot and operator agent: `get_dispute`, `list_disputes`, `accept_dispute_claim`, shipment tracking |
+| Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |
 
 AI: a configurable LLM through the Vercel AI SDK for four typed jobs (semantic fit, dispute classification,
 evidence drafting, operator questions), plus the AG Studio Agent Framework in the dashboard.
@@ -61,7 +61,7 @@ Developing without Docker: Node 20+, `corepack enable`, then `pnpm install && pn
 
 ```
 apps/api          merchant service: checkout, verification, webhooks, disputes, analytics
-apps/worker       dispute copilot pipeline, evidence PDF, Agent Toolkit
+apps/worker       dispute copilot pipeline, evidence PDF
 apps/buyer        shopper app and buyer agent
 apps/dashboard    operations dashboard: home, dispute queue and detail, analytics
 packages/contracts  shared schemas and reason codes (the frozen contract)

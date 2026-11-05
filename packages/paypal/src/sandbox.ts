@@ -1,4 +1,5 @@
 /** Real REST calls against the PayPal sandbox. Spec: docs/specs/0004-paypal-integration.md. */
+import { createToolkit, type ToolkitDisputes } from "./agent-toolkit";
 import {
   PayPalError,
   type ProvideEvidenceInput,
@@ -15,6 +16,8 @@ export interface SandboxConfig {
   webhookId: string;
   baseUrl: string;
   fetch: typeof fetch;
+  /** Dispute reads, accept-claim and tracking go through the PayPal Agent Toolkit; tests inject a fake. */
+  toolkit?: ToolkitDisputes;
 }
 
 /** Refresh this long before PayPal's expiry so a request never goes out with a token that dies in flight. */
@@ -31,6 +34,8 @@ interface OrderResponse {
 }
 
 export function createSandboxClient(config: SandboxConfig): PayPalClient {
+  let toolkit = config.toolkit;
+  const agent = () => (toolkit ??= createToolkit(config.clientId, config.clientSecret));
   let token: { value: string; expiresAt: number } | undefined;
   let pending: Promise<string> | undefined;
 
@@ -154,11 +159,10 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
       });
     },
 
-    async acceptClaim(disputeId, note) {
-      await call("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/accept-claim`, {
-        body: JSON.stringify({ note }),
-      });
-    },
+    acceptClaim: (disputeId, note) => agent().acceptClaim(disputeId, note),
+    getDispute: (disputeId) => agent().getDispute(disputeId),
+    listDisputes: () => agent().listDisputes(),
+    addTracking: (input) => agent().addTracking(input),
   };
 }
 

@@ -24,8 +24,11 @@ the team must be able to work before the sandbox is wired, hence a mock with the
   `vault_id` on the shopper.
 - **Webhooks:** verify every delivery with `POST /v1/notifications/verify-webhook-signature` (transmission headers,
   raw body, our webhook id); persist first (unique event id), enqueue, answer 200 fast; unverified → 400.
-- **Disputes:** Agent Toolkit (`get_dispute`, `list_disputes`, `accept_dispute_claim`) is used by the worker
-  (spec 0005). REST in this package covers what the toolkit doesn't: `provide-evidence` (multipart),
+- **Disputes:** the sandbox client calls the PayPal Agent Toolkit (`@paypal/agent-toolkit`,
+  `src/agent-toolkit.ts`) for `get_dispute`, `list_disputes`, `accept_dispute_claim` and
+  `create_shipment_tracking`, invoking its tools directly (no model picks them). The worker reads with
+  `get_dispute` / `list_disputes`; the API runs accept-claim and tracking only after an operator click, audit row
+  first (spec 0005). REST in this package covers what the toolkit doesn't: `provide-evidence` (multipart),
   `send-message`, and sandbox-only `require-evidence` and `adjudicate`.
 - Evidence by reason: `MERCHANDISE_OR_SERVICE_NOT_RECEIVED` → `PROOF_OF_FULFILLMENT` with tracking;
   `MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED`, `UNAUTHORISED` → `OTHER` with the attestation PDF;

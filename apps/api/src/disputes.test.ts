@@ -227,3 +227,44 @@ describe("operator actions", () => {
     expect((await post(app, "/disputes/PP-D-404/actions/accept-claim")).statusCode).toBe(404);
   });
 });
+
+describe("shipment tracking (operator)", () => {
+  const track = (
+    app: Awaited<ReturnType<typeof setup>>["app"],
+    headers: Record<string, string>,
+    payload: object,
+  ) => app.inject({ method: "POST", url: "/orders/ord_1/tracking", headers, payload });
+
+  test("needs the operator token, validates input and refuses an uncaptured order", async () => {
+    const { app, mem, paypal } = await setup();
+    expect((await track(app, {}, { trackingNumber: "T1", carrier: "USPS" })).statusCode).toBe(401);
+    expect((await track(app, auth, { trackingNumber: "T 1", carrier: "usps" })).statusCode).toBe(400);
+    expect((await track(app, auth, { trackingNumber: "T1", carrier: "USPS" })).statusCode).toBe(409); // no capture id
+    expect((paypal as ReturnType<typeof createMockClient>).disputeActions).toEqual([]);
+    expect(mem.audit).toEqual([]);
+  });
+
+  test("records the operator, sends the tracker on the capture, records the result", async () => {
+    const { app, mem, paypal } = await setup();
+    await mem.db.updateOrder("ord_1", {
+      status: "CAPTURED",
+      captureId: "CAP-1",
+      capturedAt: "2026-11-02T10:05:00Z",
+    });
+    const res = await track(app, auth, { trackingNumber: "9400100000000000000000", carrier: "USPS" });
+    expect(res.statusCode).toBe(200);
+    expect((paypal as ReturnType<typeof createMockClient>).disputeActions).toEqual([
+      {
+        kind: "add-tracking",
+        captureId: "CAP-1",
+        trackingNumber: "9400100000000000000000",
+        carrier: "USPS",
+        status: "SHIPPED",
+      },
+    ]);
+    expect(mem.audit.map((a) => [a.actor, a.action])).toEqual([
+      ["operator:dashboard", "operator.add-tracking"],
+      ["api", "paypal.add-tracking"],
+    ]);
+  });
+});
