@@ -11,7 +11,10 @@ describe("api", () => {
   });
 
   test("unbuilt routes say who owns them", async () => {
-    const res = await buildApp({ paypal: createMockClient() }).inject({ method: "GET", url: "/disputes" });
+    const res = await buildApp({ paypal: createMockClient() }).inject({
+      method: "GET",
+      url: "/analytics/overview",
+    });
     expect(res.statusCode).toBe(501);
     expect(res.json().owner).toBe("hoursgotviral-dev");
   });
