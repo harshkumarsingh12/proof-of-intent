@@ -8,7 +8,7 @@ exports[`evidence PDF generation > matches the deterministic snapshot of the ren
 1. DISPUTE SUMMARY
 ------------------
 Dispute ID:               PP-D-778899
-PayPal Order ID:          ord_compliant_001
+Order ID:                 ord_compliant_001
 PayPal custom_id:         poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831
 Dispute Status:           WAITING_FOR_SELLER_RESPONSE
 Dispute Reason:           MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED

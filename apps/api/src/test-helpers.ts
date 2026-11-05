@@ -4,7 +4,9 @@ import type { CartMandate, IntentMandate, PaymentMandate } from "@poi/contracts"
 import { compliantCart, greyJacketIntent } from "@poi/contracts/fixtures";
 import type {
   AuditEntry,
+  AuditRecord,
   Db,
+  DisputeRow,
   KeyRecord,
   MandateRecord,
   OrderPatch,
@@ -21,13 +23,23 @@ export function memoryDb() {
   const events = new Map<string, WebhookEventRecord>();
   const keys = new Map<string, KeyRecord & { kind: "shopper" | "agent" }>();
   const mandates = new Map<string, MandateRecord>();
-  const orders = new Map<string, OrderRecord & Partial<OrderPatch>>();
+  const orders = new Map<string, OrderRecord & Partial<OrderPatch> & { createdAt?: string }>();
   const verdicts: VerdictRecord[] = [];
   const audit: AuditEntry[] = [];
+  const processed = new Set<string>();
+  const disputes = new Map<string, DisputeRow>();
+  const page = <T>(rows: T[], p: { limit: number; offset: number }) =>
+    rows.slice(p.offset, p.offset + p.limit);
   const db: Db = {
     claimNonce: async (n) => (nonces.has(n) ? false : (nonces.add(n), true)),
     appendAudit: async (e) => void audit.push(e),
-    auditTrail: async () => [],
+    // Row order stands in for time: ids and timestamps both increase with insertion.
+    auditTrail: async (subjectId) =>
+      audit.flatMap((a, i): AuditRecord[] =>
+        a.subjectId === subjectId
+          ? [{ ...a, id: i + 1, at: new Date(Date.UTC(2026, 10, 1) + i * 1000).toISOString() }]
+          : [],
+      ),
     recordWebhookEvent: async (e) => (events.has(e.eventId) ? false : (events.set(e.eventId, e), true)),
     findKey: async (kind, kid) => {
       const k = keys.get(kid);
@@ -36,9 +48,13 @@ export function memoryDb() {
       return rest;
     },
     saveMandate: async (m) => void (mandates.has(m.hash) || mandates.set(m.hash, m)),
-    mandateLedger: async (intentMandateId) => {
+    mandateLedger: async (intentMandateId, asOfOrderId) => {
+      const asOf = asOfOrderId ? orders.get(asOfOrderId)?.createdAt : undefined;
       const captured = [...orders.values()].filter(
-        (o) => o.intentMandateId === intentMandateId && o.capturedAt,
+        (o) =>
+          o.intentMandateId === intentMandateId &&
+          o.capturedAt &&
+          (!asOfOrderId || (o.id !== asOfOrderId && asOf && o.capturedAt < asOf)),
       );
       return {
         capturedTotal: captured.reduce((s, o) => s + o.totalValue, 0),
@@ -48,7 +64,7 @@ export function memoryDb() {
     recordVerdict: async (v) => void verdicts.push(v),
     createOrder: async (o) => {
       if (orders.has(o.id)) throw new Error("duplicate order id");
-      orders.set(o.id, { ...o });
+      orders.set(o.id, { ...o, createdAt: new Date().toISOString() });
     },
     getOrder: async (id) => orders.get(id) ?? null,
     getMandate: async (hash) => mandates.get(hash) ?? null,
@@ -57,10 +73,35 @@ export function memoryDb() {
       if (!o) throw new Error(`order ${id} does not exist`);
       orders.set(id, { ...o, ...Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)) });
     },
+    orderVerdict: async (orderId) => verdicts.findLast((v) => v.orderId === orderId) ?? null,
+    listOrders: async (p) => page([...orders.values()].reverse(), p),
+    listVerdicts: async (p) =>
+      page(verdicts.map((v, i) => ({ ...v, id: i + 1, createdAt: new Date().toISOString() })).reverse(), p),
+    pendingDisputeEvents: async (limit) =>
+      [...events.values()]
+        .filter((e) => !processed.has(e.eventId) && e.eventType.startsWith("CUSTOMER.DISPUTE."))
+        .slice(0, limit)
+        .map(({ eventId, eventType, payload }) => ({ eventId, eventType, payload })),
+    markEventProcessed: async (eventId) => void processed.add(eventId),
+    saveDispute: async (d) => {
+      const prev = disputes.get(d.id);
+      if (prev?.paypalUpdatedAt && d.paypalUpdatedAt && d.paypalUpdatedAt < prev.paypalUpdatedAt)
+        return false;
+      disputes.set(d.id, { ...d, createdAt: d.createdAt ?? prev?.createdAt ?? new Date().toISOString() });
+      return true;
+    },
+    getDispute: async (id) => disputes.get(id) ?? null,
+    listDisputes: async (p) =>
+      page(
+        [...disputes.values()]
+          .sort((a, b) => (a.sellerResponseDueDate ?? "~").localeCompare(b.sellerResponseDueDate ?? "~"))
+          .map(({ evidencePdf, ...d }) => ({ ...d, hasEvidencePdf: evidencePdf !== undefined })),
+        p,
+      ),
     migrate: async () => [],
     close: async () => {},
   };
-  return { db, nonces, events, keys, mandates, orders, verdicts, audit };
+  return { db, nonces, events, keys, mandates, orders, verdicts, audit, disputes, processed };
 }
 
 export interface Party {

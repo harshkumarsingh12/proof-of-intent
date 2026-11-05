@@ -173,13 +173,13 @@ Day-by-day tasks are GitHub issues under each milestone; see [ROADMAP.md](ROADMA
 
 | # | Decision | Default | By | Owner |
 |---|---|---|---|---|
-| D1 | LLM provider and model | Chosen in spec 0006 | Oct 31 | Sumedha |
+| D1 | LLM provider and model | **Decided:** NVIDIA `nemotron-3.5-lightning-30b-a3b`, thinking off (spec 0006) | done | Sumedha |
 | D2 | Vault v3 in MVP | Yes; drop at the Nov 3 gate if the spike fails | Nov 3 | Harsh |
 | D3 | Step-up channel | Email link with a signed token | Oct 31 | Sristee |
 | D4 | Studio agent calls the PayPal MCP server | No for MVP; Toolkit read-only tools only | Nov 7 | Sumedha |
 | D5 | Hosting | **Decided:** team server, Docker Compose | done | Harsh |
-| D6 | Public HTTPS method | Caddy + Let's Encrypt if public IP; else Cloudflare Tunnel | Oct 31 | Harsh |
-| D7 | Domain and subdomains | `api.`, `shop.`, `ops.` on a team domain | Oct 31 | Harsh |
+| D6 | Public HTTPS method | **Decided:** Dokploy's proxy with Let's Encrypt, behind Cloudflare | done | Harsh |
+| D7 | Domain and subdomains | **Decided:** `poi-api.`, `poi-buyer.`, `poi-dashboard.iotkiit.in` | done | Harsh |
 | D8 | Prize split among the four | Agree in writing before submission | Nov 10 | everyone |
 
 ## 10. Sources

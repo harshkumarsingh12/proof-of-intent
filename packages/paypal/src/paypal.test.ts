@@ -308,6 +308,7 @@ describe("mock client", () => {
       files: [{ name: "attestation.pdf", data: new Uint8Array([1]) }],
     });
     await mock.sendMessage("PP-D-1", "hello");
+    await mock.acceptClaim("PP-D-2", "refund");
     expect(mock.disputeActions).toEqual([
       {
         kind: "provide-evidence",
@@ -317,6 +318,7 @@ describe("mock client", () => {
         files: ["attestation.pdf"],
       },
       { kind: "send-message", disputeId: "PP-D-1", message: "hello" },
+      { kind: "accept-claim", disputeId: "PP-D-2", note: "refund" },
     ]);
   });
 });
@@ -391,6 +393,15 @@ describe("sandbox disputes", () => {
     const form = requests[0]!.body as unknown as FormData;
     expect(JSON.parse(await (form.get("input") as Blob).text())).toEqual({
       message: "Here is the signed record of your instructions.",
+    });
+  });
+
+  test("accept-claim posts the operator's note as JSON", async () => {
+    const { client, requests } = fakePayPal({ "/accept-claim": { status: 200, body: { links: [] } } });
+    await client.acceptClaim("PP-D-1", "The agent bought outside the signed budget; refunding.");
+    expect(requests[0]!.path).toBe("/v1/customer/disputes/PP-D-1/accept-claim");
+    expect(JSON.parse(requests[0]!.body as string)).toEqual({
+      note: "The agent bought outside the signed budget; refunding.",
     });
   });
 

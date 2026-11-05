@@ -1,9 +1,29 @@
 import type { Money } from "@poi/contracts";
-import type { DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
-import { SEED_DISPUTES } from "./seed-disputes";
+import type { DisputeDetail, DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
+import type { AnalyticsSummary } from "./analytics-types";
+import { getDisputeDetail } from "./dispute-details";
+export { getDisputeDetail };
+export {
+  computeAnalyticsSummary,
+  computeBlockedCartsMetrics,
+  computeDisputesByClassPerWeek,
+  computePerformanceMetrics,
+  SEED_ANALYTICS,
+} from "./analytics-data";
+export type { AnalyticsSummary, PlatformBreakdown, WeeklyDisputesByClass } from "./analytics-types";
+import { computeAnalyticsSummary } from "./analytics-data";
+import { generateSeedDisputes } from "./seed-disputes";
 
 /** Same-origin proxy (app/api/[...path]/route.ts), so the browser needs neither the API's URL nor CORS. */
 export const DEFAULT_API_BASE_URL = "/api";
+
+/**
+ * Base URL for server components. "/api" only resolves in a browser, so on the server we call the API
+ * container directly (compose sets API_INTERNAL_URL=http://api:3000). Unset: the fetch fails and pages fall back to seed data.
+ */
+export function serverApiBaseUrl(): string {
+  return process.env.API_INTERNAL_URL ?? DEFAULT_API_BASE_URL;
+}
 
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
@@ -43,7 +63,8 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
     // API server not reachable in dev or standalone mode; fallback to canonical seed data
   }
 
-  return { disputes: SEED_DISPUTES, isFallback: true };
+  // Fresh per call: seed times are relative to now, and a long-running server must not serve stale deadlines.
+  return { disputes: generateSeedDisputes(), isFallback: true };
 }
 
 /**
@@ -56,13 +77,158 @@ export async function fetchDisputes(options?: FetchDisputesOptions): Promise<Dis
   return res.disputes;
 }
 
+export interface FetchDisputeDetailResponse {
+  dispute: DisputeDetail | undefined;
+  isFallback: boolean;
+}
+
+/**
+ * Fetch a single dispute with full mandate, cart, and copilot details.
+ * Returns response metadata including whether data came from canonical seed fallback.
+ */
+export async function fetchDisputeDetailDetailed(
+  disputeId: string,
+  options?: FetchDisputesOptions
+): Promise<FetchDisputeDetailResponse> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+
+  try {
+    const encodedId = encodeURIComponent(disputeId);
+    const res = await runner(`${baseUrl}/disputes/${encodedId}/recommendation`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        return { dispute: { ...(data as DisputeDetail), isDemoData: false }, isFallback: false };
+      }
+    }
+  } catch {
+    // API server not reachable; fallback to canonical dispute detail
+  }
+
+  const dispute = getDisputeDetail(disputeId);
+  return {
+    dispute: dispute ? { ...dispute, isDemoData: true } : undefined,
+    isFallback: true,
+  };
+}
+
+/**
+ * Fetch a single dispute with full mandate, cart, and copilot details.
+ * Reads from the API over HTTP with no direct database access.
+ * Falls back to canonical fixture data if the API server is unavailable or returns 501.
+ */
+export async function fetchDisputeDetail(
+  disputeId: string,
+  options?: FetchDisputesOptions
+): Promise<DisputeDetail | undefined> {
+  const res = await fetchDisputeDetailDetailed(disputeId, options);
+  return res.dispute;
+}
+
+export type DisputeOperatorAction =
+  | "provide-evidence"
+  | "accept-claim"
+  | "make-offer"
+  | "send-message";
+
+export interface DisputeActionResult {
+  success: boolean;
+  status: number;
+  error?: string;
+  data?: unknown;
+}
+
+/**
+ * Execute an operator action against the merchant API (docs/specs/0003, 0007).
+ * Calls POST /disputes/:id/actions/:action over HTTP with no direct database access.
+ */
+export async function executeDisputeAction(
+  disputeId: string,
+  action: DisputeOperatorAction,
+  payload?: Record<string, unknown>,
+  options?: FetchDisputesOptions
+): Promise<DisputeActionResult> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+
+  try {
+    const encodedId = encodeURIComponent(disputeId);
+    const res = await runner(`${baseUrl}/disputes/${encodedId}/actions/${action}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload ?? {}),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { success: true, status: res.status, data };
+    }
+
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const errorMessage =
+      typeof body?.error === "string"
+        ? body.error
+        : `Action rejected by API (${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
+
+    return {
+      success: false,
+      status: res.status,
+      error: errorMessage,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      status: 0,
+      error: err instanceof Error ? err.message : "Network error calling API",
+    };
+  }
+}
+
+/**
+ * Fetch analytics summary from the merchant API (GET /analytics/:report).
+ * Reads from the API over HTTP with no direct database access.
+ * Falls back to canonical seed analytics if the API returns 501 or is offline.
+ */
+export async function fetchAnalytics(
+  options?: FetchDisputesOptions
+): Promise<AnalyticsSummary> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+
+  try {
+    const res = await runner(`${baseUrl}/analytics/overview`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        return data as AnalyticsSummary;
+      }
+    }
+  } catch {
+    // API server not reachable; fallback to canonical seed analytics
+  }
+
+  return { ...computeAnalyticsSummary(generateSeedDisputes()), isSample: true };
+}
+
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
 export function formatMoney(money: Money): string {
-  const dollars = (money.value / 100).toFixed(2);
+  const amount = (money.value / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (money.currency === "USD") {
-    return `$${dollars}`;
+    return `$${amount}`;
   }
-  return `${dollars} ${money.currency}`;
+  return `${amount} ${money.currency}`;
 }
 
 /** Aggregates dispute amounts per currency without summing distinct currencies together. */

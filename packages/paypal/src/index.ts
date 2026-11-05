@@ -73,6 +73,8 @@ export interface PayPalClient {
   /** Multipart provide-evidence: the attestation PDF(s) plus notes. Only after an operator click (invariant 4). */
   provideEvidence(disputeId: string, input: ProvideEvidenceInput): Promise<void>;
   sendMessage(disputeId: string, message: string): Promise<void>;
+  /** Concede: PayPal refunds the buyer. Only after an operator click (invariant 4). */
+  acceptClaim(disputeId: string, note: string): Promise<void>;
 }
 
 /** A non-2xx answer from PayPal, with the fields their support asks for. */
@@ -101,6 +103,15 @@ export function toPayPalAmount(money: Money): { currency_code: string; value: st
     currency: money.currency,
   }).resolvedOptions().maximumFractionDigits!;
   return { currency_code: money.currency, value: (money.value / 10 ** digits).toFixed(digits) };
+}
+
+/** PayPal's decimal string → minor units, the inverse of toPayPalAmount. */
+export function fromPayPalAmount(amount: { currency_code: string; value: string }): Money {
+  const digits = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: amount.currency_code,
+  }).resolvedOptions().maximumFractionDigits!;
+  return { currency: amount.currency_code, value: Math.round(Number(amount.value) * 10 ** digits) };
 }
 
 export function createPayPalClient(mode: PayPalMode, config: Partial<SandboxConfig> = {}): PayPalClient {
