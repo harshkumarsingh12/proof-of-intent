@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DisputeDetail } from "../../../src/dispute-types";
 import { calculateAge, calculateSla, executeDisputeAction, formatMoney } from "../../../src/api";
+import { card, kpiLabel, pillButton } from "../../../src/theme";
 
 export function DisputeDetailView({
   dispute,
@@ -82,11 +83,11 @@ export function DisputeDetailView({
         <div
           data-testid="demo-data-banner"
           style={{
-            background: "rgba(210, 153, 34, 0.15)",
-            border: "1px solid #d29922",
+            background: "var(--poi-warning-bg)",
+            border: "1px solid var(--poi-warning)",
             borderRadius: 8,
             padding: "12px 16px",
-            color: "#e3b341",
+            color: "var(--poi-warning)",
             fontSize: 13,
             display: "flex",
             alignItems: "center",
@@ -96,8 +97,8 @@ export function DisputeDetailView({
           <span
             style={{
               padding: "2px 8px",
-              background: "#d29922",
-              color: "#0d1117",
+              background: "var(--poi-warning)",
+              color: "#ffffff",
               fontWeight: 700,
               borderRadius: 4,
               fontSize: 11,
@@ -117,7 +118,7 @@ export function DisputeDetailView({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "#f0f6fc", fontFamily: "monospace" }}>
+              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "var(--poi-heading)", fontFamily: "monospace" }}>
                 {dispute.id}
               </h1>
               <span style={decisionBadgeStyle(dispute.decision)}>
@@ -132,9 +133,9 @@ export function DisputeDetailView({
                   data-testid="demo-data-badge"
                   style={{
                     padding: "3px 8px",
-                    background: "rgba(210, 153, 34, 0.2)",
-                    color: "#e3b341",
-                    border: "1px solid #d29922",
+                    background: "var(--poi-warning-bg)",
+                    color: "var(--poi-warning)",
+                    border: "1px solid var(--poi-warning)",
                     borderRadius: 4,
                     fontSize: 11,
                     fontWeight: 700,
@@ -146,17 +147,17 @@ export function DisputeDetailView({
               )}
             </div>
 
-            <div style={{ marginTop: 8, fontSize: 13, color: "#8b949e", display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ marginTop: 8, fontSize: 13, color: "var(--poi-text-muted)", display: "flex", gap: 16, flexWrap: "wrap" }}>
               <span>
-                Order: <strong style={{ color: "#c9d1d9", fontFamily: "monospace" }}>{dispute.orderId}</strong>
+                Order: <strong style={{ color: "var(--poi-text)", fontFamily: "monospace" }}>{dispute.orderId}</strong>
               </span>
               <span>·</span>
               <span>
-                PayPal Order: <strong style={{ color: "#c9d1d9", fontFamily: "monospace" }}>{dispute.paypalOrderId}</strong>
+                PayPal Order: <strong style={{ color: "var(--poi-text)", fontFamily: "monospace" }}>{dispute.paypalOrderId}</strong>
               </span>
               <span>·</span>
               <span>
-                Created: <strong style={{ color: "#c9d1d9" }}>{age.text}</strong>
+                Created: <strong style={{ color: "var(--poi-text)" }}>{age.text}</strong>
               </span>
             </div>
           </div>
@@ -164,21 +165,21 @@ export function DisputeDetailView({
           {/* Amount & SLA Tiles */}
           <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
             <div style={{ textAlign: "right" }}>
-              <div style={kpiLabelStyle}>Disputed Amount</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f6fc" }}>{formatMoney(dispute.amount)}</div>
+              <div style={kpiLabelStyle}>Disputed amount</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "var(--poi-heading)" }}>{formatMoney(dispute.amount)}</div>
             </div>
 
             <div
               style={{
                 padding: "8px 14px",
                 borderRadius: 6,
-                background: sla.isUrgent ? "rgba(239, 68, 68, 0.15)" : "#21262d",
-                border: sla.isUrgent ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #30363d",
+                background: sla.isUrgent ? "var(--poi-danger-bg)" : "var(--poi-surface-muted)",
+                border: sla.isUrgent ? "1px solid var(--poi-danger-border)" : "1px solid var(--poi-border)",
                 textAlign: "right",
               }}
             >
-              <div style={{ ...kpiLabelStyle, color: sla.isUrgent ? "#f87171" : "#8b949e" }}>Response Deadline</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: sla.isUrgent ? "#f87171" : "#c9d1d9", marginTop: 2 }}>
+              <div style={{ ...kpiLabelStyle, color: sla.isUrgent ? "var(--poi-danger)" : "var(--poi-text-muted)" }}>Response deadline</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: sla.isUrgent ? "var(--poi-danger)" : "var(--poi-text)", marginTop: 2 }}>
                 {sla.isUrgent && "⚠️ "}
                 {sla.text}
               </div>
@@ -192,10 +193,10 @@ export function DisputeDetailView({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 16 }}>📜</span>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f0f6fc" }}>Shopper Intent Mandate</h2>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>Shopper intent mandate</h2>
           </div>
-          <span style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>
-            {dispute.mandateId ? `ID: ${dispute.mandateId}` : "No Mandate"}
+          <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--poi-text-muted)" }}>
+            {dispute.mandateId ? `ID: ${dispute.mandateId}` : "No mandate"}
           </span>
         </div>
 
@@ -204,12 +205,12 @@ export function DisputeDetailView({
             style={{
               margin: 0,
               padding: "14px 18px",
-              background: "#0d1117",
-              borderLeft: "4px solid #58a6ff",
+              background: "var(--poi-bg)",
+              borderLeft: "4px solid var(--poi-blue)",
               borderRadius: "0 6px 6px 0",
               fontSize: 15,
               lineHeight: 1.5,
-              color: "#e6edf3",
+              color: "var(--poi-text)",
               fontStyle: "italic",
             }}
           >
@@ -219,9 +220,9 @@ export function DisputeDetailView({
           <div
             style={{
               padding: "14px 18px",
-              background: "#0d1117",
+              background: "var(--poi-bg)",
               borderRadius: 6,
-              color: "#8b949e",
+              color: "var(--poi-text-muted)",
               fontStyle: "italic",
               fontSize: 14,
             }}
@@ -231,19 +232,19 @@ export function DisputeDetailView({
         )}
 
         {dispute.mandateId ? (
-          <div style={{ display: "flex", gap: 20, marginTop: 12, fontSize: 12, color: "#8b949e", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 20, marginTop: 12, fontSize: 12, color: "var(--poi-text-muted)", flexWrap: "wrap" }}>
             <span>
-              Issuer: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateIssuer || "None"}</span>
+              Issuer: <span style={{ fontFamily: "monospace", color: "var(--poi-text)" }}>{dispute.mandateIssuer || "None"}</span>
             </span>
             <span>
-              Nonce: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateNonce || "None"}</span>
+              Nonce: <span style={{ fontFamily: "monospace", color: "var(--poi-text)" }}>{dispute.mandateNonce || "None"}</span>
             </span>
             <span>
-              Expiry: <span style={{ fontFamily: "monospace", color: "#c9d1d9" }}>{dispute.mandateExpiry || "None"}</span>
+              Expiry: <span style={{ fontFamily: "monospace", color: "var(--poi-text)" }}>{dispute.mandateExpiry || "None"}</span>
             </span>
           </div>
         ) : (
-          <div style={{ marginTop: 10, fontSize: 12, color: "#8b949e" }}>
+          <div style={{ marginTop: 10, fontSize: 12, color: "var(--poi-text-muted)" }}>
             Order processed without customer-signed intent parameters. Standard seller defense evidence required.
           </div>
         )}
@@ -255,11 +256,11 @@ export function DisputeDetailView({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 16 }}>⚖️</span>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f0f6fc" }}>
-                Mandate Diff · Cart vs Intent Constraints
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
+                Mandate diff · cart vs. intent constraints
               </h2>
             </div>
-            <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#8b949e" }}>
+            <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "var(--poi-text-muted)" }}>
               Side-by-side evaluation of signed constraints versus merchant cart contents.
             </p>
           </div>
@@ -271,12 +272,12 @@ export function DisputeDetailView({
               onClick={() => setOnlyViolations((v) => !v)}
               style={{
                 ...pillBtnStyle,
-                background: onlyViolations ? "rgba(248, 81, 73, 0.2)" : "#21262d",
-                color: onlyViolations ? "#f85149" : "#c9d1d9",
-                borderColor: onlyViolations ? "rgba(248, 81, 73, 0.5)" : "#30363d",
+                background: onlyViolations ? "var(--poi-danger-bg)" : "var(--poi-surface-muted)",
+                color: onlyViolations ? "var(--poi-danger)" : "var(--poi-text)",
+                borderColor: onlyViolations ? "var(--poi-danger-border)" : "var(--poi-border)",
               }}
             >
-              {onlyViolations ? "Showing Violations Only" : "Show All Rules"} ({failingCount} violation{failingCount === 1 ? "" : "s"})
+              {onlyViolations ? "Showing violations only" : "Show all rules"} ({failingCount} violation{failingCount === 1 ? "" : "s"})
             </button>
           </div>
         </div>
@@ -284,28 +285,28 @@ export function DisputeDetailView({
         {/* Side-by-Side Summary Columns */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
           {/* Left: Mandate Limits */}
-          <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 6, padding: 14 }}>
-            <div style={{ ...kpiLabelStyle, color: "#58a6ff", marginBottom: 8 }}>Signed Intent Constraints (Left)</div>
+          <div style={{ background: "var(--poi-bg)", border: "1px solid var(--poi-border)", borderRadius: 6, padding: 14 }}>
+            <div style={{ ...kpiLabelStyle, color: "var(--poi-blue)", marginBottom: 8 }}>Signed intent constraints</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
               <div>
-                <span style={{ color: "#8b949e" }}>Budget Ceiling:</span>{" "}
-                <strong style={{ color: "#f0f6fc" }}>{formatMoney(dispute.constraints.amountMax)}</strong>
+                <span style={{ color: "var(--poi-text-muted)" }}>Budget ceiling:</span>{" "}
+                <strong style={{ color: "var(--poi-heading)" }}>{formatMoney(dispute.constraints.amountMax)}</strong>
               </div>
               {dispute.constraints.attributes.color && (
                 <div>
-                  <span style={{ color: "#8b949e" }}>Color Attribute:</span>{" "}
-                  <strong style={{ color: "#f0f6fc" }}>{dispute.constraints.attributes.color}</strong>
+                  <span style={{ color: "var(--poi-text-muted)" }}>Color attribute:</span>{" "}
+                  <strong style={{ color: "var(--poi-heading)" }}>{dispute.constraints.attributes.color}</strong>
                 </div>
               )}
               {dispute.constraints.attributes.category && (
                 <div>
-                  <span style={{ color: "#8b949e" }}>Category:</span>{" "}
-                  <strong style={{ color: "#f0f6fc" }}>{dispute.constraints.attributes.category}</strong>
+                  <span style={{ color: "var(--poi-text-muted)" }}>Category:</span>{" "}
+                  <strong style={{ color: "var(--poi-heading)" }}>{dispute.constraints.attributes.category}</strong>
                 </div>
               )}
               <div>
-                <span style={{ color: "#8b949e" }}>Allowed Merchant:</span>{" "}
-                <strong style={{ color: "#f0f6fc" }}>{dispute.constraints.merchantAllowlist.join(", ")}</strong>
+                <span style={{ color: "var(--poi-text-muted)" }}>Allowed merchant:</span>{" "}
+                <strong style={{ color: "var(--poi-heading)" }}>{dispute.constraints.merchantAllowlist.join(", ")}</strong>
               </div>
             </div>
           </div>
@@ -313,36 +314,36 @@ export function DisputeDetailView({
           {/* Right: Cart Actuals */}
           <div
             style={{
-              background: failingCount > 0 ? "rgba(248, 81, 73, 0.05)" : "#0d1117",
-              border: failingCount > 0 ? "1px solid rgba(248, 81, 73, 0.4)" : "1px solid #30363d",
+              background: failingCount > 0 ? "var(--poi-danger-bg)" : "var(--poi-bg)",
+              border: failingCount > 0 ? "1px solid var(--poi-danger-border)" : "1px solid var(--poi-border)",
               borderRadius: 6,
               padding: 14,
             }}
           >
-            <div style={{ ...kpiLabelStyle, color: failingCount > 0 ? "#f87171" : "#34d399", marginBottom: 8 }}>
+            <div style={{ ...kpiLabelStyle, color: failingCount > 0 ? "var(--poi-danger)" : "var(--poi-success)", marginBottom: 8 }}>
               Cart Mandate Contents (Right)
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
               <div>
-                <span style={{ color: "#8b949e" }}>Cart Total:</span>{" "}
-                <strong style={{ color: failingCount > 0 && dispute.cartTotal.value > dispute.constraints.amountMax.value ? "#f85149" : "#f0f6fc" }}>
+                <span style={{ color: "var(--poi-text-muted)" }}>Cart total:</span>{" "}
+                <strong style={{ color: failingCount > 0 && dispute.cartTotal.value > dispute.constraints.amountMax.value ? "var(--poi-danger)" : "var(--poi-heading)" }}>
                   {formatMoney(dispute.cartTotal)}
                 </strong>
               </div>
               {dispute.cartLines.map((line) => (
                 <div key={line.sku}>
-                  <span style={{ color: "#8b949e" }}>Item:</span>{" "}
-                  <strong style={{ color: "#f0f6fc" }}>{line.title}</strong> ({line.sku})
+                  <span style={{ color: "var(--poi-text-muted)" }}>Item:</span>{" "}
+                  <strong style={{ color: "var(--poi-heading)" }}>{line.title}</strong> ({line.sku})
                   {line.color && (
-                    <span style={{ marginLeft: 8, color: line.color !== dispute.constraints.attributes.color ? "#f85149" : "#8b949e" }}>
+                    <span style={{ marginLeft: 8, color: line.color !== dispute.constraints.attributes.color ? "var(--poi-danger)" : "var(--poi-text-muted)" }}>
                       [color: {line.color}]
                     </span>
                   )}
                 </div>
               ))}
               <div>
-                <span style={{ color: "#8b949e" }}>Merchant:</span>{" "}
-                <strong style={{ color: "#f0f6fc" }}>{dispute.cartMerchantName}</strong>
+                <span style={{ color: "var(--poi-text-muted)" }}>Merchant:</span>{" "}
+                <strong style={{ color: "var(--poi-heading)" }}>{dispute.cartMerchantName}</strong>
               </div>
             </div>
           </div>
@@ -351,19 +352,19 @@ export function DisputeDetailView({
         {/* Constraint Checks Table */}
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "#1c2128", borderBottom: "1px solid #30363d", color: "#8b949e" }}>
-              <th style={thStyle}>Rule Name</th>
-              <th style={thStyle}>Mandate Rule</th>
-              <th style={thStyle}>Cart Actual</th>
+            <tr style={{ background: "var(--poi-surface-muted)", borderBottom: "1px solid var(--poi-border)", color: "var(--poi-text-muted)" }}>
+              <th style={thStyle}>Rule</th>
+              <th style={thStyle}>Mandate rule</th>
+              <th style={thStyle}>Cart actual</th>
               <th style={thStyle}>Status</th>
-              <th style={thStyle}>Reason Code</th>
+              <th style={thStyle}>Reason code</th>
               <th style={thStyle}>Explanation</th>
             </tr>
           </thead>
           <tbody>
             {displayedChecks.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#8b949e", padding: 24 }}>
+                <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "var(--poi-text-muted)", padding: 24 }}>
                   No automated mandate constraint checks available for this transaction.
                 </td>
               </tr>
@@ -374,13 +375,13 @@ export function DisputeDetailView({
                   <tr
                     key={check.id}
                     style={{
-                      borderBottom: "1px solid #21262d",
-                      background: isFail ? "rgba(248, 81, 73, 0.08)" : "transparent",
+                      borderBottom: "1px solid var(--poi-surface-muted)",
+                      background: isFail ? "var(--poi-danger-bg)" : "transparent",
                     }}
                   >
-                    <td style={{ ...tdStyle, fontWeight: 600, color: isFail ? "#f87171" : "#f0f6fc" }}>{check.name}</td>
-                    <td style={{ ...tdStyle, fontFamily: "monospace", color: "#c9d1d9" }}>{check.mandateRule}</td>
-                    <td style={{ ...tdStyle, fontFamily: "monospace", color: isFail ? "#f85149" : "#c9d1d9" }}>{check.cartActual}</td>
+                    <td style={{ ...tdStyle, fontWeight: 600, color: isFail ? "var(--poi-danger)" : "var(--poi-heading)" }}>{check.name}</td>
+                    <td style={{ ...tdStyle, fontFamily: "monospace", color: "var(--poi-text)" }}>{check.mandateRule}</td>
+                    <td style={{ ...tdStyle, fontFamily: "monospace", color: isFail ? "var(--poi-danger)" : "var(--poi-text)" }}>{check.cartActual}</td>
                     <td style={tdStyle}>
                       <span
                         style={{
@@ -388,9 +389,9 @@ export function DisputeDetailView({
                           borderRadius: 4,
                           fontSize: 11,
                           fontWeight: 600,
-                          background: isFail ? "rgba(248, 81, 73, 0.2)" : "rgba(16, 185, 129, 0.2)",
-                          color: isFail ? "#f85149" : "#34d399",
-                          border: isFail ? "1px solid rgba(248, 81, 73, 0.4)" : "1px solid rgba(16, 185, 129, 0.4)",
+                          background: isFail ? "var(--poi-danger-bg)" : "var(--poi-success-bg)",
+                          color: isFail ? "var(--poi-danger)" : "var(--poi-success)",
+                          border: isFail ? "1px solid var(--poi-danger-border)" : "1px solid var(--poi-success-border)",
                         }}
                       >
                         {check.status === "FAIL" ? "❌ FAIL" : "✅ PASS"}
@@ -398,14 +399,14 @@ export function DisputeDetailView({
                     </td>
                     <td style={tdStyle}>
                       {check.reasonCode ? (
-                        <span style={{ ...codeBadgeStyle, color: "#f85149", borderColor: "rgba(248, 81, 73, 0.4)" }}>
+                        <span style={{ ...codeBadgeStyle, color: "var(--poi-danger)", borderColor: "var(--poi-danger-border)" }}>
                           {check.reasonCode}
                         </span>
                       ) : (
-                        <span style={{ color: "#484f58" }}>—</span>
+                        <span style={{ color: "var(--poi-text-subtle)" }}>—</span>
                       )}
                     </td>
-                    <td style={{ ...tdStyle, color: "#8b949e", fontSize: 12 }}>{check.explanation}</td>
+                    <td style={{ ...tdStyle, color: "var(--poi-text-muted)", fontSize: 12 }}>{check.explanation}</td>
                   </tr>
                 );
               })
@@ -418,26 +419,26 @@ export function DisputeDetailView({
       <div style={cardStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           <span style={{ fontSize: 16 }}>🤖</span>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f0f6fc" }}>
-            Dispute Copilot Recommendation & Classification
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
+            Copilot recommendation and classification
           </h2>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           {/* Classification */}
-          <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 6, padding: 14 }}>
-            <div style={kpiLabelStyle}>Classification Class</div>
+          <div style={{ background: "var(--poi-bg)", border: "1px solid var(--poi-border)", borderRadius: 6, padding: 14 }}>
+            <div style={kpiLabelStyle}>Classification</div>
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ ...codeBadgeStyle, fontSize: 13, padding: "4px 8px" }}>
                 {dispute.classificationInfo.disputeClass}
               </span>
-              <span style={{ fontSize: 12, color: "#8b949e" }}>
+              <span style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
                 Confidence: {(dispute.classificationInfo.confidence * 100).toFixed(0)}%
               </span>
             </div>
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, color: "#8b949e", fontWeight: 600, textTransform: "uppercase" }}>Key Findings</div>
-              <ul style={{ margin: "6px 0 0 0", paddingLeft: 18, fontSize: 13, color: "#c9d1d9" }}>
+              <div style={{ fontSize: 11, color: "var(--poi-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Key findings</div>
+              <ul style={{ margin: "6px 0 0 0", paddingLeft: 18, fontSize: 13, color: "var(--poi-text)" }}>
                 {dispute.classificationInfo.reasons.map((r, i) => (
                   <li key={i}>{r.text}</li>
                 ))}
@@ -446,16 +447,16 @@ export function DisputeDetailView({
           </div>
 
           {/* Recommendation */}
-          <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 6, padding: 14 }}>
-            <div style={kpiLabelStyle}>Recommended Action</div>
+          <div style={{ background: "var(--poi-bg)", border: "1px solid var(--poi-border)", borderRadius: 6, padding: 14 }}>
+            <div style={kpiLabelStyle}>Recommended action</div>
             <div style={{ marginTop: 8 }}>
               <span style={decisionBadgeStyle(dispute.decision)}>
                 ACTION: {dispute.classificationInfo.recommendedAction}
               </span>
             </div>
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, color: "#8b949e", fontWeight: 600, textTransform: "uppercase" }}>Evidence Plan</div>
-              <ul style={{ margin: "6px 0 0 0", paddingLeft: 18, fontSize: 13, color: "#c9d1d9" }}>
+              <div style={{ fontSize: 11, color: "var(--poi-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Evidence plan</div>
+              <ul style={{ margin: "6px 0 0 0", paddingLeft: 18, fontSize: 13, color: "var(--poi-text)" }}>
                 {dispute.classificationInfo.evidencePlan.map((step, i) => (
                   <li key={i}>{step}</li>
                 ))}
@@ -470,12 +471,12 @@ export function DisputeDetailView({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 16 }}>📑</span>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#f0f6fc" }}>
-              Evidence Package & Operator Actions
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "var(--poi-heading)" }}>
+              Evidence package and operator actions
             </h2>
           </div>
           {dispute.evidenceDraftInfo && (
-            <span style={{ fontFamily: "monospace", fontSize: 11, color: "#8b949e" }}>
+            <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--poi-text-muted)" }}>
               Hash: {dispute.evidenceDraftInfo.attestationHash.slice(0, 16)}...
             </span>
           )}
@@ -485,28 +486,28 @@ export function DisputeDetailView({
           <div>
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
               {/* Draft Content */}
-              <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 6, padding: 14 }}>
-                <div style={{ ...kpiLabelStyle, marginBottom: 6 }}>Cover Note for PayPal Reviewer</div>
-                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "#c9d1d9" }}>
+              <div style={{ background: "var(--poi-bg)", border: "1px solid var(--poi-border)", borderRadius: 6, padding: 14 }}>
+                <div style={{ ...kpiLabelStyle, marginBottom: 6 }}>Cover note for the PayPal reviewer</div>
+                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--poi-text)" }}>
                   {dispute.evidenceDraftInfo.coverNote}
                 </p>
 
-                <div style={{ ...kpiLabelStyle, marginTop: 14, marginBottom: 8 }}>Attestation Sections</div>
+                <div style={{ ...kpiLabelStyle, marginTop: 14, marginBottom: 8 }}>Attestation sections</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {dispute.evidenceDraftInfo.attestationSections.map((sec, i) => (
-                    <div key={i} style={{ fontSize: 12, borderLeft: "2px solid #30363d", paddingLeft: 8 }}>
-                      <strong style={{ color: "#f0f6fc" }}>{sec.heading}</strong>
-                      <div style={{ color: "#8b949e", marginTop: 2 }}>{sec.body}</div>
+                    <div key={i} style={{ fontSize: 12, borderLeft: "2px solid var(--poi-border)", paddingLeft: 8 }}>
+                      <strong style={{ color: "var(--poi-heading)" }}>{sec.heading}</strong>
+                      <div style={{ color: "var(--poi-text-muted)", marginTop: 2 }}>{sec.body}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* PDF Preview Trigger & Pointer */}
-              <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 6, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div style={{ background: "var(--poi-bg)", border: "1px solid var(--poi-border)", borderRadius: 6, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ ...kpiLabelStyle, marginBottom: 8 }}>Deterministic Evidence PDF</div>
-                  <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 12 }}>
+                  <div style={{ ...kpiLabelStyle, marginBottom: 8 }}>Deterministic evidence PDF</div>
+                  <div style={{ fontSize: 12, color: "var(--poi-text-muted)", marginBottom: 12 }}>
                     Rendered from verifiable audit log. Submit is locked until previewed per operator spec.
                   </div>
 
@@ -520,7 +521,7 @@ export function DisputeDetailView({
                       width: "100%",
                       padding: "8px 12px",
                       borderRadius: 6,
-                      background: hasBeenPreviewed ? "#1f6feb" : "#238636",
+                      background: hasBeenPreviewed ? "var(--poi-blue)" : "var(--poi-blue)",
                       color: "#fff",
                       border: "none",
                       fontWeight: 600,
@@ -528,19 +529,19 @@ export function DisputeDetailView({
                       cursor: "pointer",
                     }}
                   >
-                    📄 {hasBeenPreviewed ? "Re-open PDF Preview" : "Preview Evidence PDF"}
+                    📄 {hasBeenPreviewed ? "Re-open PDF Preview" : "Preview evidence PDF"}
                   </button>
 
                   {hasBeenPreviewed && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: "#34d399", textAlign: "center" }}>
+                    <div style={{ marginTop: 8, fontSize: 11, color: "var(--poi-success)", textAlign: "center" }}>
                       ✓ PDF preview verified
                     </div>
                   )}
                 </div>
 
-                <div style={{ marginTop: 16, fontSize: 11, color: "#8b949e", borderTop: "1px solid #21262d", paddingTop: 8 }}>
+                <div style={{ marginTop: 16, fontSize: 11, color: "var(--poi-text-muted)", borderTop: "1px solid var(--poi-surface-muted)", paddingTop: 8 }}>
                   <div>custom_id:</div>
-                  <div style={{ fontFamily: "monospace", color: "#c9d1d9", wordBreak: "break-all" }}>
+                  <div style={{ fontFamily: "monospace", color: "var(--poi-text)", wordBreak: "break-all" }}>
                     {dispute.evidenceDraftInfo.customId}
                   </div>
                 </div>
@@ -554,10 +555,10 @@ export function DisputeDetailView({
                 style={{
                   marginBottom: 12,
                   padding: "10px 14px",
-                  background: "rgba(248, 81, 73, 0.15)",
-                  border: "1px solid rgba(248, 81, 73, 0.4)",
+                  background: "var(--poi-danger-bg)",
+                  border: "1px solid var(--poi-danger-border)",
                   borderRadius: 6,
-                  color: "#f85149",
+                  color: "var(--poi-danger)",
                   fontSize: 13,
                   display: "flex",
                   alignItems: "center",
@@ -569,7 +570,7 @@ export function DisputeDetailView({
                 <button
                   type="button"
                   onClick={() => setActionError(null)}
-                  style={{ background: "none", border: "none", color: "#f85149", cursor: "pointer", fontSize: 13 }}
+                  style={{ background: "none", border: "none", color: "var(--poi-danger)", cursor: "pointer", fontSize: 13 }}
                 >
                   Dismiss
                 </button>
@@ -577,9 +578,9 @@ export function DisputeDetailView({
             )}
 
             {/* Operator Submission Action */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center", borderTop: "1px solid #30363d", paddingTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center", borderTop: "1px solid var(--poi-border)", paddingTop: 16 }}>
               {!hasBeenPreviewed && (
-                <span style={{ fontSize: 12, color: "#8b949e" }}>
+                <span style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
                   ⚠️ Open PDF preview above to unlock Submit Evidence
                 </span>
               )}
@@ -589,19 +590,19 @@ export function DisputeDetailView({
                 onClick={handleSubmitEvidence}
                 style={{
                   ...pillBtnStyle,
-                  background: submitted ? "#21262d" : hasBeenPreviewed && !submitting ? "#238636" : "#21262d",
-                  color: submitted ? "#8b949e" : hasBeenPreviewed && !submitting ? "#ffffff" : "#484f58",
-                  borderColor: hasBeenPreviewed && !submitted && !submitting ? "#2ea043" : "#30363d",
+                  background: submitted ? "var(--poi-surface-muted)" : hasBeenPreviewed && !submitting ? "var(--poi-blue)" : "var(--poi-surface-muted)",
+                  color: submitted ? "var(--poi-text-muted)" : hasBeenPreviewed && !submitting ? "#ffffff" : "var(--poi-text-subtle)",
+                  borderColor: hasBeenPreviewed && !submitted && !submitting ? "var(--poi-blue)" : "var(--poi-border)",
                   cursor: hasBeenPreviewed && !submitted && !submitting ? "pointer" : "not-allowed",
                   fontSize: 13,
                   padding: "8px 18px",
                 }}
               >
                 {submitted
-                  ? "✓ Evidence Submitted to PayPal"
+                  ? "✓ Evidence submitted to PayPal"
                   : submitting
                     ? "Submitting to PayPal..."
-                    : "Submit Evidence to PayPal"}
+                    : "Submit evidence to PayPal"}
               </button>
             </div>
           </div>
@@ -609,17 +610,17 @@ export function DisputeDetailView({
           <div>
             <div
               style={{
-                background: "rgba(245, 158, 11, 0.08)",
-                border: "1px solid rgba(245, 158, 11, 0.3)",
+                background: "var(--poi-warning-bg)",
+                border: "1px solid var(--poi-warning-border)",
                 borderRadius: 6,
                 padding: 16,
                 marginBottom: 16,
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#fbbf24", marginBottom: 6 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--poi-warning)", marginBottom: 6 }}>
                 Concession Recommended (Evidence Drafting Skipped)
               </div>
-              <p style={{ margin: 0, fontSize: 13, color: "#c9d1d9", lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--poi-text)", lineHeight: 1.5 }}>
                 The autonomous buyer agent overreached mandate constraints (budget ceiling and/or item attributes).
                 Submitting evidence would contradict the verified mandate. Accept the claim to promptly issue a refund
                 of {formatMoney(dispute.amount)} to the buyer and charge the agent platform ({dispute.agentPlatform}).
@@ -633,10 +634,10 @@ export function DisputeDetailView({
                 style={{
                   marginBottom: 12,
                   padding: "10px 14px",
-                  background: "rgba(248, 81, 73, 0.15)",
-                  border: "1px solid rgba(248, 81, 73, 0.4)",
+                  background: "var(--poi-danger-bg)",
+                  border: "1px solid var(--poi-danger-border)",
                   borderRadius: 6,
-                  color: "#f85149",
+                  color: "var(--poi-danger)",
                   fontSize: 13,
                   display: "flex",
                   alignItems: "center",
@@ -648,32 +649,32 @@ export function DisputeDetailView({
                 <button
                   type="button"
                   onClick={() => setActionError(null)}
-                  style={{ background: "none", border: "none", color: "#f85149", cursor: "pointer", fontSize: 13 }}
+                  style={{ background: "none", border: "none", color: "var(--poi-danger)", cursor: "pointer", fontSize: 13 }}
                 >
                   Dismiss
                 </button>
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, borderTop: "1px solid #30363d", paddingTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, borderTop: "1px solid var(--poi-border)", paddingTop: 16 }}>
               <button
                 type="button"
                 disabled={conceding || conceded}
                 onClick={handleAcceptClaim}
                 style={{
                   ...pillBtnStyle,
-                  background: conceded ? "#21262d" : conceding ? "#21262d" : "#d97706",
-                  color: conceded ? "#8b949e" : conceding ? "#484f58" : "#ffffff",
-                  borderColor: conceded || conceding ? "#30363d" : "#f59e0b",
+                  background: conceded ? "var(--poi-surface-muted)" : conceding ? "var(--poi-surface-muted)" : "var(--poi-warning)",
+                  color: conceded ? "var(--poi-text-muted)" : conceding ? "var(--poi-text-subtle)" : "#ffffff",
+                  borderColor: conceded || conceding ? "var(--poi-border)" : "var(--poi-warning)",
                   cursor: conceded || conceding ? "not-allowed" : "pointer",
                   fontSize: 13,
                   padding: "8px 18px",
                 }}
               >
                 {conceded
-                  ? "✓ Claim Conceded & Refund Issued"
+                  ? "✓ Claim conceded and refund issued"
                   : conceding
-                    ? "Issuing Refund..."
+                    ? "Issuing refund..."
                     : `Accept Claim & Refund (${formatMoney(dispute.amount)})`}
               </button>
             </div>
@@ -688,7 +689,7 @@ export function DisputeDetailView({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 18 }}>📄</span>
-                <h3 style={{ margin: 0, fontSize: 16, color: "#f0f6fc" }}>
+                <h3 style={{ margin: 0, fontSize: 16, color: "var(--poi-heading)" }}>
                   Evidence Attestation PDF Preview · {dispute.id}
                 </h3>
               </div>
@@ -699,33 +700,33 @@ export function DisputeDetailView({
 
             <div
               style={{
-                background: "#0d1117",
-                border: "1px solid #30363d",
+                background: "var(--poi-bg)",
+                border: "1px solid var(--poi-border)",
                 borderRadius: 6,
                 padding: 20,
                 maxHeight: "65vh",
                 overflowY: "auto",
                 fontFamily: "monospace",
                 fontSize: 12,
-                color: "#c9d1d9",
+                color: "var(--poi-text)",
                 lineHeight: 1.6,
               }}
             >
-              <div style={{ borderBottom: "1px solid #30363d", paddingBottom: 10, marginBottom: 12 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#58a6ff" }}>PROOF OF INTENT · DISPUTE EVIDENCE ATTESTATION</div>
+              <div style={{ borderBottom: "1px solid var(--poi-border)", paddingBottom: 10, marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--poi-blue)" }}>PROOF OF INTENT · DISPUTE EVIDENCE ATTESTATION</div>
                 <div>Dispute ID: {dispute.id} · PayPal Order ID: {dispute.paypalOrderId}</div>
                 <div>Generated: {dispute.evidenceDraftInfo?.generatedAt ?? dispute.createdAt}</div>
               </div>
 
               <div style={{ marginBottom: 14 }}>
-                <div style={{ color: "#8b949e" }}>[1] SHOPPER VERIFIABLE INTENT MANDATE</div>
+                <div style={{ color: "var(--poi-text-muted)" }}>[1] SHOPPER VERIFIABLE INTENT MANDATE</div>
                 <div>Mandate ID: {dispute.mandateId}</div>
                 <div>Description: &ldquo;{dispute.shopperIntentText}&rdquo;</div>
                 <div>Budget Limit: {formatMoney(dispute.constraints.amountMax)}</div>
               </div>
 
               <div style={{ marginBottom: 14 }}>
-                <div style={{ color: "#8b949e" }}>[2] FULFILLED CART MANDATE</div>
+                <div style={{ color: "var(--poi-text-muted)" }}>[2] FULFILLED CART MANDATE</div>
                 <div>Merchant: {dispute.cartMerchantName}</div>
                 <div>Total Charged: {formatMoney(dispute.cartTotal)}</div>
                 {dispute.cartLines.map((l) => (
@@ -736,7 +737,7 @@ export function DisputeDetailView({
               </div>
 
               <div style={{ marginBottom: 14 }}>
-                <div style={{ color: "#8b949e" }}>[3] POLICY ENGINE EVALUATION</div>
+                <div style={{ color: "var(--poi-text-muted)" }}>[3] POLICY ENGINE EVALUATION</div>
                 <div>
                   Checkout Verdict: {dispute.checkoutVerdict ?? (dispute.decision === "defend" ? "APPROVE" : "REJECT")}
                 </div>
@@ -747,13 +748,13 @@ export function DisputeDetailView({
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
-              <span style={{ fontSize: 12, color: "#34d399" }}>
+              <span style={{ fontSize: 12, color: "var(--poi-success)" }}>
                 ✓ Operator opened PDF preview (Submit evidence unlocked)
               </span>
               <button
                 type="button"
                 onClick={() => setPdfModalOpen(false)}
-                style={{ ...pillBtnStyle, background: "#21262d", color: "#f0f6fc" }}
+                style={{ ...pillBtnStyle, background: "var(--poi-surface-muted)", color: "var(--poi-heading)" }}
               >
                 Close Preview
               </button>
@@ -767,29 +768,16 @@ export function DisputeDetailView({
 
 // Styling Constants matching dark theme
 const cardStyle: React.CSSProperties = {
-  background: "#161b22",
-  border: "1px solid #30363d",
-  borderRadius: 8,
+  ...card,
   padding: 20,
 };
 
 const kpiLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "#8b949e",
+  ...kpiLabel,
 };
 
 const pillBtnStyle: React.CSSProperties = {
-  padding: "5px 14px",
-  borderRadius: 20,
-  fontSize: 12,
-  fontWeight: 500,
-  border: "1px solid #30363d",
-  background: "#21262d",
-  color: "#c9d1d9",
-  cursor: "pointer",
+  ...pillButton,
 };
 
 const thStyle: React.CSSProperties = {
@@ -810,9 +798,9 @@ const platformBadgeStyle: React.CSSProperties = {
   borderRadius: 4,
   fontSize: 12,
   fontWeight: 500,
-  background: "#21262d",
-  color: "#c9d1d9",
-  border: "1px solid #30363d",
+  background: "var(--poi-surface-muted)",
+  color: "var(--poi-text)",
+  border: "1px solid var(--poi-border)",
 };
 
 const decisionBadgeStyle = (dec: string): React.CSSProperties => {
@@ -824,9 +812,9 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
       borderRadius: 4,
       fontSize: 11,
       fontWeight: 600,
-      background: "rgba(16, 185, 129, 0.15)",
-      color: "#34d399",
-      border: "1px solid rgba(16, 185, 129, 0.4)",
+      background: "var(--poi-success-bg)",
+      color: "var(--poi-success)",
+      border: "1px solid var(--poi-success-border)",
     };
   }
   if (dec === "concede") {
@@ -837,9 +825,9 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
       borderRadius: 4,
       fontSize: 11,
       fontWeight: 600,
-      background: "rgba(245, 158, 11, 0.15)",
-      color: "#fbbf24",
-      border: "1px solid rgba(245, 158, 11, 0.4)",
+      background: "var(--poi-warning-bg)",
+      color: "var(--poi-warning)",
+      border: "1px solid var(--poi-warning-border)",
     };
   }
   return {
@@ -849,9 +837,9 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
     borderRadius: 4,
     fontSize: 11,
     fontWeight: 600,
-    background: "rgba(100, 116, 139, 0.15)",
-    color: "#94a3b8",
-    border: "1px solid rgba(100, 116, 139, 0.4)",
+    background: "var(--poi-surface-muted)",
+    color: "var(--poi-text-muted)",
+    border: "1px solid var(--poi-border)",
   };
 };
 
@@ -863,9 +851,9 @@ const statusBadgeStyle = (status: string): React.CSSProperties => {
     borderRadius: 4,
     fontSize: 10,
     fontWeight: 600,
-    background: isActionRequired ? "rgba(248, 81, 73, 0.15)" : "#21262d",
-    color: isActionRequired ? "#f85149" : "#8b949e",
-    border: isActionRequired ? "1px solid rgba(248, 81, 73, 0.3)" : "1px solid #30363d",
+    background: isActionRequired ? "var(--poi-danger-bg)" : "var(--poi-surface-muted)",
+    color: isActionRequired ? "var(--poi-danger)" : "var(--poi-text-muted)",
+    border: isActionRequired ? "1px solid var(--poi-danger-border)" : "1px solid var(--poi-border)",
   };
 };
 
@@ -874,9 +862,9 @@ const codeBadgeStyle: React.CSSProperties = {
   fontSize: 11,
   padding: "2px 6px",
   borderRadius: 3,
-  background: "#0d1117",
-  border: "1px solid #30363d",
-  color: "#c9d1d9",
+  background: "var(--poi-bg)",
+  border: "1px solid var(--poi-border)",
+  color: "var(--poi-text)",
 };
 
 const modalOverlayStyle: React.CSSProperties = {
@@ -885,7 +873,7 @@ const modalOverlayStyle: React.CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  background: "rgba(0, 0, 0, 0.75)",
+  background: "var(--poi-overlay)",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
@@ -894,20 +882,20 @@ const modalOverlayStyle: React.CSSProperties = {
 };
 
 const modalContentStyle: React.CSSProperties = {
-  background: "#161b22",
-  border: "1px solid #30363d",
+  background: "var(--poi-surface)",
+  border: "1px solid var(--poi-border)",
   borderRadius: 8,
   width: "100%",
   maxWidth: 720,
   padding: 24,
-  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+  boxShadow: "var(--poi-shadow-lg)",
 };
 
 const closeBtnStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   fontSize: 16,
-  color: "#8b949e",
+  color: "var(--poi-text-muted)",
   cursor: "pointer",
   padding: 4,
 };

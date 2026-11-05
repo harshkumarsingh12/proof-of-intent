@@ -2,7 +2,7 @@ import Link from "next/link";
 import { DisputeQueue } from "./DisputeQueue";
 
 export const metadata = {
-  title: "Dispute Queue · Proof of Intent Operations",
+  title: "Dispute queue · Proof of Intent operations",
   description: "Dispute resolution queue sorted by response deadline with defend/concede copilot decisions",
 };
 
@@ -17,7 +17,7 @@ export default function DisputesPage() {
           alignItems: "center",
           marginBottom: 24,
           paddingBottom: 16,
-          borderBottom: "1px solid #30363d",
+          borderBottom: "1px solid var(--poi-border)",
         }}
       >
         <div>
@@ -25,21 +25,21 @@ export default function DisputesPage() {
             <Link
               href="/"
               style={{
-                color: "#58a6ff",
+                color: "var(--poi-blue)",
                 textDecoration: "none",
                 fontSize: 13,
                 fontWeight: 500,
               }}
             >
-              ← Back to Operations Home
+              ← Back to overview
             </Link>
-            <span style={{ color: "#484f58" }}>|</span>
-            <span style={{ color: "#8b949e", fontSize: 13 }}>apps/dashboard · AG Studio</span>
+            <span style={{ color: "var(--poi-text-subtle)" }}>|</span>
+            <span style={{ color: "var(--poi-text-muted)", fontSize: 13 }}>apps/dashboard · AG Studio</span>
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: "10px 0 4px 0", color: "#f0f6fc" }}>
-            Dispute Queue
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: "10px 0 4px 0", color: "var(--poi-heading)" }}>
+            Dispute queue
           </h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#8b949e" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--poi-text-muted)" }}>
             Disputes from the merchant API, sorted by seller response deadline with copilot defend/concede
             recommendations.
           </p>
@@ -51,9 +51,9 @@ export default function DisputesPage() {
               padding: "4px 10px",
               borderRadius: 6,
               fontSize: 12,
-              background: "#161b22",
-              border: "1px solid #30363d",
-              color: "#8b949e",
+              background: "var(--poi-surface)",
+              border: "1px solid var(--poi-border)",
+              color: "var(--poi-text-muted)",
               fontFamily: "monospace",
             }}
           >
