@@ -41,7 +41,7 @@ evidence drafting, operator questions), plus the AG Studio Agent Framework in th
 
 | Path | What you need |
 |---|---|
-| **Hosted demo** | Links and demo logins are in the Devpost testing instructions. |
+| **Hosted demo** | [Shop](https://poi-buyer.iotkiit.in) · [Operations dashboard](https://poi-dashboard.iotkiit.in) · [API health](https://poi-api.iotkiit.in/healthz). Demo logins are in the Devpost testing instructions. |
 | **Your own sandbox** | Judge sandbox shopper accounts are in the Devpost testing instructions. |
 | **Run locally, zero credentials** | Docker. `PAYPAL_MODE=mock` and `AI_MODE=replay` are the defaults. |
 
@@ -63,7 +63,7 @@ Developing without Docker: Node 20+, `corepack enable`, then `pnpm install && pn
 apps/api          merchant service: checkout, verification, webhooks, disputes, analytics
 apps/worker       dispute copilot pipeline, evidence PDF, Agent Toolkit
 apps/buyer        shopper app and buyer agent
-apps/dashboard    operations dashboard on AG Studio
+apps/dashboard    operations dashboard: home, dispute queue and detail, analytics
 packages/contracts  shared schemas and reason codes (the frozen contract)
 packages/mandates   canonicalization, hashing, ES256 signatures
 packages/policy-engine  deterministic hard rules

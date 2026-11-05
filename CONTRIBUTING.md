@@ -13,7 +13,7 @@ The primary owner decides and reviews; the backup can merge if the primary is un
 | 2 | PayPal client (Orders, Vault, Webhooks, Disputes REST) | `packages/paypal/` | **Harsh** | Sristee |
 | 3 | Merchant API routes | `apps/api/` | **Harsh** | Sristee |
 | 4 | Database, migrations, audit log | `packages/db/` | **Harsh** | Sikruti |
-| 5 | Team server, Compose, HTTPS, monitoring | `docker-compose.yml`, `Dockerfile`, `Caddyfile` | **Harsh** | Sristee |
+| 5 | Team server (Dokploy), Compose, HTTPS, monitoring | `docker-compose.yml`, `Dockerfile`, `Caddyfile` | **Harsh** | Sristee |
 | 6 | Shared contracts and reason codes | `packages/contracts/` | **Sristee** | Harsh |
 | 7 | Mandate crypto (JCS, hashing, JWS, key registry) | `packages/mandates/` | **Sristee** | Harsh |
 | 8 | Policy engine | `packages/policy-engine/` | **Sristee** | Harsh |
