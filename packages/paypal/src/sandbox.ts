@@ -153,6 +153,12 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
         body: form,
       });
     },
+
+    async acceptClaim(disputeId, note) {
+      await call("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/accept-claim`, {
+        body: JSON.stringify({ note }),
+      });
+    },
   };
 }
 

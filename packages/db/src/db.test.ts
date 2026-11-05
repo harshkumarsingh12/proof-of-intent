@@ -39,7 +39,7 @@ describe.runIf(ADMIN_URL)("db", () => {
     const other = createDb(url.toString());
     const [a, b] = await Promise.all([db.migrate(), other.migrate()]);
     await other.close();
-    expect([...a, ...b]).toEqual(["0001_init.sql"]);
+    expect([...a, ...b]).toEqual(["0001_init.sql", "0002_dispute_copilot.sql"]);
     expect(await db.migrate()).toEqual([]);
   });
 
@@ -183,6 +183,7 @@ describe.runIf(ADMIN_URL)("db", () => {
       paypalOrderId: "PP-RT", // kept from the earlier update
       captureId: "CAP-RT",
       capturedAt: "2026-11-02T10:05:00.000Z",
+      createdAt: expect.any(String),
     });
     expect(await db.mandateLedger("m-rt")).toEqual({
       capturedTotal: 7400,
@@ -201,6 +202,76 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect((await raw.query("select outcome, reasons from verdicts where order_id = 'ord_rt'")).rows).toEqual(
       [{ outcome: "APPROVE", reasons: ["A"] }],
     );
+    expect(await db.orderVerdict("ord_rt")).toEqual({
+      intentMandateId: "m-rt",
+      cartId: "cart-rt",
+      orderId: "ord_rt",
+      outcome: "APPROVE",
+      reasons: ["A"],
+    });
+    expect(await db.orderVerdict("ord_missing")).toBeNull();
+    expect((await db.listOrders({ limit: 10, offset: 0 })).map((o) => o.id)).toContain("ord_rt");
+    expect((await db.listVerdicts({ limit: 1, offset: 0 }))[0]).toMatchObject({
+      orderId: "ord_rt",
+      id: expect.any(Number),
+    });
+
+    // A second order under the same mandate: its checkout only saw the first capture, not its own.
+    await db.createOrder({ ...order, id: "ord_rt2" });
+    await db.updateOrder("ord_rt2", {
+      status: "CAPTURED",
+      captureId: "CAP-RT2",
+      capturedAt: new Date().toISOString(),
+    });
+    expect((await db.mandateLedger("m-rt", "ord_rt2")).capturedTotal).toBe(7400);
+    expect((await db.mandateLedger("m-rt")).capturedTotal).toBe(14800);
+  });
+
+  test("dispute events form the worker's inbox until marked processed", async () => {
+    await db.recordWebhookEvent({
+      eventId: "WH-D1",
+      eventType: "CUSTOMER.DISPUTE.CREATED",
+      payload: { a: 1 },
+    });
+    await db.recordWebhookEvent({ eventId: "WH-C1", eventType: "PAYMENT.CAPTURE.COMPLETED", payload: {} });
+    const pending = await db.pendingDisputeEvents(10);
+    expect(pending.map((e) => e.eventId)).toContain("WH-D1");
+    expect(pending.map((e) => e.eventId)).not.toContain("WH-C1");
+    expect(pending.find((e) => e.eventId === "WH-D1")!.payload).toEqual({ a: 1 });
+    await db.markEventProcessed("WH-D1");
+    expect((await db.pendingDisputeEvents(10)).map((e) => e.eventId)).not.toContain("WH-D1");
+  });
+
+  test("disputes upsert, never regress to an older PayPal version, and list deadline first", async () => {
+    const base = {
+      id: "PP-D-RT",
+      reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+      status: "OPEN",
+      amountValue: 7400,
+      currency: "USD",
+      sellerResponseDueDate: "2026-11-20T00:00:00.000Z",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      paypal: { status: "OPEN" },
+      paypalUpdatedAt: "2026-11-05T01:00:00.000Z",
+      recommendation: { class: "MANDATE_COMPLIANT" },
+      evidencePdf: new Uint8Array([37, 80, 68, 70]),
+      evidenceBundle: { mandate_hash: "x" },
+    };
+    expect(await db.saveDispute(base)).toBe(true);
+    expect(await db.getDispute("PP-D-RT")).toEqual(base);
+
+    const newer = { ...base, status: "UNDER_REVIEW", paypalUpdatedAt: "2026-11-05T02:00:00.000Z" };
+    expect(await db.saveDispute(newer)).toBe(true);
+    expect(await db.saveDispute({ ...base, status: "STALE" })).toBe(false); // older update_time
+    expect((await db.getDispute("PP-D-RT"))!.status).toBe("UNDER_REVIEW");
+
+    await db.saveDispute({ id: "PP-D-SOON", paypal: {}, sellerResponseDueDate: "2026-11-07T00:00:00.000Z" });
+    const list = await db.listDisputes({ limit: 10, offset: 0 });
+    expect(list.map((d) => d.id)).toEqual(["PP-D-SOON", "PP-D-RT"]);
+    expect(list[1]).toMatchObject({ hasEvidencePdf: true, recommendation: { class: "MANDATE_COMPLIANT" } });
+    expect(list[1]).not.toHaveProperty("evidencePdf");
+    expect(list[0]!.hasEvidencePdf).toBe(false);
+    expect(await db.getDispute("PP-D-NONE")).toBeNull();
   });
 
   test("the schema refuses malformed hashes and oversized custom_id", async () => {
