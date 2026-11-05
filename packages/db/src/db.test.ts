@@ -11,7 +11,8 @@ const ADMIN_URL = process.env.DATABASE_URL;
 describe.runIf(ADMIN_URL)("db", () => {
   // A throwaway database per run, so every test starts from an empty schema.
   const name = `poi_test_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-  const url = new URL(ADMIN_URL!);
+  // Vitest still runs a skipped suite's body while collecting, so don't parse a missing URL.
+  const url = new URL(ADMIN_URL ?? "postgres://localhost/unused");
   url.pathname = `/${name}`;
   let db: Db;
   let raw: pg.Pool;
