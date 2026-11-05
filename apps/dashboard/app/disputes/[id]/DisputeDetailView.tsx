@@ -22,6 +22,8 @@ export function DisputeDetailView({
   const [conceding, setConceding] = useState(false);
   const [conceded, setConceded] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Operator override (spec 0005): accept the claim even though the copilot recommends defending. Needs a note.
+  const [overrideNote, setOverrideNote] = useState("");
 
   const handleSubmitEvidence = async () => {
     setSubmitting(true);
@@ -42,12 +44,13 @@ export function DisputeDetailView({
     }
   };
 
-  const handleAcceptClaim = async () => {
+  const handleAcceptClaim = async (note?: string) => {
     setConceding(true);
     setActionError(null);
     try {
       const result = await executeDisputeAction(dispute.id, "accept-claim", {
         amount: dispute.amount,
+        ...(note ? { note } : {}),
       });
       if (result.success) {
         setConceded(true);
@@ -553,6 +556,44 @@ export function DisputeDetailView({
                     : "Submit evidence to PayPal"}
               </button>
             </div>
+
+            {/* Operator override: concede despite a defend recommendation, with the reason on record */}
+            <details style={{ marginTop: 16, borderTop: "1px solid var(--poi-border)", paddingTop: 12 }}>
+              <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--poi-text-muted)" }}>
+                Override: accept the claim instead
+              </summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                <label htmlFor="override-note" style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
+                  Why you are refunding although the mandate verified (sent to PayPal and kept in the audit log)
+                </label>
+                <textarea
+                  id="override-note"
+                  value={overrideNote}
+                  onChange={(e) => setOverrideNote(e.target.value)}
+                  maxLength={2000}
+                  rows={3}
+                  style={{ fontSize: 13, padding: 8, borderRadius: 6, border: "1px solid var(--poi-border)" }}
+                />
+                <button
+                  type="button"
+                  disabled={overrideNote.trim().length < 10 || conceding || conceded || submitted}
+                  onClick={() => handleAcceptClaim(overrideNote.trim())}
+                  style={{
+                    ...pillBtnStyle,
+                    alignSelf: "flex-end",
+                    fontSize: 13,
+                    padding: "8px 18px",
+                    cursor: overrideNote.trim().length < 10 || conceding || conceded || submitted ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {conceded
+                    ? "✓ Claim accepted, refund issued"
+                    : conceding
+                      ? "Accepting claim..."
+                      : `Accept claim & refund (${formatMoney(dispute.amount)})`}
+                </button>
+              </div>
+            </details>
           </div>
         ) : (
           <div>
@@ -608,7 +649,7 @@ export function DisputeDetailView({
               <button
                 type="button"
                 disabled={conceding || conceded}
-                onClick={handleAcceptClaim}
+                onClick={() => handleAcceptClaim()}
                 style={{
                   ...pillBtnStyle,
                   background: conceded ? "var(--poi-surface-muted)" : conceding ? "var(--poi-surface-muted)" : "var(--poi-warning)",

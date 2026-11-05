@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { compliantCart, greyJacketIntent } from "@poi/contracts/fixtures";
 import { canonicalJson, mandateHash } from "@poi/mandates";
@@ -187,7 +188,7 @@ describe("operator actions", () => {
   });
 
   test("provide-evidence sends the stored PDF with the evidence type for the reason", async () => {
-    const { app, paypal } = await setup();
+    const { app, mem, paypal } = await setup();
     expect((await post(app, "/disputes/PP-D-1/actions/provide-evidence")).statusCode).toBe(200);
     expect((paypal as ReturnType<typeof createMockClient>).disputeActions).toEqual([
       {
@@ -198,6 +199,10 @@ describe("operator actions", () => {
         files: ["evidence-PP-D-1.pdf"],
       },
     ]);
+    const sent = mem.audit.find((a) => a.action === "operator.provide-evidence")!.requestBody as {
+      pdfSha256: string;
+    };
+    expect(sent.pdfSha256).toBe(createHash("sha256").update(pdf).digest("hex"));
   });
 
   test("provide-evidence without a package is refused before anything is recorded", async () => {
