@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | In Progress |
 | **Owner** | @harshkumarsingh12 |
 | **Reviewers** | @hoursgotviral-dev |
 | **Milestone** | M0 (mock), M1 (orders, vault, webhooks), M2 (disputes) |

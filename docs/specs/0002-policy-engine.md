@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | In Progress |
 | **Owner** | @srshriv |
 | **Reviewers** | @harshkumarsingh12, @hoursgotviral-dev |
 | **Milestone** | M0 (core), M1 (remaining rules) |
