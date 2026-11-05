@@ -408,7 +408,7 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
               },
               {
                 heading: "2. Cryptographic Attestation",
-                body: `Attestation matches PayPal custom_id pointer (poi:${disputeMandateId}:${pseudoHash.slice(0, 16)}). All ES256 signatures verified against the key registry.`,
+                body: `Demo seed dispute: no signed mandate is on file, so the pointer (poi:${disputeMandateId}:${pseudoHash.slice(0, 16)}) and hash are placeholders and have not been verified.`,
               },
             ],
             buyerMessage: "Order was fulfilled in accordance with your signed mandate.",
