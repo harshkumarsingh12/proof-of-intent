@@ -5,6 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
+    "@paypal/agent-toolkit": "1.11.0",
     "@poi/contracts": "workspace:*"
   },
   "devDependencies": {

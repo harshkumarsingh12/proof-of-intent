@@ -4,7 +4,7 @@
  * Simplification: every order counts as approved by the shopper, since there's no buyer to click.
  */
 import { randomBytes } from "node:crypto";
-import { PayPalError, type CreatedOrder, type PayPalClient } from "./index";
+import { PayPalError, type CreatedOrder, type PayPalClient, type PayPalDispute } from "./index";
 import { evidenceForm, orderBody } from "./sandbox";
 
 /** Mock mode accepts a webhook delivery only when it carries this transmission signature. */
@@ -13,11 +13,14 @@ export const MOCK_WEBHOOK_SIGNATURE = "mock-signature";
 export type DisputeAction =
   | { kind: "provide-evidence"; disputeId: string; evidenceType: string; notes: string; files: string[] }
   | { kind: "send-message"; disputeId: string; message: string }
-  | { kind: "accept-claim"; disputeId: string; note: string };
+  | { kind: "accept-claim"; disputeId: string; note: string }
+  | { kind: "add-tracking"; captureId: string; trackingNumber: string; carrier: string; status: string };
 
 export interface MockPayPalClient extends PayPalClient {
   /** Every dispute action the mock received, oldest first. Lets tests prove what was (not) sent. */
   readonly disputeActions: readonly DisputeAction[];
+  /** Mock mode has no buyers to open disputes; tests and demos add them here. */
+  seedDispute(dispute: PayPalDispute): void;
 }
 
 /** PayPal-shaped ids: 17 uppercase alphanumerics. */
@@ -33,6 +36,7 @@ export function createMockClient(): MockPayPalClient {
   const orders = new Map<string, { status: string; authorizationId?: string }>();
   const authorizations = new Map<string, "CREATED" | "CAPTURED" | "VOIDED">();
   const disputeActions: DisputeAction[] = [];
+  const disputes = new Map<string, PayPalDispute>();
 
   const notFound = (what: string, id: string) =>
     new PayPalError(
@@ -45,6 +49,7 @@ export function createMockClient(): MockPayPalClient {
 
   return {
     disputeActions,
+    seedDispute: (d) => void disputes.set(d.dispute_id, d),
 
     async createOrder(input) {
       orderBody(input); // same validation as the sandbox: one currency, totals add up
@@ -119,6 +124,24 @@ export function createMockClient(): MockPayPalClient {
 
     async acceptClaim(disputeId, note) {
       disputeActions.push({ kind: "accept-claim", disputeId, note });
+    },
+
+    async getDispute(disputeId) {
+      const d = disputes.get(disputeId);
+      if (!d) throw notFound("dispute", disputeId);
+      return d;
+    },
+
+    async listDisputes() {
+      return [...disputes.values()].map(({ dispute_id, update_time, status }) => ({
+        dispute_id,
+        update_time,
+        status,
+      }));
+    },
+
+    async addTracking(input) {
+      disputeActions.push({ kind: "add-tracking", status: "SHIPPED", ...input });
     },
   };
 }

@@ -62,6 +62,41 @@ export function evidenceTypeFor(reason: string): EvidenceType {
   return "OTHER"; // NOT_AS_DESCRIBED, UNAUTHORISED and the rest: the mandate attestation
 }
 
+/** The parts of a PayPal dispute object we read (GET /v1/customer/disputes/{id} and dispute webhooks). */
+export interface PayPalDispute {
+  dispute_id: string;
+  create_time?: string;
+  update_time?: string;
+  status?: string;
+  reason?: string;
+  dispute_amount?: { currency_code: string; value: string };
+  seller_response_due_date?: string;
+  disputed_transactions?: {
+    seller_transaction_id?: string;
+    /** Our order id: we send it to PayPal as invoice_id. */
+    invoice_number?: string;
+    /** The mandate pointer PayPal holds for the order (our custom_id). */
+    custom?: string;
+    items?: { notes?: string }[];
+  }[];
+}
+
+/** One row of GET /v1/customer/disputes. */
+export interface DisputeListItem {
+  dispute_id: string;
+  update_time?: string;
+  status?: string;
+}
+
+/** Shipment tracking for a captured payment: the proof of fulfillment for "not received" disputes. */
+export interface TrackingInput {
+  captureId: string;
+  trackingNumber: string;
+  /** PayPal carrier code, e.g. USPS, UPS, FEDEX, DHL. */
+  carrier: string;
+  status?: "SHIPPED" | "ON_HOLD" | "DELIVERED" | "CANCELLED";
+}
+
 export interface PayPalClient {
   createOrder(input: CreateOrderInput): Promise<CreatedOrder>;
   /** Authorizes an order the shopper approved. */
@@ -73,8 +108,14 @@ export interface PayPalClient {
   /** Multipart provide-evidence: the attestation PDF(s) plus notes. Only after an operator click (invariant 4). */
   provideEvidence(disputeId: string, input: ProvideEvidenceInput): Promise<void>;
   sendMessage(disputeId: string, message: string): Promise<void>;
-  /** Concede: PayPal refunds the buyer. Only after an operator click (invariant 4). */
+  /** Concede: PayPal refunds the buyer. Only after an operator click (invariant 4). Agent Toolkit `accept_dispute_claim`. */
   acceptClaim(disputeId: string, note: string): Promise<void>;
+  /** The current dispute. Agent Toolkit `get_dispute`. */
+  getDispute(disputeId: string): Promise<PayPalDispute>;
+  /** The merchant's most recent disputes (up to 50). Agent Toolkit `list_disputes`. */
+  listDisputes(): Promise<DisputeListItem[]>;
+  /** Only after an operator click. Agent Toolkit `create_shipment_tracking`. */
+  addTracking(input: TrackingInput): Promise<void>;
 }
 
 /** A non-2xx answer from PayPal, with the fields their support asks for. */
@@ -128,8 +169,10 @@ export function createPayPalClient(mode: PayPalMode, config: Partial<SandboxConf
     webhookId,
     baseUrl: config.baseUrl ?? SANDBOX_BASE_URL,
     fetch: config.fetch ?? fetch,
+    toolkit: config.toolkit,
   });
 }
 
 export type { SandboxConfig };
+export { createToolkit, toolkitDisputes, type ToolkitDisputes, type ToolkitTool } from "./agent-toolkit";
 export { createMockClient, MOCK_WEBHOOK_SIGNATURE, type DisputeAction, type MockPayPalClient } from "./mock";

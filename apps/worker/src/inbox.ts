@@ -2,7 +2,8 @@
  * The worker's inbox (docs/specs/0005): verified CUSTOMER.DISPUTE.* deliveries in webhook_events that have
  * no processed_at yet. For each one: match the dispute to our order, replay the checkout rules through the
  * deterministic tree, build the evidence package when the order was compliant, and store it all on the
- * dispute row for the operator. Nothing here calls PayPal: dispute actions only follow an operator click (API).
+ * dispute row for the operator. The worker only reads from PayPal, through the Agent Toolkit (`get_dispute`,
+ * `list_disputes`); dispute actions only follow an operator click in the API.
  *
  * Handling an event twice gives the same dispute row, so a crash between saving and marking the event
  * processed just repeats the work once on restart.
@@ -10,32 +11,15 @@
 import type { AiMode } from "@poi/ai";
 import { CartMandate, IntentMandate, type Outcome, type ReasonCode } from "@poi/contracts";
 import type { Db, StoredOrder } from "@poi/db";
-import { fromPayPalAmount } from "@poi/paypal";
+import { fromPayPalAmount, PayPalError, type PayPalClient, type PayPalDispute } from "@poi/paypal";
 import { importJWK, type JWK } from "jose";
 import { runDisputeClassifier, type DisputeRecord, type OrderRecord } from "./classifier";
 import { buildConstraintChecks, draftEvidenceForDefend, type EvidencePackageResult } from "./evidence";
 
-/** The parts of a PayPal dispute object we read. */
-export interface PayPalDispute {
-  dispute_id: string;
-  create_time?: string;
-  update_time?: string;
-  status?: string;
-  reason?: string;
-  dispute_amount?: { currency_code: string; value: string };
-  seller_response_due_date?: string;
-  disputed_transactions?: {
-    seller_transaction_id?: string;
-    /** Our order id: we send it to PayPal as invoice_id. */
-    invoice_number?: string;
-    /** The mandate pointer PayPal holds for the order (our custom_id). */
-    custom?: string;
-    items?: { notes?: string }[];
-  }[];
-}
-
 export interface InboxDeps {
   db: Db;
+  /** Absent: the webhook payload is all we know. Present: every dispute is re-read from PayPal first. */
+  paypal?: Pick<PayPalClient, "getDispute" | "listDisputes">;
   aiMode?: AiMode;
   now?: () => string;
   log?: (msg: string) => void;
@@ -58,9 +42,42 @@ export async function processDisputeEvents(deps: InboxDeps, limit = 10): Promise
   return handled;
 }
 
+/**
+ * Catch-up for missed webhooks: lists the merchant's recent disputes (Agent Toolkit `list_disputes`) and
+ * handles any we don't hold yet or hold an older version of. Returns how many it handled.
+ */
+export async function syncDisputes(deps: InboxDeps): Promise<number> {
+  if (!deps.paypal) return 0;
+  const log = deps.log ?? console.log;
+  let handled = 0;
+  for (const item of await deps.paypal.listDisputes()) {
+    const held = await deps.db.getDispute(item.dispute_id);
+    const stale =
+      !held ||
+      (item.update_time &&
+        (!held.paypalUpdatedAt || Date.parse(item.update_time) > Date.parse(held.paypalUpdatedAt)));
+    if (!stale) continue;
+    try {
+      await handleDisputeEvent({ resource: { dispute_id: item.dispute_id } }, deps);
+      handled++;
+    } catch (err) {
+      log(`dispute sync ${item.dispute_id} failed, will retry: ${(err as Error).message}`);
+    }
+  }
+  return handled;
+}
+
 export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Promise<void> {
-  const d = (payload as { resource?: PayPalDispute } | null)?.resource;
-  if (!d?.dispute_id) throw new Error("event has no resource.dispute_id");
+  const delivered = (payload as { resource?: PayPalDispute } | null)?.resource;
+  if (!delivered?.dispute_id) throw new Error("event has no resource.dispute_id");
+  // The webhook body can be partial or already outdated; PayPal's current object is the truth (get_dispute).
+  // A 404 (mock mode, or PayPal not serving it yet) falls back to what was delivered; anything else retries.
+  const d = deps.paypal
+    ? await deps.paypal.getDispute(delivered.dispute_id).catch((err: unknown) => {
+        if (err instanceof PayPalError && err.status === 404) return delivered;
+        throw err;
+      })
+    : delivered;
   const now = deps.now?.() ?? new Date().toISOString();
   const tx = d.disputed_transactions?.[0];
 

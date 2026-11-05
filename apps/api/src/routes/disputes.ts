@@ -204,6 +204,68 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
     return db && { verifications: await db.listVerdicts(page(req.query)) };
   });
 
+  // Fulfillment: tracking on the capture is the evidence PayPal wants for "not received" disputes (spec 0005 §3).
+  app.post<{
+    Params: { id: string };
+    Body: { trackingNumber?: unknown; carrier?: unknown; status?: unknown } | undefined;
+  }>("/orders/:id/tracking", { bodyLimit: 8 * 1024 }, async (req, reply) => {
+    const actor = operator(req, reply, deps.operatorToken);
+    if (!actor) return;
+    const db = needDb(reply);
+    if (!db) return;
+    const { trackingNumber, carrier, status } = req.body ?? {};
+    const STATUSES = ["SHIPPED", "ON_HOLD", "DELIVERED", "CANCELLED"] as const;
+    if (
+      typeof trackingNumber !== "string" ||
+      !/^[A-Za-z0-9-]{1,64}$/.test(trackingNumber) ||
+      typeof carrier !== "string" ||
+      !/^[A-Z0-9_]{2,64}$/.test(carrier) ||
+      (status !== undefined && !STATUSES.includes(status as (typeof STATUSES)[number]))
+    ) {
+      return reply.code(400).send({
+        error: "invalid_request",
+        message: "Expected { trackingNumber, carrier (PayPal code, e.g. USPS), status? }",
+      });
+    }
+    const order = await db.getOrder(req.params.id);
+    if (!order) return reply.code(404).send({ error: "order_not_found", message: "Unknown order" });
+    if (!order.captureId) {
+      return reply
+        .code(409)
+        .send({ error: "order_not_captured", message: "Tracking needs a captured payment" });
+    }
+    const input = {
+      captureId: order.captureId,
+      trackingNumber,
+      carrier,
+      status: (status as (typeof STATUSES)[number] | undefined) ?? "SHIPPED",
+    };
+    await db.appendAudit({ actor, action: "operator.add-tracking", subjectId: order.id, requestBody: input });
+    try {
+      await deps.paypal.addTracking(input);
+    } catch (err) {
+      await db.appendAudit({
+        actor: "api",
+        action: "paypal.add-tracking.failed",
+        subjectId: order.id,
+        requestBody: { message: (err as Error).message },
+      });
+      if (err instanceof PayPalError && err.status < 500) {
+        return reply.code(409).send({ error: "paypal_refused", message: err.message, issue: err.issue });
+      }
+      return reply
+        .code(502)
+        .send({ error: "paypal_unavailable", message: "PayPal tracking failed; try again" });
+    }
+    await db.appendAudit({
+      actor: "api",
+      action: "paypal.add-tracking",
+      subjectId: order.id,
+      requestBody: input,
+    });
+    return { status: "sent", captureId: order.captureId };
+  });
+
   app.get("/disputes", async (req, reply) => {
     const db = needDb(reply);
     if (!db) return;
