@@ -21,6 +21,9 @@ import { DisputeSearch } from "./DisputeSearch";
 
 const COLLAPSED_KEY = "poi.sidebar.collapsed";
 const BANNER_KEY = "poi.modeBanner.dismissed";
+// Matches the theme.ts breakpoint where the open sidebar floats over the page instead of pushing it.
+const PHONE_QUERY = "(max-width: 640px)";
+const isPhone = () => window.matchMedia(PHONE_QUERY).matches;
 
 type NavItem = { label: string; icon: ReactNode; href?: string; external?: boolean };
 
@@ -45,18 +48,34 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
   // Restore preferences after hydration so the server and first client render match.
   useEffect(() => {
     const saved = localStorage.getItem(COLLAPSED_KEY);
-    // No saved choice yet: start collapsed on narrow screens.
-    setCollapsed(saved === null ? window.matchMedia("(max-width: 900px)").matches : saved === "1");
+    // Phones always start closed: an open sidebar there covers the page. Elsewhere, restore the saved choice,
+    // or start collapsed on narrow screens.
+    setCollapsed(isPhone() || (saved === null ? window.matchMedia("(max-width: 900px)").matches : saved === "1"));
     setBannerOpen(sessionStorage.getItem(BANNER_KEY) !== "1");
     requestAnimationFrame(() => setReady(true));
   }, []);
 
   const toggleSidebar = () => {
     setCollapsed((c) => {
-      localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
+      // On phones the sidebar is a temporary overlay, so don't remember it as a preference.
+      if (!isPhone()) localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
       return !c;
     });
   };
+
+  // Phone overlay: close it after navigating, and on Escape.
+  const closeOverlay = () => {
+    if (isPhone()) setCollapsed(true);
+  };
+  useEffect(() => {
+    closeOverlay();
+  }, [pathname]);
+  useEffect(() => {
+    if (collapsed) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeOverlay();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [collapsed]);
 
   const dismissBanner = () => {
     sessionStorage.setItem(BANNER_KEY, "1");
@@ -68,6 +87,9 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
+      {!collapsed && (
+        <div className="poi-sidebar-backdrop" aria-hidden="true" onClick={() => setCollapsed(true)} />
+      )}
       <aside
         className="poi-sidebar"
         data-collapsed={collapsed}
@@ -86,9 +108,30 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
           transition: ready ? "width 0.15s ease" : "none",
         }}
       >
+        {!collapsed && (
+          <button
+            type="button"
+            className="poi-sidebar-close"
+            onClick={() => setCollapsed(true)}
+            aria-label="Close navigation"
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              background: "none",
+              border: "none",
+              padding: 6,
+              cursor: "pointer",
+              color: v("textMuted"),
+            }}
+          >
+            <CloseIcon size={20} />
+          </button>
+        )}
         <Link
           href="/"
           aria-label="Proof of Intent home"
+          className="poi-logo"
           style={{ display: "block", textDecoration: "none", textAlign: "center", marginBottom: 16 }}
         >
           {collapsed ? (

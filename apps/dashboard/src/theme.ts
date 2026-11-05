@@ -104,6 +104,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Four cards: 2x2 by default, one row only on very wide screens, stacked on phones. Never a lone card on a row. */
 .poi-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 1600px) { .poi-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.poi-sidebar-backdrop, .poi-sidebar-close { display: none; }
 .poi-quick-links { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 1200px) {
   .poi-quick-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -125,6 +126,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .poi-grid-4 { grid-template-columns: minmax(0, 1fr); }
   .poi-quick-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .poi-sidebar[data-collapsed="false"] { position: fixed !important; left: 0; z-index: 40; box-shadow: var(--poi-shadow-lg); }
+  .poi-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 35; background: var(--poi-overlay); }
+  .poi-sidebar-close { display: flex; }
+  .poi-sidebar[data-collapsed="false"] .poi-logo { text-align: left !important; padding: 0 40px 0 10px; }
 }
 `;
 
