@@ -33,5 +33,6 @@ areas both touch. Skip: bug fixes, refactors inside one package, docs, tests, de
 | [0008](0008-hosting-and-deploy.md) | Hosting and deploy | @harshkumarsingh12 | @srshriv | M0 | In Progress |
 | [0009](0009-demo-and-submission.md) | Demo and submission | @sumedhag28 | everyone | M0 | Accepted |
 
-All nine were reviewed at the Oct 31 contracts gate and have been built against since; statuses updated Nov 6. New specs take the next free number from
+All nine were reviewed at the Oct 31 contracts gate and have been built against since; statuses and "as built"
+notes updated Nov 6 after M2 (#59, #81–#88). New specs take the next free number from
 [TEMPLATE.md](TEMPLATE.md).

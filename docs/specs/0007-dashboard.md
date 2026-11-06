@@ -22,9 +22,9 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 | Page | Content | Data |
 |---|---|---|
 | Home *(built, #76)* | disputes due in 24 h; tabs: action required, defend, concede, resolved; quick links | seed until `/disputes` |
-| Agent orders | grid (order, platform, mandate status, verdict, reason codes, amount, captured at); KPI tiles | `/orders` |
-| Verification queue | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
-| Disputes *(built: queue #60, detail #61)* | sorted by due date; class + action chips; SLA countdown; evidence preview; Submit / Accept / Offer | `/disputes` |
+| Agent orders *(API built, page not yet)* | grid (order, platform, mandate status, verdict, reason codes, amount, captured at); KPI tiles | `/orders` |
+| Verification queue *(API built, page not yet)* | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
+| Disputes *(built: queue #60, detail #61; live data #82, actions #83 #84 #87)* | sorted by due date; class + action chips; SLA countdown; evidence preview (the exact PDF sent); Submit / Escalate / Accept / override | `/disputes`, `/disputes/:id/paypal-actions` |
 | Analytics *(built, #73)* | disputes by class per week; overreach rate by platform; defended vs conceded; median response window | `/analytics/*` |
 
 **Custom widgets** (`apps/dashboard/src/widgets.ts`), each with an AI description:
@@ -38,6 +38,10 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 reason codes; WCAG AA contrast. Our own wordmark and icons, no PayPal logo or assets. Dark mode and the locked
 operator layout with an "explore" mode are not built yet. AG Studio isn't integrated yet; when it is, its theme
 should read the same tokens.
+
+**Operator actions** *(built, #83)*: the same-origin proxy forwards GETs and only one POST,
+`/disputes/:id/actions/:action`, after an HTTP Basic login as `operator` (`OPERATOR_PASSWORD`); it adds
+`Bearer OPERATOR_TOKEN` server-side. Buttons follow PayPal's live allowed actions (#87).
 
 **Studio agent** (owner @sumedhag28): custom harness on the example OpenAI-style adapter pointed at
 `POST /ai/studio`; keep the five built-in agents and add `DisputeExplainer` with `explain_dispute(id)` and

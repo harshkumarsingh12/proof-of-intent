@@ -21,7 +21,8 @@ deliver webhooks to it. The team runs it on its own server; the same Compose fil
 | HTTPS | **Decided (D6):** Dokploy's proxy with Let's Encrypt, behind Cloudflare, on `poi-api.iotkiit.in`, `poi-buyer.iotkiit.in` and `poi-dashboard.iotkiit.in` (D7). Single-level names because Cloudflare's free certificate covers one level. Caddy (profile `server`) stays for servers without Dokploy |
 | Uptime | External monitor (e.g. UptimeRobot) on the three `/healthz` URLs, alerting the team chat; Compose starts on boot |
 | Isolation | Own Docker network; only the proxy publishes ports; Postgres unreachable from outside; non-root containers |
-| Abuse | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/ai/studio` 10/min, 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch; viewer demo login |
+| Abuse | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/keys/shopper` 10/min, `/ai/studio` 10/min, 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch. The dashboard is read-only without the operator login |
+| DNS | Containers send outside lookups to `1.1.1.1` / `8.8.8.8` (`dns:` in compose, #88) after the host resolver dropped one (`EAI_AGAIN`, Nov 6) |
 | Backups | `backup` service (server profile): `pg_dump` every 24 h, 7 days kept, atomic writes; restore in docs/SETUP.md. Nightly demo reset Dec 1–15 |
 | Secrets | Server `.env` (mode 600) outside git; GitHub Actions secrets for CI/CD |
 | Release | Dokploy redeploys on every push to `main`. Tag `v*` → `deploy.yml` still builds the 4 images to GHCR and, where SSH secrets are set, runs `compose pull && up -d` with a health check inside the `api` container, then a GitHub Release |
@@ -37,7 +38,7 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
 
 1. `docker compose config` is valid and the API image builds in CI on every PR. *(done)*
 2. `https://<api host>/healthz` returns 200 from outside the server. *(done: `https://poi-api.iotkiit.in/healthz`, Nov 5)*
-3. A real sandbox webhook reaches the server and is verified. *(M1)*
+3. A real sandbox webhook reaches the server and is verified. *(open, #19; disputes reach the server either way through the worker's `list_disputes` catch-up)*
 4. Uptime alert fires within 5 minutes of stopping the API. *(M2)*
 5. Pushing `v0.1.0-hackathon` deploys and passes the health check. *(M4)*
 

@@ -4,11 +4,15 @@
 
 Fastify service on port 3000 (`pnpm dev:api`).
 
-**Built:** `/healthz`, `/readyz`, `POST /checkout`, `POST /checkout/:id/approve`, `POST /webhooks/paypal`. Every other agreed route
-returns 501 with its owner.
+**Built:** `/healthz`, `/readyz`, checkout (`POST /checkout`, `POST /checkout/:id/approve`), `POST /webhooks/paypal`,
+keys (`POST /keys/shopper`, `POST /keys/agent`, `POST /keys/:kind/:kid/retire`), disputes (`GET /disputes`,
+`/disputes/:id/recommendation`, `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions`,
+`POST /disputes/:id/actions/:action`), `GET /orders`, `GET /verifications`, `POST /orders/:id/tracking`. Still 501
+with their owner: `POST /stepup/:token/approve`, `GET /analytics/:report`, `POST /ai/studio`.
 
-`buildApp(deps)` takes `{ paypal, db?, merchant?, aiMode?, semanticFit?, now? }`; `await depsFromEnv()` builds them
-from `PAYPAL_MODE` (mock by default), `DATABASE_URL`, `AI_MODE` and the `MERCHANT_*` variables. Tests pass a mock
+`buildApp(deps)` takes `{ paypal, db?, merchant?, aiMode?, operatorToken?, semanticFit?, now? }`; `await depsFromEnv()`
+builds them from `PAYPAL_MODE` (mock by default), `DATABASE_URL`, `AI_MODE`, `OPERATOR_TOKEN` and the `MERCHANT_*`
+variables. Tests pass a mock
 client and the in-memory `Db` from `src/test-helpers.ts`.
 
 ## POST /checkout
@@ -40,6 +44,28 @@ Verify with PayPal, store once, answer fast (spec 0004 §Webhooks).
 The body is kept as the exact string PayPal signed (a raw parser scoped to this route only). Stored rows with
 `processed_at` null are the worker's inbox. In mock mode a delivery verifies when `paypal-transmission-sig` is
 `mock-signature`.
+
+## Keys (`src/routes/keys.ts`, spec 0001)
+
+| Route | Who | Answer |
+|---|---|---|
+| `POST /keys/shopper` `{ public_jwk }` | public, 10/min/IP | 201 new / 200 same key again → `{ kid, shopper_id }`; 400 for private or non-P-256 keys |
+| `POST /keys/agent` `{ public_jwk, platform }` | operator token | 201 / 200 → `{ kid, platform }`; 409 if the key belongs to another platform |
+| `POST /keys/:kind/:kid/retire` `{ at? }` | operator token | `{ kid, retired_at }`; the first date wins |
+
+`kid` is `shp_` / `agt_` plus the key's RFC 7638 thumbprint. Every registration and retirement is audited.
+
+## Disputes and operator actions (`src/routes/disputes.ts`, spec 0005)
+
+Reads (no auth): `GET /disputes` and `GET /disputes/:id/recommendation` in the dashboard's `DisputeItem` /
+`DisputeDetail` shape, built from the row the worker stored; `GET /disputes/:id/evidence.pdf`;
+`GET /disputes/:id/paypal-actions` → `{ stage, status, allowed }` asked live from PayPal.
+
+Actions: `POST /disputes/:id/actions/{provide-evidence,accept-claim,send-message,escalate}` and
+`POST /orders/:id/tracking` need `Authorization: Bearer $OPERATOR_TOKEN` (unset → 503, wrong → 401). Each writes
+`operator.<action>` to `audit_log` before the PayPal call, then `paypal.<action>` or `paypal.<action>.failed`.
+PayPal refusing → 409 `paypal_refused` with PayPal's issue; PayPal unreachable → 503 with `retry-after`.
+`make-offer` → 501 (out of scope).
 
 ## Test
 

@@ -18,12 +18,16 @@ const order = await paypal.createOrder({ intent: "AUTHORIZE", ourOrderId, custom
 | `verifyWebhook`                                               | `verify-webhook-signature` with the raw body spliced in verbatim; `false` for 4xx, throws on outages                                                                                             | accepts `transmissionSig === MOCK_WEBHOOK_SIGNATURE`          |
 | `provideEvidence`                                             | multipart `provide-evidence`: an `input` JSON part (`evidence_type`, notes, document names) plus each PDF as `fileN`; refuses non-PDFs, files over 10 MB and empty uploads before calling PayPal | same validation; recorded in `disputeActions`                 |
 | `sendMessage`                                                 | multipart `send-message` with the message as the `input` part                                                                                                                                    | recorded in `disputeActions`                                  |
+| `escalate`                                                    | `POST /v1/customer/disputes/{id}/escalate` (inquiry → claim)                                                                                                                                     | recorded in `disputeActions`                                  |
+| `acceptClaim`, `getDispute`, `listDisputes`, `addTracking`    | PayPal Agent Toolkit (`@paypal/agent-toolkit`, `src/agent-toolkit.ts`): its tools called directly; JSON errors become `PayPalError`; a tracker refused inside a 200 batch is an error             | seedable disputes (`seedDispute`); actions recorded           |
 
 - Money in and out is integer minor units (`Money`); `toPayPalAmount` converts with the currency's own exponent.
 - Errors from PayPal are `PayPalError { status, issue, debugId }`. Quote the `debugId` to PayPal support.
 - The mock treats every order as approved by the shopper (there's nobody to click).
 - `evidenceTypeFor(reason)` maps a PayPal dispute reason to the evidence type spec 0004 prescribes.
-- Accepting a claim goes through the Agent Toolkit in the worker (spec 0005), not this client.
+- The worker only reads (`getDispute`, `listDisputes`); actions run in the API after an operator click (spec 0005).
+- A call that failed before reaching PayPal (token fetch, DNS) is retried up to 3 times; one that reached PayPal
+  never is.
 
 ## Fixtures
 

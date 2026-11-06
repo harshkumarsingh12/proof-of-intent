@@ -60,10 +60,10 @@ Authorizing before re-checking means a failed check releases the hold instead of
 held. A retry after completion returns the same outcome; a PayPal failure answers 502 and leaves the order at its
 last state (`AUTHORIZED`), so a retry finishes the job with the same idempotent capture request.
 
-### Jobs (pg-boss)
+### Jobs
 
-`dispute.received`, `dispute.classify`, `dispute.evidence.build`, `ledger.update`, each with a zod payload in
-`packages/contracts` (to add in M1).
+Superseded (Nov 6): no job queue. The `webhook_events` rows the receiver stores are the worker's inbox, and the
+worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was added to `packages/contracts`.
 
 ### Tables (`packages/db`)
 
@@ -79,7 +79,9 @@ last state (`AUTHORIZED`), so a retry finishes the job with the same idempotent 
 | POST | `/stepup/:token/approve` | Sristee | shopper approval → create (and capture) the order |
 | GET | `/orders`, `/verifications` | Harsh | paginated grids for the dashboard |
 | GET | `/disputes`, `/disputes/:id/recommendation` | Sikruti | spec 0005 |
-| POST | `/disputes/:id/actions/:action` | Sikruti | operator action; `action ∈ provide-evidence, accept-claim, make-offer, send-message` |
+| POST | `/disputes/:id/actions/:action` | Sikruti | operator token; `action ∈ provide-evidence, accept-claim, send-message, escalate` (`make-offer` → 501, out of scope) |
+| GET | `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions` | Harsh | the stored attestation PDF; what PayPal allows right now (live `get_dispute`) |
+| POST | `/orders/:id/tracking` | Harsh | operator token; `{ trackingNumber, carrier, status? }` → shipment tracking on the capture |
 | GET | `/analytics/:report` | Sikruti | spec 0007 |
 | POST | `/webhooks/paypal` | Harsh | spec 0004 |
 | POST | `/keys/shopper` | Sristee | `{ public_jwk }` (P-256) → `{ kid, shopper_id }`; public, rate-limited, `kid` = `shp_<RFC 7638 thumbprint>` (spec 0001) |

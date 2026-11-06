@@ -31,7 +31,7 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 | Orders v2 | Authorize then capture or void (human present); create and capture against a vaulted wallet (agent alone) |
 | Vault v3 | One-time wallet save so an agent can buy later without the shopper online |
 | Webhooks | Signed dispute and capture events, verified, persisted, idempotent |
-| Disputes API | Provide evidence, send message, sandbox test harness |
+| Disputes API | Provide evidence, send message, escalate (operator clicks); sandbox test harness |
 | Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |
 
 AI: a configurable LLM through the Vercel AI SDK for four typed jobs (semantic fit, dispute classification,
@@ -60,14 +60,14 @@ Developing without Docker: Node 20+, `corepack enable`, then `pnpm install && pn
 ## Repository map
 
 ```
-apps/api          merchant service: checkout, verification, webhooks, disputes, analytics
-apps/worker       dispute copilot pipeline, evidence PDF
+apps/api          merchant service: checkout, verification, key registry, webhooks, disputes, operator actions
+apps/worker       dispute copilot: webhook inbox, list_disputes catch-up, classification, evidence PDF
 apps/buyer        shopper app and buyer agent
 apps/dashboard    operations dashboard: home, dispute queue and detail, analytics
 packages/contracts  shared schemas and reason codes (the frozen contract)
-packages/mandates   canonicalization, hashing, ES256 signatures
+packages/mandates   canonicalization, hashing, ES256 signatures, key registry
 packages/policy-engine  deterministic hard rules
-packages/paypal   typed PayPal client + mock
+packages/paypal   typed PayPal client (Agent Toolkit for disputes) + mock
 packages/ai       LLM jobs, schemas, replay mode, evals
 packages/db       schema, migrations, audit log
 docs/             project document, specs, architecture, roadmap, demo
