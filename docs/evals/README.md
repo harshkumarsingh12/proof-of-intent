@@ -9,3 +9,11 @@ answers to the J1 and J2 replay files. The report separates J2 agreement with th
 from J1 prediction accuracy. Publish numbers in the root README after verifying the live report.
 
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
+
+## Buyer agent
+
+`pnpm agent:eval` runs the live buyer agent (#37) through eight cases: the four demo presets, a shopper request that
+tries to override the budget, one that asks for another color, a price nothing fits, and a merchant refusal the
+agent has to recover from. The real hard rules stand in for the merchant, so it needs only `AI_MODEL` and
+`AI_API_KEY`. It writes `docs/evals/agent-<date>.md` and fails if any case fails or any proposed cart breaks a hard
+rule.

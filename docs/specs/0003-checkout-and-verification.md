@@ -93,6 +93,11 @@ shopper reviews and signs in the browser (spec 0001), and `request_checkout` goe
 and reason codes only. Limits per run: three carts, six model calls, the daily AI budget. With `AI_MODE=replay` a
 scripted chooser (catalog filtered by the signed limits, best word match first) stands in for the model.
 
+The agent returns a trace (each search, each cart with its reason and the merchant's answer) that `/shop` shows.
+`request_checkout` skips products that break the signed price, category or color (`OUT_OF_LIMITS`, shown, merchant not
+asked) so the shopper's words can't talk the model past their own limits; the merchant still checks everything.
+`create_intent_mandate` can't set `user_cart_confirmation_required`. `pnpm agent:eval` (docs/evals/README.md) measures it live.
+
 ### Jobs
 
 Superseded (Nov 6): no job queue. The `webhook_events` rows the receiver stores are the worker's inbox, and the

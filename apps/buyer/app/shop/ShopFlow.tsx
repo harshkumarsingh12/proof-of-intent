@@ -16,6 +16,7 @@ import {
   presetFor,
   type Product,
 } from "../../src/catalog";
+import type { TraceStep } from "../../src/agent";
 import { buildIntent, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
 import { REASON_TEXT } from "../../src/reasons";
@@ -112,6 +113,48 @@ function Reasons({ reasons }: { reasons: ReasonCode[] }) {
   );
 }
 
+function AgentTrace({ steps }: { steps: TraceStep[] }) {
+  return (
+    <ol className="trace" aria-label="What the agent did">
+      {steps.map((s, i) =>
+        s.kind === "search" ? (
+          <li key={i}>
+            Searched the store
+            {s.query.category ? ` for ${categoryLabel(s.query.category).toLowerCase()}` : ""}
+            {s.query.color ? `, ${s.query.color}` : ""}
+            {s.query.max_price_usd ? `, up to ${money(Math.round(s.query.max_price_usd * 100))}` : ""}:{" "}
+            {s.found} found.
+          </li>
+        ) : (
+          <li key={i}>
+            {s.outcome === "OUT_OF_LIMITS" ? "Considered" : "Proposed"} <strong>{s.title}</strong> (
+            {money(s.price_cents)}). {s.reason && <em>{s.reason} </em>}
+            <strong>
+              {s.outcome === "APPROVE"
+                ? "The merchant approved it."
+                : s.outcome === "STEP_UP"
+                  ? "The merchant wants you to confirm it."
+                  : s.outcome === "REJECT"
+                    ? "The merchant refused it."
+                    : s.outcome === "OUT_OF_LIMITS"
+                      ? "Skipped: it breaks your signed limits, so the merchant wasn't asked."
+                      : "The merchant couldn't answer."}
+            </strong>
+            {s.reasons.length > 0 && (
+              <>
+                {" "}
+                {s.reasons.map((r) => (
+                  <code key={r}>{r} </code>
+                ))}
+              </>
+            )}
+          </li>
+        ),
+      )}
+    </ol>
+  );
+}
+
 export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [shopper, setShopper] = useState<StoredShopper>();
   const [keyError, setKeyError] = useState<string>();
@@ -129,6 +172,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [draftNote, setDraftNote] = useState<string>();
   const [choosing, setChoosing] = useState(false);
   const [agentNote, setAgentNote] = useState<string>();
+  const [agentTrace, setAgentTrace] = useState<TraceStep[]>([]);
 
   useEffect(() => {
     ensureShopper().then(setShopper, (err: Error) => setKeyError(err.message));
@@ -217,11 +261,13 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     setChoosing(true);
     setCheckoutError(undefined);
     setAgentNote(undefined);
+    setAgentTrace([]);
     setApproval(undefined);
     setApproveError(undefined);
     try {
       const res = await postJson<{
         source: "live" | "scripted";
+        trace: TraceStep[];
         attempts: { sku: string; body: CheckoutResponse | ApiError }[];
         message?: string;
       }>("/api/agent/choose", { intent_jws: signed.jws });
@@ -230,6 +276,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         setCheckoutError(res.body.message);
         return;
       }
+      setAgentTrace(res.body.trace);
       const last = res.body.attempts.at(-1);
       if (!last || isError(last.body)) {
         setCheckout(undefined);
@@ -429,6 +476,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           {choosing ? "The agent is shopping…" : "Let the agent choose"}
         </button>
         {agentNote && <p className="meta">{agentNote}</p>}
+        {agentTrace.length > 0 && <AgentTrace steps={agentTrace} />}
         <h3 className="group">{categoryLabel(shownCategory)}</h3>
         <div className="products">{inCategory.map(card)}</div>
         <details className="others">
