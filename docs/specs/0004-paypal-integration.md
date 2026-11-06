@@ -72,7 +72,8 @@ at any point. Sandbox-only calls live in `scripts/sandbox/paypal-raw.ts`, never 
 2. Sandbox: create, authorize, capture and void recorded as fixtures for CI. *(done: `pnpm sandbox:record-orders`; authorize after a real shopper approval is exercised on integration day)*
 3. A forged webhook signature is rejected. *(done, also against the live sandbox)*
    A real sandbox event is verified and stored once even when delivered twice. *(`pnpm sandbox:webhook-check` resends
-   an old event and reads the `webhooks` count on `GET /readyz`; run it after deploying the build that adds the count)*
+   an old event and reads the `webhooks` count on `GET /readyz`; done on Nov 7: a new event raised the count 100 to 101,
+   the same event again left it at 101)*
 4. `provide-evidence` sends multipart with the attestation PDF. *(done: `attestation.pdf` submitted by seller on sandbox dispute `PP-R-NSZ-10196423`)*
 5. The dispute recipe script regenerates a dispute in under 5 minutes with one manual click. *(done; the click is the Resolution Center form, about 8 short pages)*
 6. Accept-claim through the Agent Toolkit resolves a sandbox dispute. *(done: `PP-R-MMK-10196694` RESOLVED_BUYER_FAVOUR, Nov 6; hosted: `PP-R-IWL-10196768`)*
