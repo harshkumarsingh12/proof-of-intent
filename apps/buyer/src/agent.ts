@@ -383,7 +383,7 @@ export async function runChoose(args: {
     maxSteps: MAX_STEPS,
     system: [
       "You are a shopping agent for one shopper at one store. Find the single product that best fits what they asked for and propose it with request_checkout.",
-      "Search first. Propose only products that meet every limit: price, category and color. If the merchant refuses, read the reason codes and try a better product.",
+      "Search first, then choose one product that meets every limit (price, category, color) and call request_checkout with its SKU. Never ask the shopper a question or list options instead: you must call request_checkout. If the merchant refuses, read the reason codes and try a better product.",
       SHARED_RULES,
     ].join("\n"),
     prompt: dataBlock("shopper", {
