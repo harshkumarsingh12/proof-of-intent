@@ -21,7 +21,7 @@ export default function Shop() {
       <main>
         <ShopFlow
           config={{
-            merchantId: process.env.MERCHANT_ID ?? "merchant-trailhead",
+            merchantId: process.env.MERCHANT_ID || "merchant-trailhead",
             paypalMode: sandbox ? "sandbox" : "mock",
             // Public by design: PayPal's JS SDK needs it in the page. The secret never leaves the API.
             paypalClientId: sandbox ? process.env.PAYPAL_CLIENT_ID || undefined : undefined,

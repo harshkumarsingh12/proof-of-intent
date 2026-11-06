@@ -12,7 +12,7 @@ import { ledger } from "@poi/ledger";
 import { createKeyRegistry, keyIdFor, mandateHash, publicEs256Jwk, verifyMandate } from "@poi/mandates";
 import { evaluate } from "@poi/policy-engine";
 import { toolNames } from "./agent";
-import { intentFromJws } from "./agent-server";
+import { intentFromJws, merchantFromEnv } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG } from "./catalog";
 import { buildIntent, CLOCK_SKEW_MS, dollarsToCents, type IntentForm } from "./intent";
@@ -209,6 +209,21 @@ describe("buyer agent: cart and Payment Mandate", () => {
     expect(intentFromJws(jws)).toEqual(signed);
     expect(mandateHash(intentFromJws(jws))).toBe(mandateHash(signed));
     expect(() => intentFromJws("not-a-jws")).toThrow();
+  });
+});
+
+describe("shop env", () => {
+  test("an empty MERCHANT_ID falls back like the API does, instead of sending an empty merchant", () => {
+    const before = process.env.MERCHANT_ID;
+    try {
+      process.env.MERCHANT_ID = "";
+      expect(merchantFromEnv().id).toBe("merchant-trailhead");
+      process.env.MERCHANT_ID = "m-2";
+      expect(merchantFromEnv().id).toBe("m-2");
+    } finally {
+      if (before === undefined) delete process.env.MERCHANT_ID;
+      else process.env.MERCHANT_ID = before;
+    }
   });
 });
 

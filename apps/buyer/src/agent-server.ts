@@ -18,10 +18,10 @@ import { exportJWK, importPKCS8, type JWK } from "jose";
 import { paymentMandate, proposeCart, type Merchant } from "./cart";
 
 export const apiBase = (): string =>
-  (process.env.API_INTERNAL_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  (process.env.API_INTERNAL_URL || "http://localhost:3000").replace(/\/$/, "");
 
 export const merchantFromEnv = (): Merchant => ({
-  id: process.env.MERCHANT_ID ?? "merchant-trailhead",
+  id: process.env.MERCHANT_ID || "merchant-trailhead",
   name: "Trailhead Outfitters",
 });
 
