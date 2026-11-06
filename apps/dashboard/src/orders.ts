@@ -100,22 +100,41 @@ export function sampleOrders(): OrdersData {
   return { orders: joinOrders(orders, verdicts), verdicts, isSample: true };
 }
 
+/** The API's page cap (apps/api `page()`). */
+export const PAGE_SIZE = 200;
+/** A stop for a misbehaving API: 50 pages is 10,000 rows, far beyond any demo merchant. */
+const MAX_PAGES = 50;
+
 export async function fetchOrders(
   options: { apiBaseUrl?: string; fetchFn?: typeof fetch } = {},
 ): Promise<OrdersData> {
   const base = options.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const get = options.fetchFn ?? fetch;
-  // ponytail: first 200 of each (the API's page cap); add paging once a merchant has more.
-  const read = async <T>(path: string, key: string): Promise<T[] | undefined> => {
-    const res = await get(`${base}${path}?limit=200`, { headers: { Accept: "application/json" }, cache: "no-store" });
-    if (!res.ok) return undefined;
-    const body = (await res.json()) as Record<string, unknown>;
-    return Array.isArray(body[key]) ? (body[key] as T[]) : undefined;
+  // The API serves at most PAGE_SIZE rows per call, newest first; read every page so the grid and its totals
+  // cover the whole set and a verdict on another page still finds its order.
+  const read = async <T>(
+    path: string,
+    key: string,
+    idOf: (row: T) => string | number,
+  ): Promise<T[] | undefined> => {
+    const rows = new Map<string | number, T>();
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const url = `${base}${path}?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`;
+      const res = await get(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!res.ok) return undefined;
+      const body = (await res.json()) as Record<string, unknown>;
+      const batch = body[key];
+      if (!Array.isArray(batch)) return undefined;
+      // A row inserted mid-read shifts the offsets by one; keying by id drops the repeat.
+      for (const row of batch as T[]) if (!rows.has(idOf(row))) rows.set(idOf(row), row);
+      if (batch.length < PAGE_SIZE) break;
+    }
+    return [...rows.values()];
   };
   try {
     const [orders, verdicts] = await Promise.all([
-      read<ApiOrder>("/orders", "orders"),
-      read<VerdictRow>("/verifications", "verifications"),
+      read<ApiOrder>("/orders", "orders", (o) => o.id),
+      read<VerdictRow>("/verifications", "verifications", (v) => v.id),
     ]);
     if (orders && verdicts) return { orders: joinOrders(orders, verdicts), verdicts, isSample: false };
   } catch {

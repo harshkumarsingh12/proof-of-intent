@@ -4,6 +4,7 @@ import { createMockClient } from "@poi/paypal";
 import pg from "pg";
 import { expect, test } from "vitest";
 import { seedDemo } from "../../../scripts/demo/seed-data";
+import { fetchOrders, orderKpis } from "../../dashboard/src/orders";
 import { buildApp } from "./app";
 
 const adminUrl = process.env.DATABASE_URL;
@@ -42,6 +43,35 @@ test.runIf(adminUrl)(
       const orders = [...first.json().orders, ...rest.json().orders];
       expect(new Set(orders.map((o) => o.id)).size).toBe(300);
       expect(new Set(orders.map((o) => o.agentPlatform)).size).toBe(4);
+
+      // The dashboard's loader reads every page (#99): all 300 orders, every verdict, and the totals.
+      const viaApi = (async (input: string | URL | Request) => {
+        const res = await app.inject(String(input).replace("http://api", ""));
+        return new Response(res.body, { status: res.statusCode });
+      }) as typeof fetch;
+      const loaded = await fetchOrders({ apiBaseUrl: "http://api", fetchFn: viaApi });
+      const testDb = new pg.Client({ connectionString: url.toString() });
+      await testDb.connect();
+      const { rows } = await testDb.query<{ verdicts: number; value: number; approved: string[] }>(
+        `select (select count(*)::int from verdicts) as verdicts,
+          (select sum(total_value)::int from orders where status = 'CAPTURED') as value,
+          (select array_agg(order_id) from verdicts where outcome = 'APPROVE') as approved`,
+      );
+      await testDb.end();
+      const [truth] = rows;
+      expect(loaded.isSample).toBe(false);
+      expect(loaded.orders).toHaveLength(300);
+      expect(truth!.verdicts).toBeGreaterThan(200);
+      expect(loaded.verdicts).toHaveLength(truth!.verdicts);
+      expect(orderKpis(loaded)).toMatchObject({
+        captured: 300,
+        capturedValue: [{ value: truth!.value, currency: "USD" }],
+      });
+      // Orders past the first page keep their verdict, wherever the verdict landed in its own list.
+      const approved = new Set(truth!.approved);
+      const late = loaded.orders.slice(200);
+      expect(late.some((o) => approved.has(o.orderId))).toBe(true);
+      for (const o of loaded.orders) expect(o.verdict).toBe(approved.has(o.orderId) ? "APPROVE" : undefined);
 
       const queue = await app.inject("/disputes");
       expect(queue.statusCode).toBe(200);
