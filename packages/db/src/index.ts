@@ -118,6 +118,31 @@ export interface DisputeRow {
 /** Listing view: no PDF bytes, just whether there is one. */
 export type DisputeSummary = Omit<DisputeRow, "evidencePdf"> & { hasEvidencePdf: boolean };
 
+/** A step-up waiting for the shopper (docs/specs/0003, #35). No order exists until it is APPROVED. */
+export interface StepUpRecord {
+  id: string;
+  /** sha256 hex of the link token. The token is only ever in the link itself. */
+  tokenHash: string;
+  intentMandateId: string;
+  intentMandateHash: string;
+  cartMandateHash: string;
+  /** The proposed CartMandate, as JSON. */
+  cart: unknown;
+  shopperKid: string;
+  agentPlatform: string;
+  reasons: string[];
+  expiresAt: string;
+}
+
+export type StepUpStatus = "PENDING" | "APPROVING" | "APPROVED" | "REJECTED" | "EXPIRED" | "FAILED";
+
+export type StoredStepUp = StepUpRecord & {
+  status: StepUpStatus;
+  orderId?: string;
+  createdAt: string;
+  approvedAt?: string;
+};
+
 export interface Page {
   limit: number;
   offset: number;
@@ -162,6 +187,15 @@ export interface Db {
   /** Newest first, for the dashboard grids. */
   listOrders(page: Page): Promise<StoredOrder[]>;
   listVerdicts(page: Page): Promise<StoredVerdict[]>;
+  createStepUp(s: StepUpRecord): Promise<void>;
+  findStepUp(tokenHash: string): Promise<StoredStepUp | null>;
+  /**
+   * PENDING → APPROVING, only while the link is unexpired at `now`. False when another approval holds it, it
+   * already finished, or it expired: exactly one request can go on to create the order.
+   */
+  claimStepUp(id: string, now: string): Promise<boolean>;
+  /** Sets the outcome. Back to PENDING releases a claim that charged nothing (no vaulted wallet yet). */
+  finishStepUp(id: string, patch: { status: StepUpStatus; orderId?: string; approvedAt?: string }): Promise<void>;
   /** Dispute deliveries the worker hasn't handled yet, oldest first. */
   pendingDisputeEvents(limit: number): Promise<PendingEvent[]>;
   markEventProcessed(eventId: string): Promise<void>;
@@ -327,6 +361,47 @@ export function createDb(databaseUrl: string): Db {
     async getOrder(id) {
       const r = (await pool.query("select * from orders where id = $1", [id])).rows[0];
       return r ? toOrder(r) : null;
+    },
+
+    async createStepUp(st) {
+      await pool.query(
+        `insert into stepups (id, token_hash, intent_mandate_id, intent_mandate_hash, cart_mandate_hash, cart,
+                              shopper_kid, agent_platform, reasons, expires_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          st.id,
+          st.tokenHash,
+          st.intentMandateId,
+          st.intentMandateHash,
+          st.cartMandateHash,
+          json(st.cart),
+          st.shopperKid,
+          st.agentPlatform,
+          st.reasons,
+          st.expiresAt,
+        ],
+      );
+    },
+
+    async findStepUp(tokenHash) {
+      const r = (await pool.query("select * from stepups where token_hash = $1", [tokenHash])).rows[0];
+      return r ? toStepUp(r) : null;
+    },
+
+    async claimStepUp(id, now) {
+      const res = await pool.query(
+        "update stepups set status = 'APPROVING' where id = $1 and status = 'PENDING' and expires_at > $2",
+        [id, now],
+      );
+      return res.rowCount === 1;
+    },
+
+    async finishStepUp(id, { status, orderId, approvedAt }) {
+      await pool.query(
+        `update stepups set status = $2, order_id = coalesce($3, order_id), approved_at = coalesce($4, approved_at)
+         where id = $1`,
+        [id, status, orderId ?? null, approvedAt ?? null],
+      );
     },
 
     async listOrders({ limit, offset }) {
@@ -534,6 +609,25 @@ function toOrder(r: Row): StoredOrder {
     ...(r.capture_id ? { captureId: r.capture_id as string } : {}),
     ...(r.captured_at ? { capturedAt: iso(r.captured_at) } : {}),
     ...(r.created_at ? { createdAt: iso(r.created_at) } : {}),
+  };
+}
+
+function toStepUp(r: Row): StoredStepUp {
+  return {
+    id: r.id as string,
+    tokenHash: (r.token_hash as string).trim(),
+    intentMandateId: r.intent_mandate_id as string,
+    intentMandateHash: (r.intent_mandate_hash as string).trim(),
+    cartMandateHash: (r.cart_mandate_hash as string).trim(),
+    cart: r.cart,
+    shopperKid: r.shopper_kid as string,
+    agentPlatform: r.agent_platform as string,
+    reasons: r.reasons as string[],
+    expiresAt: iso(r.expires_at),
+    status: r.status as StepUpStatus,
+    ...(r.order_id ? { orderId: r.order_id as string } : {}),
+    createdAt: iso(r.created_at),
+    ...(r.approved_at ? { approvedAt: iso(r.approved_at) } : {}),
   };
 }
 

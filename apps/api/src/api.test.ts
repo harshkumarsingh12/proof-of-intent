@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { ledger } from "@poi/ledger";
 import { createMockClient } from "@poi/paypal";
 import { buildApp } from "./app";
 
@@ -17,15 +16,5 @@ describe("api", () => {
     });
     expect(res.statusCode).toBe(501);
     expect(res.json().owner).toBe("hoursgotviral-dev");
-  });
-});
-
-describe("checkout (unbuilt)", () => {
-  ledger("M2", "srshriv", "step-up approval link captures only after the shopper approves", async () => {
-    const res = await buildApp({ paypal: createMockClient() }).inject({
-      method: "POST",
-      url: "/stepup/test-token/approve",
-    });
-    expect(res.statusCode).toBe(200);
   });
 });

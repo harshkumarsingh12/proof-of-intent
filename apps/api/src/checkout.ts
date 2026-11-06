@@ -11,7 +11,7 @@
  *   6. semantic (J1)   only if every hard rule passed; can only lower the outcome
  * Invariant 1: no PayPal order exists for a REJECT.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { APPROVE_AT, STEP_UP_AT, isAiUnavailable, type AiMode, type SemanticFit } from "@poi/ai";
 import {
   CartMandate,
@@ -22,7 +22,7 @@ import {
   type Outcome,
   type ReasonCode,
 } from "@poi/contracts";
-import type { Db, KeyRecord } from "@poi/db";
+import type { Db, KeyRecord, StepUpRecord } from "@poi/db";
 import {
   customId,
   keyValidAt,
@@ -41,6 +41,20 @@ export interface Merchant {
   privateKey: SigningKey;
 }
 
+/** The approval link for an agent-alone step-up. It goes to the shopper, never back to the agent. */
+export interface StepUpLink {
+  stepUpId: string;
+  shopperId?: string;
+  url: string;
+  expiresAt: string;
+}
+
+export interface StepUpConfig {
+  /** Where the shopper opens the link: the buyer app's /approve page. */
+  linkBase: string;
+  send: (link: StepUpLink) => Promise<void>;
+}
+
 export interface CheckoutDeps {
   db: Db;
   paypal: PayPalClient;
@@ -48,7 +62,13 @@ export interface CheckoutDeps {
   aiMode: AiMode;
   semanticFit: (description: string, cart: CartMandate, mode: AiMode) => Promise<SemanticFit>;
   now: () => string;
+  stepUp: StepUpConfig;
 }
+
+/** Spec 0003: the link is good for 24 h, and never longer than the cart or the intent it approves. */
+export const STEP_UP_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const stepUpTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export type CheckoutResult = { status: 200; body: CheckoutResponse } | { status: 409 | 502; body: ApiError };
 
@@ -170,7 +190,25 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
 
   // Agent alone and not sure enough: nothing is charged until the shopper approves the step-up link (#35).
   if (!payment.human_present && outcome === "STEP_UP") {
-    return record(deps, intent.mandate_id, cart.contents.cart_id, outcome, reasons, semantic);
+    const result = await record(deps, intent.mandate_id, cart.contents.cart_id, outcome, reasons, semantic);
+    await createStepUp(deps, {
+      intentMandateId: intent.mandate_id,
+      intentMandateHash: intentHash,
+      cartMandateHash: cartHash,
+      cart,
+      shopperKid: intentSig.kid,
+      agentPlatform: payment.agent_platform,
+      reasons,
+      expiresAt: new Date(
+        Math.min(
+          Date.parse(now) + STEP_UP_TTL_MS,
+          Date.parse(cart.contents.cart_expiry),
+          Date.parse(intent.intent_expiry),
+        ),
+      ).toISOString(),
+      shopperId: shopper?.shopperId,
+    });
+    return result;
   }
   const vaultId = shopper?.vaultId;
   if (!payment.human_present && !vaultId) {
@@ -190,6 +228,46 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     };
   }
 
+  return placeOrder(deps, {
+    intent,
+    intentHash,
+    cart,
+    cartHash,
+    shopperId: shopper?.shopperId,
+    agentPlatform: payment.agent_platform,
+    humanPresent: payment.human_present,
+    vaultId,
+    outcome,
+    reasons,
+    semantic,
+  });
+}
+
+export interface OrderToPlace {
+  intent: IntentMandate;
+  intentHash: string;
+  cart: CartMandate;
+  cartHash: string;
+  shopperId?: string;
+  agentPlatform: string;
+  humanPresent: boolean;
+  /** Agent alone: the shopper's saved wallet, charged with intent CAPTURE. */
+  vaultId?: string;
+  outcome: Outcome;
+  reasons: ReasonCode[];
+  semantic?: unknown;
+}
+
+/**
+ * Signs the Cart Mandate, writes the order and its verdict, then creates the PayPal order. Used by checkout for
+ * an APPROVE (and a human-present STEP_UP) and by step-up approval once the shopper has signed.
+ */
+export async function placeOrder(
+  deps: Pick<CheckoutDeps, "db" | "paypal" | "merchant" | "now">,
+  o: OrderToPlace,
+): Promise<CheckoutResult> {
+  const now = deps.now();
+  const { intent, intentHash, cart, cartHash, outcome, reasons, semantic } = o;
   // Sign the Cart Mandate: the merchant's commitment, issued only after the checks above.
   const cartJws = await signMandate(cart, deps.merchant.privateKey, deps.merchant.kid);
   await deps.db.saveMandate({
@@ -203,7 +281,7 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
 
   const orderId = `ord_${randomUUID()}`;
   const pointer = customId(intent.mandate_id, intentHash);
-  const paypalIntent = payment.human_present ? "AUTHORIZE" : "CAPTURE";
+  const paypalIntent = o.humanPresent ? "AUTHORIZE" : "CAPTURE";
   await deps.db.createOrder({
     id: orderId,
     intentMandateId: intent.mandate_id,
@@ -214,9 +292,9 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     status: "PENDING",
     totalValue: cart.contents.total.value,
     currency: cart.contents.total.currency,
-    shopperId: shopper?.shopperId,
-    agentPlatform: payment.agent_platform,
-    humanPresent: payment.human_present,
+    shopperId: o.shopperId,
+    agentPlatform: o.agentPlatform,
+    humanPresent: o.humanPresent,
   });
   await deps.db.recordVerdict({
     intentMandateId: intent.mandate_id,
@@ -246,7 +324,7 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
         unitAmount: l.unit_price,
         quantity: l.quantity,
       })),
-      vaultId: payment.human_present ? undefined : vaultId,
+      vaultId: o.humanPresent ? undefined : o.vaultId,
     });
   } catch (err) {
     await deps.db.updateOrder(orderId, { status: "PAYPAL_FAILED" });
@@ -289,6 +367,29 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
       ...(created.approvalUrl ? { approval_url: created.approvalUrl } : {}),
     },
   };
+}
+
+/** Stores the waiting cart and sends the shopper its link. The token exists only in that link. */
+async function createStepUp(
+  deps: CheckoutDeps,
+  st: Omit<StepUpRecord, "id" | "tokenHash"> & { shopperId?: string },
+): Promise<void> {
+  const { shopperId, ...row } = st;
+  const token = randomBytes(32).toString("base64url");
+  const id = `stp_${randomUUID()}`;
+  await deps.db.createStepUp({ ...row, id, tokenHash: stepUpTokenHash(token) });
+  await deps.db.appendAudit({
+    actor: "api",
+    action: "stepup.created",
+    subjectId: id,
+    requestBody: {
+      intentMandateId: st.intentMandateId,
+      cartMandateHash: st.cartMandateHash,
+      expiresAt: st.expiresAt,
+    },
+  });
+  const url = `${deps.stepUp.linkBase.replace(/\/+$/, "")}/approve/${token}`;
+  await deps.stepUp.send({ stepUpId: id, shopperId, url, expiresAt: st.expiresAt });
 }
 
 /**

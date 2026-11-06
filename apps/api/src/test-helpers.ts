@@ -11,6 +11,7 @@ import type {
   MandateRecord,
   OrderPatch,
   OrderRecord,
+  StoredStepUp,
   VerdictRecord,
   WebhookEventRecord,
 } from "@poi/db";
@@ -28,6 +29,7 @@ export function memoryDb() {
   const audit: AuditEntry[] = [];
   const processed = new Set<string>();
   const disputes = new Map<string, DisputeRow>();
+  const stepups = new Map<string, StoredStepUp>();
   const page = <T>(rows: T[], p: { limit: number; offset: number }) =>
     rows.slice(p.offset, p.offset + p.limit);
   const db: Db = {
@@ -92,6 +94,26 @@ export function memoryDb() {
     listOrders: async (p) => page([...orders.values()].reverse(), p),
     listVerdicts: async (p) =>
       page(verdicts.map((v, i) => ({ ...v, id: i + 1, createdAt: new Date().toISOString() })).reverse(), p),
+    createStepUp: async (st) => {
+      if (stepups.has(st.id) || [...stepups.values()].some((x) => x.tokenHash === st.tokenHash))
+        throw new Error("duplicate step-up");
+      stepups.set(st.id, { ...st, status: "PENDING", createdAt: new Date().toISOString() });
+    },
+    findStepUp: async (tokenHash) => {
+      const st = [...stepups.values()].find((x) => x.tokenHash === tokenHash);
+      return st ? { ...st } : null;
+    },
+    claimStepUp: async (id, now) => {
+      const st = stepups.get(id);
+      if (!st || st.status !== "PENDING" || Date.parse(st.expiresAt) <= Date.parse(now)) return false;
+      st.status = "APPROVING";
+      return true;
+    },
+    finishStepUp: async (id, { status, orderId, approvedAt }) => {
+      const st = stepups.get(id);
+      if (!st) throw new Error(`step-up ${id} does not exist`);
+      Object.assign(st, { status }, orderId ? { orderId } : {}, approvedAt ? { approvedAt } : {});
+    },
     pendingDisputeEvents: async (limit) =>
       [...events.values()]
         .filter((e) => !processed.has(e.eventId) && e.eventType.startsWith("CUSTOMER.DISPUTE."))
@@ -116,7 +138,7 @@ export function memoryDb() {
     migrate: async () => [],
     close: async () => {},
   };
-  return { db, nonces, events, keys, mandates, orders, verdicts, audit, disputes, processed };
+  return { db, nonces, events, keys, mandates, orders, verdicts, audit, disputes, processed, stepups };
 }
 
 export interface Party {

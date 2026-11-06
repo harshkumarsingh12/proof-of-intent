@@ -9,7 +9,7 @@ import { createDb, type Db } from "@poi/db";
 import { generateSigningKeyPair } from "@poi/mandates";
 import { createPayPalClient, parseMode, type PayPalClient } from "@poi/paypal";
 import { importPKCS8 } from "jose";
-import type { CheckoutDeps, Merchant } from "./checkout";
+import type { CheckoutDeps, Merchant, StepUpConfig } from "./checkout";
 import { checkoutRoutes } from "./routes/checkout";
 import { disputeRoutes } from "./routes/disputes";
 import { keyRoutes } from "./routes/keys";
@@ -28,6 +28,11 @@ export interface AppDeps {
   operatorToken?: string;
   semanticFit?: CheckoutDeps["semanticFit"];
   now?: () => string;
+  /**
+   * Agent-alone step-up links. linkBase defaults to BUYER_PUBLIC_URL; send defaults to the API log, because no
+   * email provider is wired yet (the link only locates the cart: approving it needs the shopper's own key).
+   */
+  stepUp?: Partial<StepUpConfig>;
 }
 
 /**
@@ -42,6 +47,7 @@ export async function depsFromEnv(env = process.env): Promise<AppDeps> {
     merchant: await merchantFromEnv(env, paypalMode === "sandbox"),
     aiMode: parseAiMode(env.AI_MODE),
     operatorToken: env.OPERATOR_TOKEN || undefined,
+    stepUp: { linkBase: env.BUYER_PUBLIC_URL || "http://localhost:3001" },
   };
 }
 
@@ -90,6 +96,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     aiMode: deps.aiMode ?? "replay",
     semanticFit: deps.semanticFit ?? semanticFit,
     now: deps.now ?? (() => new Date().toISOString()),
+    stepUp: {
+      linkBase: deps.stepUp?.linkBase ?? "http://localhost:3001",
+      send:
+        deps.stepUp?.send ??
+        (async (link) => {
+          app.log.info(
+            { stepUpId: link.stepUpId, shopperId: link.shopperId, expiresAt: link.expiresAt, url: link.url },
+            "step-up approval link (no email provider configured; deliver this to the shopper)",
+          );
+        }),
+    },
   });
   // As a plugin, so these load after rate-limit and its per-route hook sees them.
   app.register(async (instance) => registerRoutes(instance));
