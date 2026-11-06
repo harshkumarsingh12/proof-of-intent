@@ -11,6 +11,9 @@ const adminUrl = process.env.DATABASE_URL;
 test("demo seed refuses sandbox mode and remote Postgres before connecting", async () => {
   await expect(seedDemo("postgres://localhost/demo", "sandbox")).rejects.toThrow("PAYPAL_MODE=mock");
   await expect(seedDemo("postgres://example.invalid/demo")).rejects.toThrow("local or Compose Postgres");
+  await expect(seedDemo("postgres://localhost/demo?host=example.invalid")).rejects.toThrow(
+    "local or Compose Postgres",
+  );
 });
 
 test.runIf(adminUrl)(
@@ -23,7 +26,8 @@ test.runIf(adminUrl)(
     await admin.connect();
     await admin.query(`create database ${name}`);
 
-    const app = buildApp({ db: createDb(url.toString()), paypal: createMockClient() });
+    const paypal = createMockClient();
+    const app = buildApp({ db: createDb(url.toString()), paypal, operatorToken: "test-only" });
     try {
       const now = new Date("2026-11-07T09:00:00Z");
       const results = await Promise.all([
@@ -58,6 +62,23 @@ test.runIf(adminUrl)(
       expect(preview.statusCode).toBe(200);
       expect(preview.headers["content-type"]).toContain("application/pdf");
       expect(preview.body.startsWith("%PDF-")).toBe(true);
+
+      const action = await app.inject({
+        method: "POST",
+        url: "/disputes/PP-D-1002/actions/accept-claim",
+        headers: { authorization: "Bearer test-only" },
+      });
+      expect(action.statusCode).toBe(409);
+      expect(action.json().error).toBe("demo_read_only");
+      const tracking = await app.inject({
+        method: "POST",
+        url: `/orders/${orders[0].id}/tracking`,
+        headers: { authorization: "Bearer test-only" },
+        payload: { trackingNumber: "sample", carrier: "UPS" },
+      });
+      expect(tracking.statusCode).toBe(409);
+      expect(tracking.json().error).toBe("demo_read_only");
+      expect(paypal.disputeActions).toEqual([]);
     } finally {
       await app.close();
       await admin.query(`drop database ${name} with (force)`);

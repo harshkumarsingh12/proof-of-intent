@@ -28,7 +28,7 @@ Judges may score from the video and text alone. Presentation is one of five equa
 **Seed data:** 300 synthetic agent orders across four platforms, 24 disputes, and the two scripted disputes
 (compliant + overreach) pinned on top. Fictional names and addresses only.
 
-`pnpm demo:seed` applies migrations and loads a fresh local mock database in one transaction. The two scripted
+`pnpm demo:seed` applies migrations, then loads a fresh local mock database in one transaction. The two scripted
 cases are visible through the normal dispute and evidence preview routes. The sample records are for read-only
 inspection. See [SETUP.md](../SETUP.md#load-the-mock-demo-dataset).
 

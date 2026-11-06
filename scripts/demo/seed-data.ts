@@ -21,7 +21,11 @@ const seedLock = 7_007_041;
 /** Seed one isolated mock database. A retry after success leaves the dataset and deadlines intact. */
 export async function seedDemo(databaseUrl: string, mode = "mock", now = new Date()): Promise<boolean> {
   if (mode !== "mock") throw new Error("Demo seeding requires PAYPAL_MODE=mock.");
-  if (!["localhost", "127.0.0.1", "[::1]", "postgres"].includes(new URL(databaseUrl).hostname)) {
+  const url = new URL(databaseUrl);
+  if (
+    url.searchParams.has("host") ||
+    !["localhost", "127.0.0.1", "[::1]", "postgres"].includes(url.hostname)
+  ) {
     throw new Error("Demo seeding requires a local or Compose Postgres database.");
   }
 
@@ -204,6 +208,7 @@ async function insertDemo(client: pg.Client, now: Date): Promise<void> {
         : undefined;
     const recommendation = {
       ...rec,
+      demo: true,
       checkoutVerdict,
       constraintChecks: buildConstraintChecks(intent, cart, rec.reasons),
       analyzedAt: now.toISOString(),
