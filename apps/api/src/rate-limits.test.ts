@@ -30,10 +30,16 @@ describe("rate limits", () => {
     for (let i = 0; i < 100; i++) expect((await hit(app, "GET", "/healthz")).statusCode).toBe(200);
   });
 
-  test("the Studio stub is already limited", async () => {
-    const app = buildApp({ paypal: createMockClient() });
-    for (let i = 0; i < RATE_LIMITS.studio.max; i++)
-      expect((await hit(app, "POST", "/ai/studio")).statusCode).toBe(501);
-    expect((await hit(app, "POST", "/ai/studio")).statusCode).toBe(429);
+  test("the Studio endpoint is limited even for malformed authenticated requests", async () => {
+    const app = buildApp({ paypal: createMockClient(), operatorToken: "test-only" });
+    const studio = () =>
+      app.inject({
+        method: "POST",
+        url: "/ai/studio",
+        payload: {},
+        headers: { authorization: "Bearer test-only" },
+      });
+    for (let i = 0; i < RATE_LIMITS.studio.max; i++) expect((await studio()).statusCode).toBe(400);
+    expect((await studio()).statusCode).toBe(429);
   });
 });

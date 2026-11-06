@@ -47,14 +47,18 @@ should read the same tokens.
 `POST /ai/studio`; keep the five built-in agents and add `DisputeExplainer` with `explain_dispute(id)` and
 `draft_buyer_message(id)`, plus Agent Toolkit read-only `list_disputes`, `get_dispute`. **Read-only only.**
 
+The dashboard sends validated turn or lookup requests to the operator-authenticated endpoint. The server runs
+live turns through the configured AI provider. The browser executes only the tools registered with its Studio
+runner, and dispute tools return a limited policy finding, draft, or status. With no AI-enabled license the
+dashboard offers the standard Analytics and Disputes views.
+
 **Demo polish:** 300 seeded orders across four platforms and 24 disputes; the two scripted disputes pinned on top.
 
 ## Acceptance criteria
 
 1. `mandate-diff` registered with an AI description. *(ledger M2 @hoursgotviral-dev)*
-2. DisputeExplainer exposes read-only tools only. *(ledger M3 @sumedhag28)*
-3. Without a license key, behaviour is documented in SETUP.md. *(M0; today the dashboard has no AG Studio
-   dependency, so it runs without a key, as SETUP.md says)*
+2. DisputeExplainer exposes read-only tools only. *(Tool registration and API tests)*
+3. Without a license key, behaviour is documented in SETUP.md.
 4. Every number on the analytics page traces to seed data or a sandbox order. *(done, #73: tests check against
    `SEED_DISPUTES` and `SEED_ORDERS`)*
 

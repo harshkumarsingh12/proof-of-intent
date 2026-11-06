@@ -1,6 +1,8 @@
 import { fetchAnalytics, serverApiBaseUrl } from "../../src/api";
+import Link from "next/link";
 import { AnalyticsView } from "./AnalyticsView";
 import { pageSubtitle, pageTitle } from "../../src/theme";
+import { studioEnabled } from "./studio/enabled";
 
 export const metadata = {
   title: "Analytics · Proof of Intent operations",
@@ -35,6 +37,7 @@ export default async function AnalyticsPage() {
 
       </div>
 
+      {studioEnabled() && <Link href="/analytics/studio">Open Dispute Studio</Link>}
       {/* Analytics Dashboard Cards & Chart */}
       <AnalyticsView initialData={initialData} />
     </div>

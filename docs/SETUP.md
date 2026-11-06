@@ -26,10 +26,10 @@ default to 3000, 3001 and 3002), then open the matching `localhost` port. Host p
 so journeys A–D run end to end without any account. _(Journeys are wired in as the milestones land; see the
 ledger in the latest CI run for what is open.)_
 
-**AG Studio license.** The dashboard doesn't use AG Grid or AG Studio yet (no dependency in
-`apps/dashboard/package.json`), so it runs without `AG_STUDIO_LICENSE_KEY`.
-`TODO(@hoursgotviral-dev)`: when AG Studio lands, document here whether a missing key shows a watermark or
-refuses to load.
+**AG Studio license.** Analytics and Disputes work without a license. Set `AG_STUDIO_LICENSE_KEY` to an
+AI-enabled key and configure the dashboard operator login to open Dispute Studio from Analytics. Studio chat
+uses the merchant API's live AI settings. Provider credentials remain in the API environment. With replay
+mode or an unavailable provider, use the standard Analytics and Disputes views.
 
 **The shop** (http://localhost:3001/shop) runs journey A: your browser makes a key and keeps it, you sign an
 intent, the buyer agent proposes a product from the store (12 products in four categories: running jackets, road running shoes, base layers, socks), and the merchant approves, steps up or refuses it before any
