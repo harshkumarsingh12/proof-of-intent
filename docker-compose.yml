@@ -10,6 +10,10 @@ x-app: &app
   env_file: .env
   restart: unless-stopped
   networks: [poi]
+  # Outside names (PayPal, the LLM) go to public resolvers; Docker's embedded DNS still answers service names
+  # (postgres, api). The host's resolver dropped lookups on the team server (EAI_AGAIN for
+  # api.sandbox.paypal.com, Nov 6), which failed an operator's accept-claim.
+  dns: [1.1.1.1, 8.8.8.8]
 
 services:
   postgres:
