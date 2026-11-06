@@ -12,11 +12,10 @@
  * Invariant 1: no PayPal order exists for a REJECT.
  */
 import { randomUUID } from "node:crypto";
-import { APPROVE_AT, STEP_UP_AT, type AiMode, type SemanticFit } from "@poi/ai";
+import { APPROVE_AT, STEP_UP_AT, isAiUnavailable, type AiMode, type SemanticFit } from "@poi/ai";
 import {
   CartMandate,
   IntentMandate,
-  NotImplementedError,
   PaymentMandate,
   type CheckoutRequest,
   type CheckoutResponse,
@@ -24,7 +23,14 @@ import {
   type ReasonCode,
 } from "@poi/contracts";
 import type { Db, KeyRecord } from "@poi/db";
-import { customId, keyValidAt, mandateHash, signMandate, verifyMandate, type SigningKey } from "@poi/mandates";
+import {
+  customId,
+  keyValidAt,
+  mandateHash,
+  signMandate,
+  verifyMandate,
+  type SigningKey,
+} from "@poi/mandates";
 import type { PayPalClient } from "@poi/paypal";
 import { evaluate } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
@@ -154,11 +160,11 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
       reasons.push("SEMANTIC_UNCERTAIN");
     }
   } catch (err) {
-    if (!(err instanceof NotImplementedError)) throw err;
-    // J1 unavailable (unbuilt, budget kill switch): a human confirms instead of the model.
+    if (!isAiUnavailable(err)) throw err;
+    // J1 unavailable (no recording, invalid output after a retry, timeout, no key): a human confirms instead.
     outcome = "STEP_UP";
     reasons.push("SEMANTIC_UNCERTAIN");
-    semantic = { unavailable: true };
+    semantic = { unavailable: true, why: (err as Error).message };
   }
   if (intent.user_cart_confirmation_required) outcome = "STEP_UP";
 

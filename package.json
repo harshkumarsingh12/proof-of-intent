@@ -23,7 +23,8 @@
     "sandbox:record-orders": "tsx --env-file=.env scripts/sandbox/record-orders.ts",
     "sandbox:checkout-smoke": "tsx --env-file=.env scripts/sandbox/checkout-smoke.ts",
     "sandbox:dispute-cycle": "tsx --env-file=.env scripts/sandbox/dispute-cycle.ts",
-    "sandbox:hosted-order": "tsx scripts/sandbox/hosted-order.ts"
+    "sandbox:hosted-order": "tsx scripts/sandbox/hosted-order.ts",
+    "ai:record": "tsx --env-file=.env scripts/ai/record-j1.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

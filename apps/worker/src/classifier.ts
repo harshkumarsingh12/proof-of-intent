@@ -1,7 +1,6 @@
-import { APPROVE_AT, parseAiMode, semanticFit, type AiMode } from "@poi/ai";
+import { APPROVE_AT, isAiUnavailable, parseAiMode, semanticFit, type AiMode } from "@poi/ai";
 import {
   DisputeClass,
-  NotImplementedError,
   type CartMandate,
   type IntentMandate,
   type Money,
@@ -138,8 +137,9 @@ export async function runDisputeClassifier(
         return result("INTENT_MISREAD", "ACCEPT_CLAIM", ["SEMANTIC_MISMATCH"]);
       }
     } catch (err) {
-      if (!(err instanceof NotImplementedError)) throw err;
-      // J1 is unbuilt (docs/specs/0006, @sumedhag28): the hard rules passed, so fall through to compliant.
+      if (!isAiUnavailable(err)) throw err;
+      // No J1 answer (no recording, model down): the hard rules passed, so fall through to compliant and
+      // let the operator, who reviews every dispute, judge the wording.
     }
   }
 
