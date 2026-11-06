@@ -76,13 +76,16 @@ describe("POST /checkout: decisions", () => {
     const res = await s.checkout(body);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().verdict).toEqual({ outcome: "REJECT", reasons: ["AMOUNT_EXCEEDS_MAX"] });
+    expect(res.json().verdict).toEqual({
+      outcome: "REJECT",
+      reasons: ["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"],
+    });
     expect(res.json().paypal_order_id).toBeUndefined();
     expect(res.json().cart_mandate_jws).toBeUndefined();
     expect(s.createOrder).not.toHaveBeenCalled();
     expect(s.mem.orders.size).toBe(0);
     expect(s.mem.verdicts).toMatchObject([
-      { outcome: "REJECT", reasons: ["AMOUNT_EXCEEDS_MAX"], cartId: "cart-overreach" },
+      { outcome: "REJECT", reasons: ["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"], cartId: "cart-overreach" },
     ]);
   });
 
