@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { ledger } from "@poi/ledger";
 import { tools } from "./studio-agent";
 import { widgets } from "./widgets";
 
@@ -10,8 +9,13 @@ describe("dashboard", () => {
     expect(diff?.aiDescription.length).toBeGreaterThan(20);
   });
 
-  ledger("M3", "sumedhag28", "DisputeExplainer agent exposes read-only tools only", () => {
-    expect(tools.length).toBeGreaterThan(0);
+  it("DisputeExplainer exposes the four read-only dispute tools", () => {
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "explain_dispute",
+      "draft_buyer_message",
+      "list_disputes",
+      "get_dispute",
+    ]);
     expect(tools.every((t) => t.readOnly)).toBe(true);
   });
 });

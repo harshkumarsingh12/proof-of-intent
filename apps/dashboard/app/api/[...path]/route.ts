@@ -28,11 +28,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
 
 export async function POST(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
-  if (!isOperatorActionPath(path)) {
+  const studio = path.length === 2 && path[0] === "ai" && path[1] === "studio";
+  if (!studio && !isOperatorActionPath(path)) {
     return Response.json(
-      { error: "not_found", message: "Only dispute actions can be posted" },
+      { error: "not_found", message: "Unknown dashboard operation" },
       { status: 404 },
     );
+  }
+  if (studio && req.headers.get("content-type")?.split(";", 1)[0]?.trim() !== "application/json") {
+    return Response.json({ error: "invalid_request", message: "Studio expects JSON" }, { status: 415 });
   }
   const token = process.env.OPERATOR_TOKEN;
   const password = process.env.OPERATOR_PASSWORD;

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import { semanticFit as realJ1, type SemanticFit } from "@poi/ai";
+import { semanticFit as realJ1, type Generate, type SemanticFit } from "@poi/ai";
 import { NotImplementedError } from "@poi/contracts";
 import {
   compliantCart,
@@ -60,6 +60,7 @@ function setup(overrides: Partial<AppDeps> & { vaultId?: string; retiredAt?: str
   const app = buildApp({
     paypal,
     db: mem.db,
+    aiMode: overrides.aiMode,
     merchant: { id: MERCHANT_ID, kid: "merchant-1", privateKey: merchantKey.privateKey },
     semanticFit,
     now: () => NOW,
@@ -170,6 +171,44 @@ describe("POST /checkout: decisions", () => {
       expect(res.json().verdict).toEqual({ outcome, reasons: [...reasons] });
       expect(s.createOrder).toHaveBeenCalledTimes(1);
     }
+  });
+
+  test.each(["live", "replay"] as const)("a trail shoe for road running needs confirmation in %s mode", async (aiMode) => {
+    const amount = { value: 12800, currency: "USD" };
+    const attributes = { category: "running-shoe", color: "blue" };
+    const intent = {
+      ...greyJacketIntent,
+      natural_language_description: "Blue road running shoes in size 10, under $130.",
+      constraints: { ...greyJacketIntent.constraints, attributes, amount_max: { value: 13000, currency: "USD" } },
+    };
+    const cart = {
+      ...compliantCart,
+      contents: {
+        ...compliantCart.contents,
+        lines: [{ sku: "SHO-RDG-BLU-10", title: "Ridge Trail Running Shoe, size 10", attributes, unit_price: amount, quantity: 1 }],
+        total: amount,
+      },
+    };
+    // What the live model really answered for this cart (#103): a confident match.
+    const calls = vi.fn();
+    const provider: Generate = async ({ schema }) => {
+      calls();
+      return schema.parse({
+        fit: "match",
+        confidence: 0.95,
+        reasons: ["Running shoe, blue, size 10, under budget."],
+        matched_attributes: ["category", "color"],
+        conflicting_attributes: [],
+      });
+    };
+    const s = setup({ aiMode, vaultId: "VAULT-1", semanticFit: (words, proposed, mode) => realJ1(words, proposed, mode, { generate: provider }) });
+    const { body } = await signedCheckout({ shopper, agent, intent, cart, humanPresent: false });
+    const res = await s.checkout(body);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().verdict).toEqual({ outcome: "STEP_UP", reasons: ["SEMANTIC_UNCERTAIN"] });
+    expect(res.json().paypal_order_id).toBeUndefined();
+    expect(calls).toHaveBeenCalledTimes(aiMode === "live" ? 1 : 0);
+    expect(s.createOrder).not.toHaveBeenCalled();
   });
 
   test("while J1 is unbuilt, a passing cart steps up to the shopper instead of auto-approving", async () => {

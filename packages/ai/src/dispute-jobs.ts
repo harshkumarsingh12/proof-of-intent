@@ -63,6 +63,8 @@ const j2 = {
   timeoutMs: 5_000,
   prompt: loadPrompt("j2-dispute-classification"),
 };
+export const J2_REPLAY = j2.name;
+export const J2_PROMPT_VERSION = j2.prompt.version;
 const j3 = {
   id: "J3",
   name: "j3-evidence-drafting",
@@ -97,6 +99,9 @@ export function disputeJobInput(input: DisputeJobInput): DisputeJobInput {
     bundle: Object.fromEntries(Object.entries(input.bundle).map(([id, fact]) => [id, scrub(fact)])),
   };
 }
+
+export const j2ReplayKey = (input: DisputeJobInput): string =>
+  replayKey(j2.id, J2_PROMPT_VERSION, disputeJobInput(input));
 
 const hasValidCitations = ({ cites }: { cites: string[] }, bundle: DisputeJobInput["bundle"]) =>
   cites.length > 0 && cites.every((id) => Object.hasOwn(bundle, id));
