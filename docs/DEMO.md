@@ -37,14 +37,22 @@ zero-credential local path, follow [SETUP.md](SETUP.md#1-zero-credentials-judges
    supplied with the testing instructions and click **Preview evidence PDF**. An operator testing the action
    on a designated sandbox dispute can click **Escalate to a claim** at inquiry, wait for PayPal to open the
    claim, then click **Submit evidence to PayPal** when PayPal allows it.
-5. Open the designated overreach dispute and compare the mandate and cart in the diff. An operator can use
-   **Accept Claim & Refund** when PayPal offers that action. Read-only reviewers can inspect both paths in
-   the preview. The dashboard labels demo data and shows the reason when an action is disabled.
+5. **Overreach (concede).** Checkout refuses an overreaching cart before PayPal (step 2), so the hosted sandbox
+   never holds an overreaching capture to dispute. See this path on the zero-credential local stack:
+   `pnpm demo:seed` ([SETUP.md](SETUP.md)) puts the scripted overreach dispute (the red USD 95 jacket against
+   grey under USD 80, captured "before Proof of Intent was installed") second in the queue. Open it, compare the
+   mandate and cart in the diff (`AMOUNT_EXCEEDS_MAX`, `ATTRIBUTE_MISMATCH`) and see **Accept Claim & Refund**
+   recommended; seeded disputes are read-only. On the hosted sandbox an operator can still run the refund
+   itself on a designated compliant dispute through **Override: accept the claim instead**, with a note. The
+   dashboard shows the reason whenever an action is disabled.
 6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
 
 ### Before recording and submission
 
-- Verify the complete hosted checkout and both designated sandbox disputes with the supplied test accounts.
+- Verify the complete hosted checkout and two designated sandbox disputes (one to defend, one for the override
+  refund) with the supplied test accounts.
+- Record the 1:42 overreach shot on the local seeded stack (`pnpm demo:seed`); the hosted sandbox has no
+  overreaching capture to dispute.
 - Put the verified dispute IDs and the appropriate sandbox access in the Devpost testing instructions.
 - Add the dated full eval report and its measured numbers to the README when #43 is complete.
 - Use the analytics view at 2:02. If #39 lands and is verified on the hosted demo, time the Studio prompt
