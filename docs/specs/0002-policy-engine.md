@@ -1,12 +1,12 @@
 # 0002: Policy engine and reason codes
 
-| | |
-|---|---|
-| **Status** | In Progress |
-| **Owner** | @srshriv |
-| **Reviewers** | @harshkumarsingh12, @hoursgotviral-dev |
-| **Milestone** | M0 (core), M1 (remaining rules) |
-| **Code** | `packages/policy-engine`, `ReasonCode` in `packages/contracts` |
+|               |                                                                |
+| ------------- | -------------------------------------------------------------- |
+| **Status**    | In Progress                                                    |
+| **Owner**     | @srshriv                                                       |
+| **Reviewers** | @harshkumarsingh12, @hoursgotviral-dev                         |
+| **Milestone** | M0 (core), M1 (remaining rules)                                |
+| **Code**      | `packages/policy-engine`, `ReasonCode` in `packages/contracts` |
 
 ## Context
 
@@ -18,21 +18,21 @@ the dispute copilot must be able to replay the exact same decision later. Projec
 `evaluate({ intent, cart, now, ledger }) → { pass, reasons[] }`. Pure: no I/O, no clock, no randomness. Rules are
 a table; every failing rule adds its reason code; `pass` is true only with zero reasons.
 
-| Constraint | Reason code | Status |
-|---|---|---|
-| cart points at this intent | `MANDATE_MISMATCH` | built |
-| `valid_from <= now` | `MANDATE_NOT_YET_VALID` | built |
-| `now < intent_expiry` | `MANDATE_EXPIRED` | built |
-| `now < cart_expiry` | `CART_EXPIRED` | built |
-| all currencies equal `amount_max.currency` | `CURRENCY_MISMATCH` | built |
-| `total <= amount_max` | `AMOUNT_EXCEEDS_MAX` | built |
-| merchant in `merchant_allowlist` | `MERCHANT_NOT_ALLOWED` | built |
-| `quantity_max.per_line`, `.per_order` | `QUANTITY_EXCEEDS_MAX` | built |
-| exact `attributes` (category, color, size) | `ATTRIBUTE_MISMATCH` | M1 |
-| `sku_allowlist` | `SKU_NOT_ALLOWED` | M1 |
-| `shipping_address_hash` | `ADDRESS_MISMATCH` | M1 |
-| `budget_cap` vs ledger captured total + this cart | `BUDGET_EXCEEDED` | M1 |
-| `recurrence` (max orders per window) vs ledger | `RECURRENCE_EXCEEDED` | M1 |
+| Constraint                                        | Reason code             | Status |
+| ------------------------------------------------- | ----------------------- | ------ |
+| cart points at this intent                        | `MANDATE_MISMATCH`      | built  |
+| `valid_from <= now`                               | `MANDATE_NOT_YET_VALID` | built  |
+| `now < intent_expiry`                             | `MANDATE_EXPIRED`       | built  |
+| `now < cart_expiry`                               | `CART_EXPIRED`          | built  |
+| all currencies equal `amount_max.currency`        | `CURRENCY_MISMATCH`     | built  |
+| `total <= amount_max`                             | `AMOUNT_EXCEEDS_MAX`    | built  |
+| merchant in `merchant_allowlist`                  | `MERCHANT_NOT_ALLOWED`  | built  |
+| `quantity_max.per_line`, `.per_order`             | `QUANTITY_EXCEEDS_MAX`  | built  |
+| exact `attributes` (category, color, size)        | `ATTRIBUTE_MISMATCH`    | built  |
+| `sku_allowlist`                                   | `SKU_NOT_ALLOWED`       | built  |
+| `shipping_address_hash`                           | `ADDRESS_MISMATCH`      | built  |
+| `budget_cap` vs ledger captured total + this cart | `BUDGET_EXCEEDED`       | built  |
+| `recurrence` (max orders per window) vs ledger    | `RECURRENCE_EXCEEDED`   | built  |
 
 Signature, key and nonce failures (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `NONCE_REPLAYED`, `SCHEMA_INVALID`) are
 produced by the verification pipeline before the engine runs (spec 0003). Semantic codes (`SEMANTIC_UNCERTAIN`,
@@ -40,6 +40,14 @@ produced by the verification pipeline before the engine runs (spec 0003). Semant
 
 **Attributes:** exact, case-insensitive comparison of keys present in `constraints.attributes` against each cart
 line's `attributes`. Free-text nuance ("running jacket" vs "rain shell") is J1's job, not this engine's.
+A line that lacks a constrained attribute fails, since it can't show the shopper's attribute.
+
+**Address:** a cart without `shipping_address_hash` fails when the mandate has one.
+
+**Ledger rules:** a missing ledger means no prior captures. `budget_cap` fails when captured total + this cart is
+over the cap, and its currency joins `amount_max` in the currency check. `recurrence` counts captures in
+`(now - window_days, now]` plus this order; captures after `now` are ignored, so a replay at capture time sees
+what checkout saw.
 
 ## Interfaces
 
@@ -50,12 +58,12 @@ evaluate(input: { intent: IntentMandate; cart: CartMandate; now: string; ledger?
 
 ## Acceptance criteria
 
-1. Compliant fixture passes with no reasons; the red $95 fixture fails with `AMOUNT_EXCEEDS_MAX`. *(done)*
-2. Boundaries: exactly the max passes, one cent over fails. *(done)*
-3. Currency, merchant, quantity and freshness rules each produce their code. *(done)*
-4. Same input, same output. *(done)*
-5. Red fixture also yields `ATTRIBUTE_MISMATCH`. *(ledger M1 @srshriv)*
-6. Budget, recurrence, address and SKU rules. *(ledger M1 @srshriv)*
+1. Compliant fixture passes with no reasons; the red $95 fixture fails with `AMOUNT_EXCEEDS_MAX`. _(done)_
+2. Boundaries: exactly the max passes, one cent over fails. _(done)_
+3. Currency, merchant, quantity and freshness rules each produce their code. _(done)_
+4. Same input, same output. _(done)_
+5. Red fixture also yields `ATTRIBUTE_MISMATCH`. _(done)_
+6. Budget, recurrence, address and SKU rules. _(done)_
 7. Full line coverage of `packages/policy-engine` before M3.
 
 ## Out of scope
