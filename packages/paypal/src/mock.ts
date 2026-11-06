@@ -14,6 +14,7 @@ export type DisputeAction =
   | { kind: "provide-evidence"; disputeId: string; evidenceType: string; notes: string; files: string[] }
   | { kind: "send-message"; disputeId: string; message: string }
   | { kind: "accept-claim"; disputeId: string; note: string }
+  | { kind: "escalate"; disputeId: string; note: string }
   | { kind: "add-tracking"; captureId: string; trackingNumber: string; carrier: string; status: string };
 
 export interface MockPayPalClient extends PayPalClient {
@@ -120,6 +121,10 @@ export function createMockClient(): MockPayPalClient {
 
     async sendMessage(disputeId, message) {
       disputeActions.push({ kind: "send-message", disputeId, message });
+    },
+
+    async escalate(disputeId, note) {
+      disputeActions.push({ kind: "escalate", disputeId, note });
     },
 
     async acceptClaim(disputeId, note) {

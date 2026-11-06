@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DisputeDetail } from "../../../src/dispute-types";
-import { calculateAge, calculateSla, executeDisputeAction, formatMoney } from "../../../src/api";
+import {
+  calculateAge,
+  calculateSla,
+  executeDisputeAction,
+  fetchPaypalActions,
+  formatMoney,
+  type PaypalActions,
+} from "../../../src/api";
 import { card, kpiLabel, pillButton } from "../../../src/theme";
 import { SampleDataNotice } from "../../SampleDataNotice";
 
@@ -24,6 +31,39 @@ export function DisputeDetailView({
   const [actionError, setActionError] = useState<string | null>(null);
   // Operator override (spec 0005): accept the claim even though the copilot recommends defending. Needs a note.
   const [overrideNote, setOverrideNote] = useState("");
+  const noteTooShort = overrideNote.trim().length < 10;
+  // What PayPal allows right now (live). Unknown (demo data, PayPal unreachable): nothing is blocked client-side.
+  const [paypal, setPaypal] = useState<PaypalActions | null>(null);
+  const [escalating, setEscalating] = useState(false);
+  const can = (action: PaypalActions["allowed"][number]) => !paypal || paypal.allowed.includes(action);
+  const refreshPaypal = useCallback(async () => {
+    const live = await fetchPaypalActions(dispute.id);
+    if (live) setPaypal(live);
+    return live;
+  }, [dispute.id]);
+  useEffect(() => {
+    if (!isDemoData) void refreshPaypal();
+  }, [isDemoData, refreshPaypal]);
+
+  const handleEscalate = async () => {
+    setEscalating(true);
+    setActionError(null);
+    try {
+      const result = await executeDisputeAction(dispute.id, "escalate", {});
+      if (!result.success) {
+        setActionError(result.error ?? "Failed to escalate");
+        return;
+      }
+      // PayPal opens the claim within about a minute; check until it accepts evidence (up to 3 minutes).
+      for (let i = 0; i < 18; i++) {
+        await new Promise((r) => setTimeout(r, 10_000));
+        const live = await refreshPaypal();
+        if (live?.allowed.includes("provide-evidence")) break;
+      }
+    } finally {
+      setEscalating(false);
+    }
+  };
 
   const handleSubmitEvidence = async () => {
     setSubmitting(true);
@@ -530,21 +570,45 @@ export function DisputeDetailView({
 
             {/* Operator Submission Action */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, alignItems: "center", borderTop: "1px solid var(--poi-border)", paddingTop: 16 }}>
+              {paypal && (
+                <span style={{ fontSize: 12, color: "var(--poi-text-muted)", marginRight: "auto" }}>
+                  PayPal: {paypal.stage ?? "?"} · {paypal.status ?? "?"}
+                </span>
+              )}
               {!hasBeenPreviewed && (
                 <span style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
                   Open the PDF preview above to unlock Submit evidence
                 </span>
               )}
+              {hasBeenPreviewed && !submitted && !can("provide-evidence") && (
+                <span style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
+                  {escalating
+                    ? "Waiting for PayPal to open the claim..."
+                    : can("escalate")
+                      ? "PayPal accepts evidence once the inquiry is escalated to a claim"
+                      : "PayPal isn't accepting evidence on this dispute right now"}
+                </span>
+              )}
+              {!submitted && can("escalate") && !can("provide-evidence") && (
+                <button
+                  type="button"
+                  disabled={escalating}
+                  onClick={handleEscalate}
+                  style={{ ...pillBtnStyle, fontSize: 13, padding: "8px 18px", cursor: escalating ? "not-allowed" : "pointer" }}
+                >
+                  {escalating ? "Escalating..." : "Escalate to a claim"}
+                </button>
+              )}
               <button
                 type="button"
-                disabled={!hasBeenPreviewed || submitting || submitted}
+                disabled={!hasBeenPreviewed || submitting || submitted || !can("provide-evidence")}
                 onClick={handleSubmitEvidence}
                 style={{
                   ...pillBtnStyle,
-                  background: submitted ? "var(--poi-surface-muted)" : hasBeenPreviewed && !submitting ? "var(--poi-blue)" : "var(--poi-surface-muted)",
-                  color: submitted ? "var(--poi-text-muted)" : hasBeenPreviewed && !submitting ? "#ffffff" : "var(--poi-text-subtle)",
-                  borderColor: hasBeenPreviewed && !submitted && !submitting ? "var(--poi-blue)" : "var(--poi-border)",
-                  cursor: hasBeenPreviewed && !submitted && !submitting ? "pointer" : "not-allowed",
+                  background: submitted ? "var(--poi-surface-muted)" : hasBeenPreviewed && !submitting && can("provide-evidence") ? "var(--poi-blue)" : "var(--poi-surface-muted)",
+                  color: submitted ? "var(--poi-text-muted)" : hasBeenPreviewed && !submitting && can("provide-evidence") ? "#ffffff" : "var(--poi-text-subtle)",
+                  borderColor: hasBeenPreviewed && !submitted && !submitting && can("provide-evidence") ? "var(--poi-blue)" : "var(--poi-border)",
+                  cursor: hasBeenPreviewed && !submitted && !submitting && can("provide-evidence") ? "pointer" : "not-allowed",
                   fontSize: 13,
                   padding: "8px 18px",
                 }}
@@ -574,16 +638,26 @@ export function DisputeDetailView({
                   rows={3}
                   style={{ fontSize: 13, padding: 8, borderRadius: 6, border: "1px solid var(--poi-border)" }}
                 />
+                <span style={{ fontSize: 12, color: "var(--poi-text-muted)", alignSelf: "flex-end" }}>
+                  {conceded
+                    ? ""
+                    : !can("accept-claim")
+                      ? "PayPal isn't accepting a claim acceptance on this dispute right now"
+                      : noteTooShort
+                        ? `Write at least 10 characters (${overrideNote.trim().length}/10)`
+                        : ""}
+                </span>
                 <button
                   type="button"
-                  disabled={overrideNote.trim().length < 10 || conceding || conceded || submitted}
+                  disabled={noteTooShort || conceding || conceded || submitted || !can("accept-claim")}
                   onClick={() => handleAcceptClaim(overrideNote.trim())}
                   style={{
                     ...pillBtnStyle,
                     alignSelf: "flex-end",
                     fontSize: 13,
                     padding: "8px 18px",
-                    cursor: overrideNote.trim().length < 10 || conceding || conceded || submitted ? "not-allowed" : "pointer",
+                    opacity: !conceded && (noteTooShort || conceding || submitted || !can("accept-claim")) ? 0.45 : 1,
+                    cursor: noteTooShort || conceding || conceded || submitted || !can("accept-claim") ? "not-allowed" : "pointer",
                   }}
                 >
                   {conceded
@@ -648,7 +722,7 @@ export function DisputeDetailView({
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, borderTop: "1px solid var(--poi-border)", paddingTop: 16 }}>
               <button
                 type="button"
-                disabled={conceding || conceded}
+                disabled={conceding || conceded || !can("accept-claim")}
                 onClick={() => handleAcceptClaim()}
                 style={{
                   ...pillBtnStyle,

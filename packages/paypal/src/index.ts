@@ -71,6 +71,10 @@ export interface PayPalDispute {
   reason?: string;
   dispute_amount?: { currency_code: string; value: string };
   seller_response_due_date?: string;
+  /** INQUIRY, CHARGEBACK, PRE_ARBITRATION, ARBITRATION. */
+  dispute_life_cycle_stage?: string;
+  /** HATEOAS: the actions PayPal allows right now (rel accept_claim, provide_evidence, escalate, ...). */
+  links?: { rel: string; href?: string; method?: string }[];
   disputed_transactions?: {
     seller_transaction_id?: string;
     /** Our order id: we send it to PayPal as invoice_id. */
@@ -108,6 +112,8 @@ export interface PayPalClient {
   /** Multipart provide-evidence: the attestation PDF(s) plus notes. Only after an operator click (invariant 4). */
   provideEvidence(disputeId: string, input: ProvideEvidenceInput): Promise<void>;
   sendMessage(disputeId: string, message: string): Promise<void>;
+  /** Inquiry → claim, so PayPal reviews it and accepts evidence. Only after an operator click. */
+  escalate(disputeId: string, note: string): Promise<void>;
   /** Concede: PayPal refunds the buyer. Only after an operator click (invariant 4). Agent Toolkit `accept_dispute_claim`. */
   acceptClaim(disputeId: string, note: string): Promise<void>;
   /** The current dispute. Agent Toolkit `get_dispute`. */

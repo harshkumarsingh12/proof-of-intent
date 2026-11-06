@@ -46,7 +46,7 @@ const EXPLANATION: Record<DisputeClass, string> = {
   NO_MANDATE: "No signed mandate matches this order, so it takes PayPal's standard dispute path.",
 };
 
-const ACTIONS = ["provide-evidence", "accept-claim", "send-message"] as const;
+const ACTIONS = ["provide-evidence", "accept-claim", "send-message", "escalate"] as const;
 type Action = (typeof ACTIONS)[number];
 
 const page = (q: unknown) => {
@@ -297,6 +297,25 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
     return detail(db, d, d.recommendation as Recommendation);
   });
 
+  // What PayPal allows on this dispute right now, asked live (get_dispute): the worker's copy can be minutes old,
+  // and a button disabled from stale data could block a valid action. Rel names map to our action names.
+  app.get<{ Params: { id: string } }>("/disputes/:id/paypal-actions", async (req, reply) => {
+    try {
+      const live = await deps.paypal.getDispute(req.params.id);
+      const rels = new Set((live.links ?? []).map((l) => l.rel));
+      const allowed = ACTIONS.filter((a) => rels.has(a.replace("-", "_")));
+      return { stage: live.dispute_life_cycle_stage ?? null, status: live.status ?? null, allowed };
+    } catch (err) {
+      if (err instanceof PayPalError && err.status === 404) {
+        return reply.code(404).send({ error: "dispute_not_found", message: "PayPal has no such dispute" });
+      }
+      return reply
+        .code(503)
+        .header("retry-after", "5")
+        .send({ error: "paypal_unavailable", message: "Could not reach PayPal" });
+    }
+  });
+
   app.get<{ Params: { id: string } }>("/disputes/:id/evidence.pdf", async (req, reply) => {
     const db = needDb(reply);
     if (!db) return;
@@ -359,6 +378,11 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         note ?? `Accepted after review: the purchase did not match the shopper's signed intent${reasons}.`;
       request = { note: claimNote, amount: { value: d.amountValue, currency: d.currency } };
       send = () => deps.paypal.acceptClaim(d.id, claimNote);
+    } else if (action === "escalate") {
+      const escalateNote =
+        note ?? "Escalating so PayPal can review the signed record of the shopper's instructions.";
+      request = { note: escalateNote };
+      send = () => deps.paypal.escalate(d.id, escalateNote);
     } else {
       const message = text(req.body?.message) ?? rec?.draft?.buyer_message;
       if (!message)
