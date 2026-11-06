@@ -1,12 +1,12 @@
 # 0001: Mandate model and signatures
 
-| | |
-|---|---|
-| **Status** | In Progress |
-| **Owner** | @srshriv |
-| **Reviewers** | @harshkumarsingh12 |
-| **Milestone** | M0 (model), M1 (browser signing, key registry) |
-| **Code** | `packages/contracts`, `packages/mandates`, `apps/buyer/src/signing.ts` |
+|               |                                                                        |
+| ------------- | ---------------------------------------------------------------------- |
+| **Status**    | In Progress                                                            |
+| **Owner**     | @srshriv                                                               |
+| **Reviewers** | @harshkumarsingh12                                                     |
+| **Milestone** | M0 (model), M1 (browser signing, key registry)                         |
+| **Code**      | `packages/contracts`, `packages/mandates`, `apps/buyer/src/signing.ts` |
 
 ## Context
 
@@ -19,11 +19,11 @@ Project document §1, §5.
 Three mandates, AP2 v0.1 field names for the core, a `constraints` extension modeled on Mastercard Verifiable
 Intent, compact JWS signatures (ES256).
 
-| Mandate | Signed by | Key |
-|---|---|---|
-| Intent | shopper | ECDSA P-256, generated in the browser with WebCrypto, non-extractable, kept in IndexedDB |
-| Cart | merchant | `MERCHANT_SIGNING_KEY` from `pnpm keys:gen`; issued only after hard rules pass |
-| Payment | buyer agent | registered agent key (KYA-lite: key, platform, owner) |
+| Mandate | Signed by   | Key                                                                                      |
+| ------- | ----------- | ---------------------------------------------------------------------------------------- |
+| Intent  | shopper     | ECDSA P-256, generated in the browser with WebCrypto, non-extractable, kept in IndexedDB |
+| Cart    | merchant    | `MERCHANT_SIGNING_KEY` from `pnpm keys:gen`; issued only after hard rules pass           |
+| Payment | buyer agent | registered agent key (KYA-lite: key, platform, owner)                                    |
 
 - **Canonicalization:** RFC 8785 (JCS). `mandate_hash = SHA-256(JCS(payload))`, lowercase hex.
 - **Signature:** the JWS payload is the canonical bytes; header `{ alg: "ES256", kid }`.
@@ -52,13 +52,25 @@ key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/
 
 ## Acceptance criteria
 
-1. Key order does not change canonical bytes or the hash. *(test, done)*
-2. `customId` is 57 characters for a UUID mandate id. *(test, done)*
-3. Sign/verify round trip returns the exact canonical payload. *(test, done)*
-4. A tampered payload, a wrong key and an unknown `kid` are each rejected with the right reason. *(tests, done)*
-5. A retired key verifies mandates created before `retired_at` and rejects newer ones. *(test, done)*
-6. The browser key is ECDSA P-256 and non-extractable. *(ledger M1 @srshriv)*
-7. A mandate signed in the browser verifies on the server. *(M1, Playwright smoke)*
+1. Key order does not change canonical bytes or the hash. _(test, done)_
+2. `customId` is 57 characters for a UUID mandate id. _(test, done)_
+3. Sign/verify round trip returns the exact canonical payload. _(test, done)_
+4. A tampered payload, a wrong key and an unknown `kid` are each rejected with the right reason. _(tests, done)_
+5. A retired key verifies mandates created before `retired_at` and rejects newer ones. _(test, done)_
+6. The browser key is ECDSA P-256 and non-extractable. _(done)_
+7. A mandate signed in the browser verifies on the server. _(done: `apps/buyer/src/buyer.test.ts` runs the page's
+   WebCrypto code against `verifyMandate`; a Playwright smoke of the page itself is still open)_
+
+## As built (apps/buyer)
+
+- `src/signing.ts`: WebCrypto only. `generateKey` with `extractable: false`; the compact JWS is built by hand
+  (ES256's raw r‖s signature is what WebCrypto returns), payload = `canonicalize` bytes.
+- `src/key-store.ts`: the `CryptoKey` objects themselves in IndexedDB, with the `kid` and shopper id from
+  `POST /keys/shopper`. "Use a new key" deletes it; mandates it already signed stay valid.
+- Intents start 5 minutes in the past (`valid_from`, `created_at`) so a browser clock a little ahead of the server
+  doesn't produce `MANDATE_NOT_YET_VALID`.
+- The countersignature hashes the payload of the `cart_mandate_jws` the merchant returned, so the shopper approves
+  the exact bytes the merchant signed.
 
 ## Out of scope
 

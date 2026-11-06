@@ -31,6 +31,14 @@ ledger in the latest CI run for what is open.)_
 `TODO(@hoursgotviral-dev)`: when AG Studio lands, document here whether a missing key shows a watermark or
 refuses to load.
 
+**The shop** (http://localhost:3001/shop) runs journey A: your browser makes a key and keeps it, you sign an
+intent, the buyer agent proposes one of three jackets, and the merchant approves, steps up or refuses it before any
+PayPal order exists. In `PAYPAL_MODE=mock` an "Approve with PayPal (mock)" button stands in for PayPal; in sandbox
+the real PayPal button appears (it needs `PAYPAL_CLIENT_ID`). The agent's key has to be registered with the API:
+set `OPERATOR_TOKEN` in `.env` (any long random string) and the shop registers it on the first checkout. Without it,
+proposing a cart answers "the merchant doesn't know this shop's agent key". Keep the intent's default words for the
+demo: `AI_MODE=replay` has recorded J1 answers for exactly those.
+
 **What's in the dashboard** (http://localhost:3002):
 
 | Page           | Path             | Notes                                                                                             |
@@ -80,6 +88,8 @@ Postgres for local work: `docker compose up -d postgres` and set
    `packages/ai/prompts/`, run `pnpm ai:record` to re-record the replay answers (it uses the live model).
 6. Merchant signing key: `pnpm keys:gen > merchant-key.pem`, then put it in `MERCHANT_SIGNING_KEY`.
 7. Operator actions: `OPERATOR_TOKEN` (e.g. `openssl rand -hex 32`) and `OPERATOR_PASSWORD`.
+8. Buyer agent key: `pnpm keys:gen > agent-key.pem`, then put it in `AGENT_SIGNING_KEY` (and `AGENT_PLATFORM`).
+   Without it the shop makes a new agent key every time it starts, and registers each one.
 
 Sandbox scripts (all need the PayPal variables in `.env`):
 
@@ -140,6 +150,7 @@ like `api.poi.iotkiit.in` would fail HTTPS. `https://poi-api.iotkiit.in/` return
    OPS_HOST_PORT=3102
    OPERATOR_TOKEN=<openssl rand -hex 32>   # same value reaches api and dashboard; never shown to browsers
    OPERATOR_PASSWORD=<a password>          # dashboard login, user "operator"; share it only via Devpost
+   AGENT_SIGNING_KEY=<pnpm keys:gen, \n escaped>   # the shop's buyer agent; registered on first checkout
    ```
 
    For sandbox, add `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` and `MERCHANT_SIGNING_KEY`
