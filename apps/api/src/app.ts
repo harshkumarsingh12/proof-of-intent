@@ -12,6 +12,7 @@ import { importPKCS8 } from "jose";
 import type { CheckoutDeps, Merchant } from "./checkout";
 import { checkoutRoutes } from "./routes/checkout";
 import { disputeRoutes } from "./routes/disputes";
+import { keyRoutes } from "./routes/keys";
 import { registerRoutes } from "./routes/index";
 import { webhookRoutes } from "./routes/webhooks";
 
@@ -81,6 +82,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.register(webhookRoutes, deps);
   app.register(disputeRoutes, deps);
+  app.register(keyRoutes, deps);
   app.register(checkoutRoutes, {
     ...deps,
     aiMode: deps.aiMode ?? "replay",

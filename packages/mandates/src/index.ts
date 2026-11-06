@@ -4,7 +4,14 @@
  */
 import { createHash } from "node:crypto";
 import canonicalize from "canonicalize";
-import { CompactSign, compactVerify, generateKeyPair } from "jose";
+import {
+  calculateJwkThumbprint,
+  CompactSign,
+  compactVerify,
+  generateKeyPair,
+  importJWK,
+  type JWK,
+} from "jose";
 
 export type SigningKey = Parameters<CompactSign["sign"]>[0];
 export type VerifyKey = Awaited<ReturnType<typeof generateKeyPair>>["publicKey"];
@@ -67,4 +74,63 @@ class UnknownKey extends Error {}
 
 export async function generateSigningKeyPair(): Promise<{ privateKey: SigningKey; publicKey: VerifyKey }> {
   return generateKeyPair("ES256", { extractable: true });
+}
+
+/**
+ * Spec 0001: a retired key still verifies mandates created before `retired_at`, and nothing created after.
+ * The one place this rule lives; checkout and the registry both use it.
+ */
+export function keyValidAt(key: { retiredAt?: string }, createdAt: string): boolean {
+  return !key.retiredAt || Date.parse(createdAt) < Date.parse(key.retiredAt);
+}
+
+/** A public ES256 key as we store it: P-256 coordinates only. Throws on anything else (private parts included). */
+export function publicEs256Jwk(input: unknown): JWK {
+  const k = input as Record<string, unknown> | null;
+  const coord = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9_-]{43}$/.test(v);
+  if (!k || k.kty !== "EC" || k.crv !== "P-256" || !coord(k.x) || !coord(k.y)) {
+    throw new Error("expected a P-256 public JWK { kty: EC, crv: P-256, x, y }");
+  }
+  if ("d" in k) throw new Error("that is a private key; send only the public half");
+  return { kty: "EC", crv: "P-256", x: k.x as string, y: k.y as string };
+}
+
+/**
+ * The key id is the key's RFC 7638 thumbprint, so the same key always gets the same id and nobody can claim
+ * an id for a key they don't hold the public half of.
+ */
+export async function keyIdFor(prefix: "shp" | "agt", jwk: JWK): Promise<string> {
+  return `${prefix}_${await calculateJwkThumbprint(jwk, "sha256")}`;
+}
+
+export interface RegisteredKey {
+  kid: string;
+  publicJwk: JWK;
+  owner: string;
+  retiredAt?: string;
+}
+
+/** In-memory key registry (spec 0001 interface). The API keeps the same records in Postgres. */
+export function createKeyRegistry() {
+  const keys = new Map<string, RegisteredKey>();
+  return {
+    register(kid: string, publicJwk: JWK, owner: string): void {
+      const prev = keys.get(kid);
+      if (prev && (prev.publicJwk.x !== publicJwk.x || prev.publicJwk.y !== publicJwk.y)) {
+        throw new Error(`key id ${kid} is already registered to a different key`);
+      }
+      if (!prev) keys.set(kid, { kid, publicJwk: publicEs256Jwk(publicJwk), owner });
+    },
+    retire(kid: string, at: string): void {
+      const key = keys.get(kid);
+      if (!key) throw new Error(`unknown key id ${kid}`);
+      key.retiredAt ??= at; // retiring twice keeps the first date
+    },
+    /** The key for a mandate created at `mandateCreatedAt`, or undefined (unknown, or retired by then). */
+    async resolve(kid: string, mandateCreatedAt: string): Promise<VerifyKey | undefined> {
+      const key = keys.get(kid);
+      if (!key || !keyValidAt(key, mandateCreatedAt)) return undefined;
+      return (await importJWK(key.publicJwk, "ES256")) as VerifyKey;
+    },
+  };
 }

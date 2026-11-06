@@ -31,7 +31,7 @@ of every `ci` run.
 | Checkout route end to end | Harsh + Sristee | ✅ Done (stage 2 live run on integration day) |
 | Webhook receiver with verification | Harsh | Built; public URL live, real sandbox delivery check pending |
 | Remaining hard rules (budget, recurrence, address, attributes, SKU) | Sristee | Pending |
-| Key registry with retirement | Sristee | Pending |
+| Key registry with retirement | Sristee | ✅ `createKeyRegistry`, `/keys/shopper` (public), `/keys/agent` and retire (operator); hosted orders via `pnpm sandbox:hosted-order` |
 | Buyer app: intent form, browser key, signing, PayPal button | Sristee | Landing page live (#78); intent form, signing and checkout pending |
 | J1 semantic fit + replay mode | Sumedha | Pending |
 | Worker skeleton on fixtures | Sikruti | Intake, classification, decision and evidence drafting merged (#54–#57); pg-boss wiring pending |
