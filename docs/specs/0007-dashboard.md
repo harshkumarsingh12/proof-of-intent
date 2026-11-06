@@ -33,6 +33,24 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 2. `evidence-preview`: attestation PDF + cover note; Submit disabled until opened.
 3. `agent-platform`: card per platform with orders, overreach rate, conceded amount.
 
+**Custom widgets, as built** (`apps/dashboard/app/analytics/studio/studio-widgets.tsx`, shaping in `src/studio-data.ts`,
+descriptions in `src/widgets.ts`). `/analytics/studio` registers all three through `createWidgets({ additionalTypes })`
+and opens on a report with one of each, wired to two tables: `disputes` (one row per dispute, amount in dollars) and
+`checks` (one row per signed limit per dispute, from each dispute's `constraintChecks`). `mandate-diff` shows one dispute
+at a time with an "only violations" toggle; `evidence-preview` embeds the attestation PDF through the dashboard proxy for
+MANDATE_COMPLIANT disputes and says why there is none for the others; `agent-platform` is a card per platform with the
+overreach rate and conceded dollars. Every widget and every data-mapping slot carries an AI description, and
+`dashboard.test.ts` checks the registration. Differences from the AG Studio docs that cost time, for the next person
+(ag-studio 3.0.0): a data-mapping slot holds the hydrated field (`{ fieldId, key, name, ... }`), not `{ id }`, and
+`getData` wants those objects back (aggregates are the same object with `type: "implicitMeasure"` and an
+`aggregation`); `use(widgetApi.getData(...))` suspends forever because each render makes a new promise, so the widgets
+load in an effect; `ag-studio-react` ships no overlay components; a custom widget draws its own title. Not done: a
+`formatShape` for the widgets (the docs don't show how to build one outside Studio, and the AI harness works without it),
+cross-filtering between widgets, and the dispute selector driving the other two.
+
+**Theme, as built:** `src/studio-theme.ts` builds the Studio theme from `palette` (Studio wants literal colors, so it
+reads the palette, not the CSS variables), and the filters panel starts collapsed so it doesn't sit over the widgets.
+
 **Theme** *(built, #75 and #76)*: light, PayPal-inspired palette in `apps/dashboard/src/theme.ts`, written to
 `:root` as CSS variables; sidebar shell with the merchant name, dispute search and a `PAYPAL_MODE` badge; monospace
 reason codes; WCAG AA contrast. Our own wordmark and icons, no PayPal logo or assets. Dark mode and the locked
