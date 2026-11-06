@@ -28,6 +28,10 @@ services:
       interval: 5s
       retries: 10
     restart: unless-stopped
+    # Time for a clean shutdown (Docker's default 10 s can cut off a checkpoint). Changing this service's config
+    # also makes the next deploy recreate the container, which reattaches it to the current compose network
+    # (Nov 6: a postgres container left on a stale network gave migrate "getaddrinfo ENOTFOUND postgres").
+    stop_grace_period: 60s
     networks: [poi]
 
   # One-shot: applies pending migrations (packages/db/migrations), then exits. Uses the api image.
