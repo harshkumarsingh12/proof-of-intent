@@ -26,6 +26,9 @@ importers:
       pg:
         specifier: ^8.13.1
         version: 8.23.1
+      playwright-core:
+        specifier: 1.49.1
+        version: 1.49.1
       prettier:
         specifier: ^3.3.3
         version: 3.9.10
@@ -2263,6 +2266,11 @@ packages:
     resolution: {integrity: sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA==}
     engines: {node: '>=8'}
 
+  playwright-core@1.49.1:
+    resolution: {integrity: sha512-BzmpVcs4kE2CH15rWfzpjzVGhWERJfmnXmniSyKeRZUs9Ws65m+RGIi7mjJK/euCegfn3i7jvqWeWyHe9y3Vgg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   postcss@8.4.31:
     resolution: {integrity: sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==}
     engines: {node: ^10 || ^12 || >=14}
@@ -3618,6 +3626,9 @@ snapshots:
     dependencies:
       ag-grid-community: 36.2.0
       ag-stack: 36.2.0
+    optionalDependencies:
+      ag-charts-community: 14.2.0
+      ag-charts-enterprise: 14.2.0
 
   ag-grid-react@36.2.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
@@ -4705,6 +4716,8 @@ snapshots:
   pkg-up@3.1.0:
     dependencies:
       find-up: 3.0.0
+
+  playwright-core@1.49.1: {}
 
   postcss@8.4.31:
     dependencies:
