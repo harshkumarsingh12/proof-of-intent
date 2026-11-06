@@ -51,7 +51,7 @@ describe("evidence drafting for defend disputes", () => {
 
     const res = await draftEvidenceForDefend(
       { dispute, signedIntentJws, cart: compliantCart, captureRecord, keyResolver },
-      { store, db },
+      { store, db, mode: "replay" },
     );
 
     expect(res.status).toBe("pending_human_approval");
@@ -60,6 +60,8 @@ describe("evidence drafting for defend disputes", () => {
     expect(res.bundleJson).toContain(hash);
     expect(res.bundleJson).toContain(signedIntentJws);
     expect(res.draft.cover_note).toContain("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED");
+    expect(res.draft).toMatchObject({ source: "replay", prompt_version: "j3-v1" });
+    expect(new TextDecoder().decode(res.pdf)).toContain("The signed purchase record supports the cart checked at capture");
     expect((await store.get("PP-D-1001"))?.status).toBe("pending_human_approval");
     expect(auditLogs.map((a) => a.action)).toEqual(["evidence.drafted"]);
   });

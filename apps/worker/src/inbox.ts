@@ -8,12 +8,12 @@
  * Handling an event twice gives the same dispute row, so a crash between saving and marking the event
  * processed just repeats the work once on restart.
  */
-import type { AiMode } from "@poi/ai";
+import { classifyDispute, isAiUnavailable, parseAiMode, type AiMode } from "@poi/ai";
 import { CartMandate, IntentMandate, type Outcome, type ReasonCode } from "@poi/contracts";
 import type { Db, StoredOrder } from "@poi/db";
 import { fromPayPalAmount, PayPalError, type PayPalClient, type PayPalDispute } from "@poi/paypal";
 import { importJWK, type JWK } from "jose";
-import { runDisputeClassifier, type DisputeRecord, type OrderRecord } from "./classifier";
+import { disputeFacts, runDisputeClassifier, type DisputeRecord, type OrderRecord } from "./classifier";
 import { buildConstraintChecks, draftEvidenceForDefend, type EvidencePackageResult } from "./evidence";
 
 export interface InboxDeps {
@@ -88,16 +88,31 @@ export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Pro
   const order = stored ? await loadOrder(stored, tx?.custom, deps.db) : null;
 
   const amount = d.dispute_amount ? fromPayPalAmount(d.dispute_amount) : undefined;
+  const buyerNote = tx?.items?.flatMap((item) => item.notes ? [item.notes] : []).join("\n");
   const dispute: DisputeRecord = {
     disputeId: d.dispute_id,
     ...(stored ? { orderId: stored.id } : {}),
     ...(d.status ? { status: d.status } : {}),
     ...(d.reason ? { reason: d.reason } : {}),
+    ...(buyerNote ? { buyerNote } : {}),
     ...(amount ? { amount } : {}),
     ...(d.seller_response_due_date ? { responseDueDate: d.seller_response_due_date } : {}),
   };
 
-  const rec = await runDisputeClassifier(dispute, order, { mode: deps.aiMode });
+  const mode = deps.aiMode ?? parseAiMode(process.env.AI_MODE);
+  const rec = await runDisputeClassifier(dispute, order, { mode });
+  const ai = await classifyDispute({
+    decision: { class: rec.class, action: rec.action },
+    bundle: {
+      ...disputeFacts(dispute, order?.intent, order?.cart),
+      policy_evaluation: rec.reasons.length ? rec.reasons.join(", ") : rec.class,
+      ...(order?.checkoutVerdict ? { checkout_verdict: order.checkoutVerdict.outcome } : {}),
+      ...(order?.capturedAt ? { capture_record: "PayPal recorded a capture for this order." } : {}),
+    },
+  }, mode).catch((err: unknown) => {
+    if (!isAiUnavailable(err)) throw err;
+    return undefined;
+  });
 
   let pkg: EvidencePackageResult | undefined;
   let evidenceError: string | undefined;
@@ -117,7 +132,7 @@ export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Pro
         ledger: order.ledger,
         auditTrail: trail.map((a) => ({ timestamp: a.at, event: a.action, actor: a.actor })),
       },
-      { mode: deps.aiMode, now: () => now },
+      { mode, now: () => now },
     ).catch((err: Error) => {
       evidenceError = err.message;
       return undefined;
@@ -126,6 +141,7 @@ export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Pro
 
   const recommendation = {
     ...rec,
+    ...(ai ? { ai } : {}),
     constraintChecks:
       order?.intent && order.cart ? buildConstraintChecks(order.intent, order.cart, rec.reasons) : [],
     checkoutVerdict: order?.checkoutVerdict?.outcome ?? null,
@@ -159,6 +175,7 @@ export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Pro
       class: rec.class,
       action: rec.action,
       reasons: rec.reasons,
+      ...(ai ? { j2: { prompt_version: ai.prompt_version, source: ai.source } } : {}),
       ...(pkg ? { evidence: { mandateHash: pkg.mandateHash, customId: pkg.customId } } : {}),
     },
   });

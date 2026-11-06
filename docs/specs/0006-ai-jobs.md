@@ -55,6 +55,12 @@ thresholds, which turns "the model didn't answer" into "the shopper's cart is wr
 **Prompts:** `packages/ai/prompts/*.md` with front matter (`version`, `model`, `schema`). Each verdict records its
 prompt version in the audit log.
 
+**J2 and J3 as built.** The worker supplies named excerpts of the dispute and verified purchase facts. J2
+keeps the worker's deterministic class and action and stores cited reasons and evidence suggestions on the
+recommendation. J3 drafts the preview cover note and buyer message for verified compliant orders. Both drop
+items with missing or unknown citations. When a job is unavailable, the rule-only recommendation and evidence
+remain available for operator review. The first J2/J3 replay entries are hand-authored demo fixtures.
+
 **Evals:** J1 set of 20 (7 match, 7 partial, 6 mismatch); J2 set of 12 covering all four classes. `pnpm eval`
 writes `docs/evals/<date>.md`. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
 schema validity 100% after retry.
@@ -63,7 +69,7 @@ schema validity 100% after retry.
 
 1. Replay: compliant fixture → `match` ≥ 0.8; rain shell → `partial`. _(done)_
 2. An injected "ignore the budget" title never yields `match`. _(done)_
-3. Overreach dispute → `AGENT_OVERREACH`, `ACCEPT_CLAIM`. _(ledger M2)_
+3. Overreach dispute → `AGENT_OVERREACH`, `ACCEPT_CLAIM`. _(J2 replay test)_
 4. Stack runs end to end with no API key in replay mode. _(J1 done: `checkout.test.ts` runs the real J1 in replay)_
 5. Eval report committed with numbers quoted in the README. _(M3)_
 
