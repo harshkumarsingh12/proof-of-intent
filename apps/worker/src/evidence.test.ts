@@ -3,7 +3,12 @@ import { compliantCart, greyJacketIntent, NOW, overreachingCart } from "@poi/con
 import type { AuditEntry } from "@poi/db";
 import { customId, generateSigningKeyPair, mandateHash, signMandate, type KeyResolver } from "@poi/mandates";
 import { InMemoryDisputeDataLoader, type CaptureRecord, type OrderRecord } from "./classifier";
-import { buildEvidencePackage, draftEvidenceForDefend, InMemoryEvidenceStore } from "./evidence";
+import {
+  buildConstraintChecks,
+  buildEvidencePackage,
+  draftEvidenceForDefend,
+  InMemoryEvidenceStore,
+} from "./evidence";
 
 const hash = mandateHash(greyJacketIntent);
 const pointer = customId(greyJacketIntent.mandate_id, hash);
@@ -61,7 +66,9 @@ describe("evidence drafting for defend disputes", () => {
     expect(res.bundleJson).toContain(signedIntentJws);
     expect(res.draft.cover_note).toContain("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED");
     expect(res.draft).toMatchObject({ source: "replay", prompt_version: "j3-v1" });
-    expect(new TextDecoder().decode(res.pdf)).toContain("The signed purchase record supports the cart checked at capture");
+    expect(new TextDecoder().decode(res.pdf)).toContain(
+      "The signed purchase record supports the cart checked at capture",
+    );
     expect((await store.get("PP-D-1001"))?.status).toBe("pending_human_approval");
     expect(auditLogs.map((a) => a.action)).toEqual(["evidence.drafted"]);
   });
@@ -171,5 +178,46 @@ describe("buildEvidencePackage", () => {
     await expect(buildEvidencePackage("PP-D-1001", { loader, keyResolver })).rejects.toThrow(
       "AGENT_OVERREACH",
     );
+  });
+});
+
+describe("buildConstraintChecks", () => {
+  const status = (checks: ReturnType<typeof buildConstraintChecks>) =>
+    Object.fromEntries(checks.map((c) => [c.name, c.passed]));
+
+  it("judges each attribute on its own: the red $95 jacket keeps its category and breaks color and price", () => {
+    const checks = buildConstraintChecks(greyJacketIntent, overreachingCart, [
+      "AMOUNT_EXCEEDS_MAX",
+      "ATTRIBUTE_MISMATCH",
+    ]);
+    expect(status(checks)).toMatchObject({
+      amount_max: false,
+      "attributes.category": true,
+      "attributes.color": false,
+    });
+    expect(checks.find((c) => c.name === "attributes.color")).toMatchObject({ rule: "grey", actual: "red" });
+  });
+
+  it("passes every check for a compliant cart", () => {
+    expect(Object.values(status(buildConstraintChecks(greyJacketIntent, compliantCart, [])))).not.toContain(
+      false,
+    );
+  });
+
+  it("compares like the policy engine: case-insensitive, and a line without the attribute fails", () => {
+    const shouting = {
+      ...compliantCart,
+      contents: {
+        ...compliantCart.contents,
+        lines: compliantCart.contents.lines.map((l) => ({
+          ...l,
+          attributes: { category: "Running-Jacket" },
+        })),
+      },
+    };
+    expect(status(buildConstraintChecks(greyJacketIntent, shouting, []))).toMatchObject({
+      "attributes.category": true,
+      "attributes.color": false,
+    });
   });
 });
