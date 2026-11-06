@@ -58,6 +58,26 @@ test.runIf(adminUrl)(
         cartLines: [{ color: "red" }],
         cartTotal: { value: 9500, currency: "USD" },
       });
+      // The other overreach disputes come from across the catalog, each failing its own signed limit.
+      const others = await Promise.all(
+        ["PP-D-1007", "PP-D-1012", "PP-D-1017"].map(async (id) => {
+          const res = await app.inject(`/disputes/${id}/recommendation`);
+          return {
+            status: res.statusCode,
+            reasons: res.json().reasons,
+            title: res.json().cartLines?.[0]?.title,
+          };
+        }),
+      );
+      expect(others).toMatchObject([
+        { status: 200, reasons: ["ATTRIBUTE_MISMATCH"], title: "Tempo Road Running Shoe, size 10" },
+        { status: 200, reasons: ["AMOUNT_EXCEEDS_MAX"], title: "Cushioned Running Socks, 6-pack" },
+        { status: 200, reasons: ["ATTRIBUTE_MISMATCH"], title: "Stride Running Jacket" },
+      ]);
+      expect(
+        new Set(disputes.map((d: { amount?: { value: number } }) => d.amount?.value)).size,
+      ).toBeGreaterThan(2);
+
       const preview = await app.inject("/disputes/PP-D-1001/evidence.pdf");
       expect(preview.statusCode).toBe(200);
       expect(preview.headers["content-type"]).toContain("application/pdf");

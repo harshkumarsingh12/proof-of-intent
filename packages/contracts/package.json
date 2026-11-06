@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./fixtures": "./src/fixtures.ts"
+    "./fixtures": "./src/fixtures.ts",
+    "./catalog": "./src/catalog.ts"
   },
   "dependencies": {
     "zod": "^3.23.8"

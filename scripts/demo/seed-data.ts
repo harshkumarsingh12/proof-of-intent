@@ -1,6 +1,7 @@
 import { exportJWK } from "jose";
 import pg from "pg";
-import { compliantCart, greyJacketIntent, overreachingCart } from "../../packages/contracts/src/fixtures";
+import { presetFor, productBySku } from "../../packages/contracts/src/catalog";
+import { compliantCart, greyJacketIntent } from "../../packages/contracts/src/fixtures";
 import { createDb } from "../../packages/db/src/index";
 import {
   canonicalJson,
@@ -14,6 +15,24 @@ import { runDisputeClassifier } from "../../apps/worker/src/classifier";
 import { buildConstraintChecks, draftEvidenceForDefend } from "../../apps/worker/src/evidence";
 
 const platforms = ["Northstar", "Wayfinder", "Errandly", "Tote"];
+
+// What each seeded order bought, from the shared catalog (packages/contracts/src/catalog.ts). Order 0 is the grey
+// jacket the compliant scripted dispute (PP-D-1001) defends and order 1 the red jacket the overreach one
+// (PP-D-1002) concedes, so the video's two disputes stay exactly the fixtures.
+const COMPLIANT = ["JKT-GRY-M", "SHO-TMP-BLU-10", "BSL-MER-GRY-M", "SOK-3PK-WHT"];
+// Overreach: captured before checkout enforcement, each breaking a different signed limit.
+const OVERREACH = ["JKT-RED-M", "SHO-TMP-GRY-10", "SOK-6PK-WHT", "JKT-BLK-M"];
+
+/** The product order `index` bought, and the shopper's intent words and limits for its category. */
+function purchase(index: number, overreach: boolean) {
+  const sku = overreach
+    ? OVERREACH[Math.floor(index / 5) % OVERREACH.length]!
+    : COMPLIANT[index % COMPLIANT.length]!;
+  const product = productBySku(sku);
+  const preset = product && presetFor(product.line.attributes.category ?? "");
+  if (!product || !preset) throw new Error(`seed: ${sku} is not in the catalog`);
+  return { line: product.line, preset };
+}
 const hour = 3_600_000;
 const marker = "proof-of-intent-demo-v1";
 const seedLock = 7_007_041;
@@ -95,21 +114,29 @@ async function insertDemo(client: pg.Client, now: Date): Promise<void> {
     const capturedAt = iso(-(index + 4) * hour);
     const disputed = index < 24;
     const overreach = disputed && index % 5 === 1;
-    const template = overreach ? overreachingCart : compliantCart;
+    const { line, preset } = purchase(index, overreach);
     const intent = {
       ...greyJacketIntent,
+      natural_language_description: preset.description,
       mandate_id: `0192f3a0-0000-7000-8000-${suffix}`,
       nonce: `demo-nonce-${suffix}`,
       issuer: shopperKid,
       created_at: createdAt,
       intent_expiry: iso(-(index + 3) * hour),
-      constraints: { ...greyJacketIntent.constraints, valid_from: createdAt },
+      constraints: {
+        ...greyJacketIntent.constraints,
+        amount_max: preset.amountMax,
+        attributes: { category: preset.category, color: preset.color },
+        valid_from: createdAt,
+      },
     };
     const intentHash = mandateHash(intent);
     const cart = {
-      ...template,
+      ...compliantCart,
       contents: {
-        ...template.contents,
+        ...compliantCart.contents,
+        lines: [line],
+        total: line.unit_price,
         cart_id: `cart-demo-${suffix}`,
         cart_expiry: iso(-((index + 4) * hour) + 600_000),
       },
