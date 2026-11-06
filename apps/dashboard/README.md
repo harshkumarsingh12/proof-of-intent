@@ -13,7 +13,8 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 | Dispute detail | `/disputes/<id>` | `app/disputes/[id]/page.tsx`, `DisputeDetailView.tsx`            |
 | Analytics      | `/analytics`     | `app/analytics/page.tsx`, `AnalyticsView.tsx`                    |
 
-Not built yet: agent orders and the verification queue (greyed out as "Soon" in the sidebar), and AG Studio.
+Not built yet: agent orders and the verification queue (greyed out as "Soon" in the sidebar; their API routes
+`/orders` and `/verifications` exist), and AG Studio.
 
 ## Layout
 
@@ -37,9 +38,14 @@ illustrations.
 
 ## Data
 
-Pages call the API through the same-origin proxy `app/api/[...path]/route.ts`, which forwards **GET only**. While
-`GET /disputes` and `GET /disputes/:id/recommendation` return 501, pages fall back to seed data
-(`src/seed-disputes.ts`, `src/seed-orders.ts`) and show a demo-data banner. Logic lives in plain `.ts` under
+Pages call the API through the same-origin proxy `app/api/[...path]/route.ts`. It forwards GETs, and one POST:
+`/disputes/:id/actions/:action`, only after an HTTP Basic login as `operator` (`OPERATOR_PASSWORD`), adding
+`Bearer OPERATOR_TOKEN` itself (`src/operator.ts`). If the API can't be reached or errors, pages fall back to seed data
+(`src/seed-disputes.ts`, `src/seed-orders.ts`) and show a demo-data banner.
+
+The dispute detail page asks `GET /disputes/:id/paypal-actions` what PayPal allows right now and disables, with the
+reason, any action PayPal would refuse; at the inquiry stage it offers **Escalate to a claim**. Live disputes
+preview the exact PDF that Submit sends. Logic lives in plain `.ts` under
 `src/` (`api.ts`, `home.ts`, `analytics-data.ts`, `dispute-details.ts`); JSX lives under `app/`.
 
 ## Test

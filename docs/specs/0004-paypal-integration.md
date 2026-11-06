@@ -29,7 +29,10 @@ the team must be able to work before the sandbox is wired, hence a mock with the
   `create_shipment_tracking`, invoking its tools directly (no model picks them). The worker reads with
   `get_dispute` / `list_disputes`; the API runs accept-claim and tracking only after an operator click, audit row
   first (spec 0005). REST in this package covers what the toolkit doesn't: `provide-evidence` (multipart),
-  `send-message`, and sandbox-only `require-evidence` and `adjudicate`.
+  `send-message`, `escalate`, and sandbox-only `require-evidence` and `adjudicate`.
+- **Transient failures:** a call that failed before reaching PayPal (token fetch, DNS: `EAI_AGAIN` seen live on
+  Nov 6) is retried up to 3 times; one that reached PayPal is never retried, so no action runs twice. Callers
+  answer 503 with `retry-after`.
 - Evidence by reason: `MERCHANDISE_OR_SERVICE_NOT_RECEIVED` → `PROOF_OF_FULFILLMENT` with tracking;
   `MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED`, `UNAUTHORISED` → `OTHER` with the attestation PDF;
   `CREDIT_NOT_PROCESSED` → `PROOF_OF_REFUND`. Always follow the dispute's HATEOAS links.
@@ -58,7 +61,9 @@ at any point. Sandbox-only calls live in `scripts/sandbox/paypal-raw.ts`, never 
 ## Interfaces
 
 `PayPalClient` in `packages/paypal/src/index.ts`: `createOrder`, `authorizeOrder`, `captureAuthorization`,
-`voidAuthorization`, `verifyWebhook`, `provideEvidence`, `sendMessage`. `parseMode(env)`.
+`voidAuthorization`, `verifyWebhook`, `provideEvidence`, `sendMessage`, `escalate`, and through the Agent Toolkit
+`acceptClaim`, `getDispute`, `listDisputes`, `addTracking`. `parseMode(env)`, `toPayPalAmount`, `fromPayPalAmount`,
+`evidenceTypeFor(reason)`.
 
 ## Acceptance criteria
 
@@ -67,6 +72,7 @@ at any point. Sandbox-only calls live in `scripts/sandbox/paypal-raw.ts`, never 
 3. A forged webhook signature is rejected. *(done, also against the live sandbox)*
 4. `provide-evidence` sends multipart with the attestation PDF. *(done: `attestation.pdf` submitted by seller on sandbox dispute `PP-R-NSZ-10196423`)*
 5. The dispute recipe script regenerates a dispute in under 5 minutes with one manual click. *(done; the click is the Resolution Center form, about 8 short pages)*
+6. Accept-claim through the Agent Toolkit resolves a sandbox dispute. *(done: `PP-R-MMK-10196694` RESOLVED_BUYER_FAVOUR, Nov 6; hosted: `PP-R-IWL-10196768`)*
 
 ## Open questions
 

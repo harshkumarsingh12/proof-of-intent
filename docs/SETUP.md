@@ -41,9 +41,10 @@ refuses to load.
 | Analytics | `/analytics` | Defended vs. conceded, blocked carts, platform breakdown, disputes by class per week |
 
 The top-bar search finds a dispute by dispute id, order id or PayPal order id (press `/` to focus it). The badge
-and banner show the real `PAYPAL_MODE`. Until `GET /disputes` and the recommendation route are built, the pages
-show seed data and say so in a banner. Operator actions report the API's answer honestly, so in mock mode today
-they show an error rather than a fake success.
+and banner show the dashboard's `PAYPAL_MODE` (keep it the same as the API's). Pages show the API's disputes; if the
+API can't be reached they fall back to seed data and say so in a banner. Operator actions need `OPERATOR_TOKEN` and
+`OPERATOR_PASSWORD` in `.env` (user `operator` at the browser's login prompt); without them they answer
+"operator actions are not configured" rather than faking success.
 
 ## 2. Development without Docker
 
@@ -77,6 +78,21 @@ Postgres for local work: `docker compose up -d postgres` and set
    `CUSTOMER.DISPUTE.RESOLVED`, `VAULT.PAYMENT-TOKEN.CREATED`. Put its id in `PAYPAL_WEBHOOK_ID`.
 5. For live model calls: `AI_MODE=live` plus `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`.
 6. Merchant signing key: `pnpm keys:gen > merchant-key.pem`, then put it in `MERCHANT_SIGNING_KEY`.
+7. Operator actions: `OPERATOR_TOKEN` (e.g. `openssl rand -hex 32`) and `OPERATOR_PASSWORD`.
+
+Sandbox scripts (all need the PayPal variables in `.env`):
+
+| Command | What it does |
+|---|---|
+| `pnpm sandbox:checkout-smoke` | Journey B against the sandbox: the red $95 cart is rejected, no PayPal order |
+| `pnpm sandbox:dispute-cycle start` | A compliant order through a local API and database, then waits for you to file a dispute |
+| `pnpm sandbox:dispute-cycle escalate\|evidence\|adjudicate\|status <id>` | Sandbox dispute steps (spec 0004 §Sandbox dispute recipe) |
+| `POI_API_URL=… OPERATOR_TOKEN=… pnpm sandbox:hosted-order` | A compliant order through a **deployed** API over HTTP only: registers keys, checks out, waits for your PayPal approval, captures |
+
+Filing the dispute is a manual step as the sandbox shopper: Activity → the payment → **Report a problem** →
+"different or not as described" → item (Physical product, Other) → "I got a different item" → Color, a
+description of 120+ characters, delivery date, refund amount, return **No** with a reason → seller contact
+optional → a short note → Submit. PayPal shows it to the API a few minutes later.
 
 ## 4. Team server (owner: Harsh)
 
@@ -121,6 +137,8 @@ like `api.poi.iotkiit.in` would fail HTTPS. `https://poi-api.iotkiit.in/` return
    API_HOST_PORT=3100
    SHOP_HOST_PORT=3101
    OPS_HOST_PORT=3102
+   OPERATOR_TOKEN=<openssl rand -hex 32>   # same value reaches api and dashboard; never shown to browsers
+   OPERATOR_PASSWORD=<a password>          # dashboard login, user "operator"; share it only via Devpost
    ```
 
    For sandbox, add `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` and `MERCHANT_SIGNING_KEY`

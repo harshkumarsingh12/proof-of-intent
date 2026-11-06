@@ -34,7 +34,7 @@ of every `ci` run.
 | Key registry with retirement | Sristee | ✅ `createKeyRegistry`, `/keys/shopper` (public), `/keys/agent` and retire (operator); hosted orders via `pnpm sandbox:hosted-order` |
 | Buyer app: intent form, browser key, signing, PayPal button | Sristee | Landing page live (#78); intent form, signing and checkout pending |
 | J1 semantic fit + replay mode | Sumedha | Pending |
-| Worker skeleton on fixtures | Sikruti | Intake, classification, decision and evidence drafting merged (#54–#57); pg-boss wiring pending |
+| Worker skeleton on fixtures | Sikruti | ✅ Intake, classification and evidence (#54–#57); runs as an inbox poller over `webhook_events` instead of pg-boss (#82), with a `list_disputes` catch-up (#59) |
 | Dashboard shell: orders grid, verification queue, theme | Sikruti | Shell, theme and home ✅ (#75, #76); orders grid and verification queue pending |
 
 **Done when:** a signed mandate is verified, a sandbox order is authorized and captured with the pointer in

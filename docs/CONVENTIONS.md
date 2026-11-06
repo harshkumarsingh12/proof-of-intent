@@ -8,7 +8,8 @@ Small rules that prevent the bugs that cost a day to find.
   Convert to PayPal's string amounts only inside `packages/paypal`.
 - **Time** is ISO 8601 with an offset, stored and compared in UTC. Pure code takes `now` as a parameter;
   only the edges (API handlers, jobs) read the clock.
-- **IDs**: mandate ids are UUIDv7; our order ids are `ord_<ulid or uuid>`; PayPal ids are kept as PayPal gives them.
+- **IDs**: mandate ids are UUIDv7; our order ids are `ord_<ulid or uuid>`; key ids are `shp_` / `agt_` plus the
+  key's RFC 7638 thumbprint; PayPal ids are kept as PayPal gives them.
 - **Hashes** are lowercase hex SHA-256 over RFC 8785 canonical JSON (`mandateHash()` in `packages/mandates`).
 - **`custom_id`** is `poi:<mandate_id>:<first 16 hex of hash>` (57 characters). Never put mandate data in it.
 
@@ -24,6 +25,7 @@ the copilot's reasons, the dashboard chips and the evidence PDF. Adding one is a
 - A REJECT verdict is a successful request: HTTP 200 with `verdict.outcome = "REJECT"`. 4xx is for malformed or
   unauthenticated requests.
 - Idempotency: anything that creates something on PayPal sends `PayPal-Request-Id` equal to our id.
+- PayPal unreachable is 503 with `retry-after`; PayPal refusing is 409 `paypal_refused` with PayPal's issue.
 
 ## Code
 

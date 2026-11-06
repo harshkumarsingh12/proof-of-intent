@@ -28,8 +28,14 @@ the Devpost testing instructions, not here.
 
 1. Shop → sign the example intent → let the agent build a cart → pay with the judge sandbox account.
 2. Watch the agent try the red jacket → see the rejection and its reason codes.
-3. Operations → Disputes → open the compliant-order dispute → preview evidence → (operator login) Submit.
-4. Open the overreach dispute → mandate diff → Accept.
+3. Operations → Disputes → open the compliant-order dispute → **Preview evidence PDF** → at the inquiry stage
+   **Escalate to a claim** (PayPal opens it within about a minute; the page waits) → **Submit evidence to PayPal**.
+   The first action asks for the operator login (user `operator`).
+4. Open the overreach dispute → mandate diff → **Accept Claim & Refund**. On a compliant dispute the operator can
+   still refund through **Override: accept the claim instead**, with a note.
+
+Each button follows what PayPal allows at that moment (status line "PayPal: INQUIRY · …"); a disabled button says
+why. Until the buyer app lands (#23), orders for the demo come from `pnpm sandbox:hosted-order` (spec 0003).
 5. Ask the Studio agent: "Which agent platforms cause the most wrong-item disputes this month?"
 
 ## What we will not claim

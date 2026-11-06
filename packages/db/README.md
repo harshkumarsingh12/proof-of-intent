@@ -17,6 +17,13 @@ const timeline = await db.auditTrail(orderId); // oldest first, each row has `at
 
 `migrations/0001_init.sql`: `shoppers`, `shopper_keys` and `agent_keys` (with `retired_at`), `mandates` (canonical
 bytes + JWS), `nonces`, `orders`, `verdicts`, `webhook_events`, `disputes`, `audit_log`.
+`migrations/0002_dispute_copilot.sql`: on `disputes`, the PayPal object and its `update_time`, the recommendation,
+the evidence PDF and the JSON bundle.
+
+Beyond checkout's methods, `Db` has the worker's inbox (`pendingDisputeEvents`, `markEventProcessed`), disputes
+(`saveDispute` refuses an older PayPal version, `getDispute`, `listDisputes` deadline first), the dashboard grids
+(`listOrders`, `listVerdicts`, `orderVerdict`), `mandateLedger(intent, asOfOrderId)` for what an order's checkout
+saw, and keys (`registerShopperKey`, `registerAgentKey`, `retireKey`).
 
 - Replay protection and idempotency are unique indexes (`nonces`, `webhook_events.event_id`, `mandates.hash`,
   PayPal ids on `orders`), never "check then insert".
