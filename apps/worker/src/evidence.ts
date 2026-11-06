@@ -3,9 +3,8 @@
  * It refuses rather than invents: no verified signature, no matching custom_id, no capture record,
  * or a cart that fails the hard rules means no defence package.
  */
-import { draftEvidence, parseAiMode, type AiMode, type EvidenceDraft } from "@poi/ai";
+import { draftEvidence, isAiUnavailable, parseAiMode, type AiMode, type EvidenceDraft } from "@poi/ai";
 import {
-  NotImplementedError,
   type CartMandate,
   type IntentMandate,
   type Money,
@@ -16,6 +15,7 @@ import { mandateHash, verifyMandate, type KeyResolver } from "@poi/mandates";
 import { evaluate, type MandateLedger } from "@poi/policy-engine";
 import {
   parseCustomId,
+  disputeFacts,
   runDisputeClassifier,
   type CaptureRecord,
   type DisputeDataLoader,
@@ -115,7 +115,7 @@ export function buildConstraintChecks(
   return checks;
 }
 
-/** Used until J3 lands. Only states what draftEvidenceForDefend has just checked. */
+/** Rule-only fallback when J3 cannot supply a grounded draft. */
 export function generateDefaultEvidenceDraft(
   intent: IntentMandate,
   cart: CartMandate,
@@ -166,16 +166,23 @@ export async function draftEvidenceForDefend(
     );
   }
 
-  let draft: EvidenceDraft;
+  let generated: Awaited<ReturnType<typeof draftEvidence>> | undefined;
   try {
-    draft = await draftEvidence(
-      { disputeId: dispute.disputeId, intent, cart, captureRecord },
+    generated = await draftEvidence(
+      {
+        decision: { class: "MANDATE_COMPLIANT", action: "PROVIDE_EVIDENCE" },
+        bundle: {
+          ...disputeFacts(dispute, intent, cart),
+          capture_record: `PayPal recorded a capture of ${money(captureRecord.amount)}.`,
+          policy_evaluation: "The Intent Mandate signature verified, the order pointer matched and every hard rule passed.",
+        },
+      },
       options.mode ?? parseAiMode(process.env.AI_MODE),
     );
   } catch (err) {
-    if (!(err instanceof NotImplementedError)) throw err;
-    draft = generateDefaultEvidenceDraft(intent, cart, captureRecord, hash, dispute.reason);
+    if (!isAiUnavailable(err)) throw err;
   }
+  const draft = generated ?? generateDefaultEvidenceDraft(intent, cart, captureRecord, hash, dispute.reason);
 
   // Only events with a real timestamp: the signed mandate, the capture, audit rows, and this draft.
   const timeline: TimelineEntry[] = [
@@ -253,7 +260,12 @@ export async function draftEvidenceForDefend(
     actor: "worker:copilot",
     action: "evidence.drafted",
     subjectId: dispute.disputeId,
-    requestBody: { status: result.status, mandate_hash: hash, custom_id: captureRecord.customId },
+    requestBody: {
+      status: result.status,
+      mandate_hash: hash,
+      custom_id: captureRecord.customId,
+      ...(generated ? { prompt_version: generated.prompt_version, source: generated.source } : {}),
+    },
   });
 
   return result;
