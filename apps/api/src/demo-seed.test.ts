@@ -79,6 +79,41 @@ test.runIf(adminUrl)(
       expect(tracking.statusCode).toBe(409);
       expect(tracking.json().error).toBe("demo_read_only");
       expect(paypal.disputeActions).toEqual([]);
+
+      const studio = (payload: object) =>
+        app.inject({
+          method: "POST",
+          url: "/ai/studio",
+          headers: { authorization: "Bearer test-only" },
+          payload,
+        });
+      const defend = await studio({ kind: "tool", tool: "explain_dispute", disputeId: "PP-D-1001" });
+      expect(defend.statusCode).toBe(200);
+      expect(defend.json()).toMatchObject({
+        class: "MANDATE_COMPLIANT",
+        action: "PROVIDE_EVIDENCE",
+        failedChecks: [],
+      });
+      expect(defend.json()).not.toHaveProperty("shopperNotes");
+      const concede = await studio({ kind: "tool", tool: "explain_dispute", disputeId: "PP-D-1002" });
+      expect(concede.json()).toMatchObject({
+        class: "AGENT_OVERREACH",
+        action: "ACCEPT_CLAIM",
+        reasons: ["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"],
+      });
+      const draft = await studio({ kind: "tool", tool: "draft_buyer_message", disputeId: "PP-D-1002" });
+      expect(draft.json()).toMatchObject({
+        id: "PP-D-1002",
+        draft: expect.stringContaining("exceeded"),
+        sent: false,
+      });
+      expect((await studio({ kind: "tool", tool: "explain_dispute", disputeId: "unknown" })).statusCode).toBe(
+        404,
+      );
+      for (const tool of ["accept_claim", "send_message", "provide_evidence"]) {
+        expect((await studio({ kind: "tool", tool, disputeId: "PP-D-1002" })).statusCode).toBe(400);
+      }
+      expect(paypal.disputeActions).toEqual([]);
     } finally {
       await app.close();
       await admin.query(`drop database ${name} with (force)`);

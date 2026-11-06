@@ -14,6 +14,7 @@ import { checkoutRoutes } from "./routes/checkout";
 import { disputeRoutes } from "./routes/disputes";
 import { keyRoutes } from "./routes/keys";
 import { registerRoutes } from "./routes/index";
+import { studioRoutes } from "./routes/studio";
 import { webhookRoutes } from "./routes/webhooks";
 
 export interface AppDeps {
@@ -82,6 +83,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.register(webhookRoutes, deps);
   app.register(disputeRoutes, deps);
+  app.register(studioRoutes, deps);
   app.register(keyRoutes, deps);
   app.register(checkoutRoutes, {
     ...deps,

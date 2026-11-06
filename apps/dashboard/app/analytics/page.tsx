@@ -1,4 +1,5 @@
 import { fetchAnalytics, serverApiBaseUrl } from "../../src/api";
+import Link from "next/link";
 import { AnalyticsView } from "./AnalyticsView";
 import { pageSubtitle, pageTitle } from "../../src/theme";
 
@@ -35,6 +36,7 @@ export default async function AnalyticsPage() {
 
       </div>
 
+      {process.env.AG_STUDIO_LICENSE_KEY && <Link href="/analytics/studio">Open Dispute Studio</Link>}
       {/* Analytics Dashboard Cards & Chart */}
       <AnalyticsView initialData={initialData} />
     </div>
