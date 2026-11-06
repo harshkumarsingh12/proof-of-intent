@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchDisputesDetailed, serverApiBaseUrl } from "../../../src/api";
 import { pageSubtitle, pageTitle } from "../../../src/theme";
+import { studioEnabled } from "./enabled";
 import { StudioView } from "./StudioView";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const metadata = { title: "Dispute Studio · Proof of Intent operations" 
 
 export default async function StudioPage() {
   const licenseKey = process.env.AG_STUDIO_LICENSE_KEY?.trim();
-  const enabled = licenseKey && process.env.OPERATOR_PASSWORD && process.env.OPERATOR_TOKEN;
+  const enabled = studioEnabled();
   const data = enabled ? await fetchDisputesDetailed({ apiBaseUrl: serverApiBaseUrl() }) : undefined;
 
   return (
