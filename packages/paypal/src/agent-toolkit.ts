@@ -36,6 +36,18 @@ export function createToolkit(clientId: string, clientSecret: string): ToolkitDi
 /** Wraps the toolkit's tools; tests pass fakes with the same JSON-string contract. */
 export function toolkitDisputes(tools: Record<string, ToolkitTool>): ToolkitDisputes {
   async function run<T>(name: string, args: Record<string, unknown>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await runOnce<T>(name, args);
+      } catch (err) {
+        // A DNS or token failure means the call itself never left us, so retrying can't do anything twice.
+        if (attempt >= RETRIES || !(err instanceof PayPalError) || !NOT_SENT.test(err.message)) throw err;
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+
+  async function runOnce<T>(name: string, args: Record<string, unknown>): Promise<T> {
     const execute = tools[name]?.execute;
     if (!execute) throw new Error(`Agent Toolkit tool ${name} is not enabled`);
     const raw = await execute(args as never, { toolCallId: `poi-${name}`, messages: [] } as never);
@@ -94,6 +106,11 @@ export function toolkitDisputes(tools: Record<string, ToolkitTool>): ToolkitDisp
     },
   };
 }
+
+/** Failures that happen before the request reaches PayPal (seen live: EAI_AGAIN while fetching the token). */
+const NOT_SENT = /Failed to fetch access token|EAI_AGAIN|ENOTFOUND/;
+const RETRIES = 3;
+const RETRY_DELAY_MS = 500;
 
 /** PayPal's issue name (e.g. NOT_ELIGIBLE) when the toolkit's message carries one, else the toolkit's code. */
 const issueOf = (message: string, fallback: string) =>
