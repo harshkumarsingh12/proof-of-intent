@@ -1,20 +1,35 @@
 // Records live J1 answers for replay mode (docs/specs/0006). Owner: @sumedhag28.
 //
-//   pnpm ai:record      (needs AI_MODEL and AI_API_KEY in .env; AI_PROVIDER defaults to nvidia)
+//   pnpm ai:record          records only the cases without an answer for the current prompt version
+//   pnpm ai:record --all    re-asks the model about every case
 //
-// Asks the live model about every case in packages/ai/src/j1-cases.ts and rewrites packages/ai/replay/j1-semantic-fit.json, keyed by
-// SHA-256 of { job, prompt version, model input }. Changing the prompt's `version` changes every key, so
-// re-record after editing a prompt. Prints where the model disagrees with the expected label; it still records
-// what the model said, because replay must reproduce the live system, not the answer we hoped for.
+// Needs AI_MODEL and AI_API_KEY in .env (AI_PROVIDER defaults to nvidia). Cases come from
+// packages/ai/src/j1-cases.ts; answers go to packages/ai/replay/j1-semantic-fit.json, keyed by SHA-256 of
+// { job, prompt version, model input }. Changing the prompt's `version` changes every key, so re-record after
+// editing a prompt. Existing answers are kept by default so the demo's recorded verdicts don't shift under it.
+// Prints where the model disagrees with the expected label; it still records what the model said, because
+// replay must reproduce the live system, not the answer we hoped for.
 import { writeFileSync } from "node:fs";
 import { J1_PROMPT_VERSION, j1ReplayKey, semanticFit, type SemanticFit } from "../../packages/ai/src/j1";
 import { J1_CASES } from "../../packages/ai/src/j1-cases";
-import { replayPath, type ReplayFile } from "../../packages/ai/src/runtime";
+import { readReplay, replayPath, type ReplayFile } from "../../packages/ai/src/runtime";
 
+const all = process.argv.includes("--all");
+const existing = readReplay<SemanticFit>("j1-semantic-fit");
 const out: ReplayFile<SemanticFit> = {};
 let disagreements = 0;
+let asked = 0;
 
 for (const c of J1_CASES) {
+  const key = j1ReplayKey(c.description, c.cart);
+  const kept = existing[key];
+  if (kept && !all) {
+    out[key] = { ...kept, label: c.label };
+    const ok = kept.output.fit === c.expected;
+    if (!ok) disagreements++;
+    console.log(`kept  ${ok ? "" : "DIFF "}${c.label}: ${kept.output.fit} ${kept.output.confidence}`);
+    continue;
+  }
   const started = Date.now();
   const res = await semanticFit(c.description, c.cart, "live");
   const ms = Date.now() - started;
@@ -22,8 +37,9 @@ for (const c of J1_CASES) {
     console.log(`skip  ${c.label}: caught by the injection guard, no model call to record`);
     continue;
   }
+  asked++;
   const { prompt_version: _v, source: _s, ...fit } = res;
-  out[j1ReplayKey(c.description, c.cart)] = { label: c.label, output: fit };
+  out[key] = { label: c.label, output: fit };
   const ok = fit.fit === c.expected;
   if (!ok) disagreements++;
   console.log(
@@ -33,5 +49,5 @@ for (const c of J1_CASES) {
 
 writeFileSync(replayPath("j1-semantic-fit"), `${JSON.stringify(out, null, 2)}\n`);
 console.log(
-  `\nwrote ${Object.keys(out).length} answers for prompt ${J1_PROMPT_VERSION}; ${disagreements} disagree`,
+  `\n${Object.keys(out).length} answers for prompt ${J1_PROMPT_VERSION} (${asked} asked live); ${disagreements} disagree with the expected label`,
 );

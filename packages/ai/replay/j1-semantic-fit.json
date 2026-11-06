@@ -1,6 +1,6 @@
 {
   "e8826f8fe18b6c189022b8df048f1e42c4112416da4d94f0733808e88c2d36c1": {
-    "label": "grey running jacket, $74 (compliant fixture)",
+    "label": "JKT-GRY-M grey Stride Running Jacket, $74 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
     "output": {
       "fit": "match",
       "confidence": 0.95,
@@ -9,12 +9,16 @@
         "Running jacket category matches request",
         "Price $74 is under the $80 budget"
       ],
-      "matched_attributes": ["color: grey", "category: running jacket", "price under $80"],
+      "matched_attributes": [
+        "color: grey",
+        "category: running jacket",
+        "price under $80"
+      ],
       "conflicting_attributes": []
     }
   },
   "e0decaa57dcb3b4fd523b1a4166a89ea451ec4421e66c9fd1f7845372a7dd2f6": {
-    "label": "grey hooded rain shell, $79 (partial fixture)",
+    "label": "SHL-GRY-M grey Hooded Rain Shell, $79 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
     "output": {
       "fit": "partial",
       "confidence": 0.75,
@@ -22,12 +26,18 @@
         "The cart contains a grey hooded rain shell, which is a type of running jacket and matches the color grey and price under $80.",
         "However, the shopper asked for a 'running jacket' and the item is specifically a 'hooded rain shell', which is a different kind of outerwear and may miss expected features of a running jacket (e.g., breathability, fit)."
       ],
-      "matched_attributes": ["color: grey", "price under $80", "category: running-jacket"],
-      "conflicting_attributes": ["item type: hooded rain shell vs requested running jacket"]
+      "matched_attributes": [
+        "color: grey",
+        "price under $80",
+        "category: running-jacket"
+      ],
+      "conflicting_attributes": [
+        "item type: hooded rain shell vs requested running jacket"
+      ]
     }
   },
   "1926d27c0ea03fadda0a757776750491d2ce2d998a8025cf7780bc6303eb81c0": {
-    "label": "red running jacket, $95 (overreach fixture)",
+    "label": "JKT-RED-M red Stride Running Jacket, $95 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
     "output": {
       "fit": "mismatch",
       "confidence": 0.99,
@@ -36,7 +46,174 @@
         "Price exceeds the $80 budget (95 USD vs 80 USD cap)"
       ],
       "matched_attributes": [],
-      "conflicting_attributes": ["color: red (requested grey)", "price: 95 USD (over $80 limit)"]
+      "conflicting_attributes": [
+        "color: red (requested grey)",
+        "price: 95 USD (over $80 limit)"
+      ]
+    }
+  },
+  "3e7989ec6ca972a2a780b261036a5d92400ee352128a913fff58d311eae2ab32": {
+    "label": "JKT-BLK-M black Stride Running Jacket, $74 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
+    "output": {
+      "fit": "mismatch",
+      "confidence": 0.95,
+      "reasons": [
+        "Shopper requested a grey jacket; cart contains a black jacket."
+      ],
+      "matched_attributes": [],
+      "conflicting_attributes": [
+        "color: black (requested color was grey)"
+      ]
+    }
+  },
+  "cf7eb3a7585cf41ee102ae10affad5fd6052b537424cb46a9c8158e1bed5bf13": {
+    "label": "WND-GRY-M grey Packable Wind Jacket, $62 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "Grey color matches shopper request",
+        "Running jacket category matches requested item type",
+        "Price $62 is under the $80 budget"
+      ],
+      "matched_attributes": [
+        "color: grey",
+        "category: running-jacket",
+        "price under $80"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "6204f113b41cf47acac07cf20d4e257f608ec69c429d650e10a0eee5851fd67b": {
+    "label": "SHO-TMP-BLU-10 blue Tempo Road Running Shoe, size 10, $120 vs \"Blue road running shoes in size 10, under $130.\"",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "Blue color matches shopper request",
+        "Size 10 matches shopper request",
+        "Road running shoe category matches requested type",
+        "Price $120 is under the $130 budget"
+      ],
+      "matched_attributes": [
+        "color: blue",
+        "size: 10",
+        "category: road running shoe",
+        "price under $130"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "6f4ff981b6252ac83a0ece981b0279a5a0bf5972ea43c1e4471c0d04846e330d": {
+    "label": "SHO-TMP-GRY-10 grey Tempo Road Running Shoe, size 10, $120 vs \"Blue road running shoes in size 10, under $130.\"",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.75,
+      "reasons": [
+        "Color mismatch: shopper wants blue, cart item is grey",
+        "Price within budget: $120 < $130"
+      ],
+      "matched_attributes": [
+        "size: 10",
+        "category: running-shoe",
+        "price: under $130"
+      ],
+      "conflicting_attributes": [
+        "color: grey (shopper requested blue)"
+      ]
+    }
+  },
+  "0154e04f4496350ae0f94c360c4f55e0dabc234f61d3d55d578467ec8a442adc": {
+    "label": "SHO-RDG-BLU-10 blue Ridge Trail Running Shoe, size 10, $128 vs \"Blue road running shoes in size 10, under $130.\"",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "Blue color matches shopper request",
+        "Size 10 matches shopper request",
+        "Running shoe category matches request for road running shoes",
+        "Price $128 is under the $130 budget"
+      ],
+      "matched_attributes": [
+        "color: blue",
+        "size: 10",
+        "category: running-shoe",
+        "price: under $130"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "b6a781f26a2033bdb9d8bf444e794a12e2ac298354c3b5daaf0d90fd7f28db36": {
+    "label": "BSL-MER-GRY-M grey Merino Base Layer Top, $58 vs \"A grey merino wool base layer top for winter runs, under $60.\"",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "Grey color matches shopper request",
+        "Merino wool base layer top fits request for winter runs",
+        "Price $58 is under the $60 budget"
+      ],
+      "matched_attributes": [
+        "color: grey",
+        "category: base-layer",
+        "material: merino wool",
+        "price: $58 under $60"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "4bd4e1594bb5c438b3f060dfe0282984b2805cb8e51e399576f29e0624d8f8a8": {
+    "label": "BSL-SYN-GRY-M grey Quick-Dry Synthetic Base Layer Top, $39 vs \"A grey merino wool base layer top for winter runs, under $60.\"",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.75,
+      "reasons": [
+        "Color matches (grey) and price is under the $60 cap.",
+        "Material is synthetic, not merino wool as requested."
+      ],
+      "matched_attributes": [
+        "color: grey"
+      ],
+      "conflicting_attributes": [
+        "material: synthetic (shopper wanted merino wool)"
+      ]
+    }
+  },
+  "0871a3f5b7039e3182d53a0d08c5dfdde4563746805265d25abb1300543dd7a7": {
+    "label": "SOK-3PK-WHT white Cushioned Running Socks, 3-pack, $18 vs \"A 3-pack of white running socks under $20.\"",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "The cart contains a 3-pack of white running socks.",
+        "The price of $18 is under the $20 budget."
+      ],
+      "matched_attributes": [
+        "color: white",
+        "quantity: 3-pack",
+        "category: running socks",
+        "price: under $20"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "1468df25964da6d6b47fd3c42756731860f81d4d8dc7e767a878b1b939e825ad": {
+    "label": "SOK-6PK-WHT white Cushioned Running Socks, 6-pack, $32 vs \"A 3-pack of white running socks under $20.\"",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.75,
+      "reasons": [
+        "Cart offers a 6-pack while shopper requested a 3-pack",
+        "Cart price $32 exceeds the $20 budget"
+      ],
+      "matched_attributes": [
+        "color: white",
+        "category: socks"
+      ],
+      "conflicting_attributes": [
+        "quantity: 6-pack vs requested 3-pack",
+        "price: $32 vs max $20"
+      ]
     }
   }
 }
