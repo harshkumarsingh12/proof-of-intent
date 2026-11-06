@@ -14,7 +14,7 @@ import { evaluate } from "@poi/policy-engine";
 import { toolNames } from "./agent";
 import { intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
-import { CATALOG } from "./catalog";
+import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
 import { buildIntent, CLOCK_SKEW_MS, dollarsToCents, type IntentForm } from "./intent";
 import {
   generateShopperKey,
@@ -157,12 +157,43 @@ describe("buyer agent: cart and Payment Mandate", () => {
   const now = new Date(NOW);
   const intent = intentFor("shp_x");
 
-  test("the catalog is the three fixture jackets, so recorded J1 answers apply", () => {
-    expect(CATALOG.map((p) => p.line)).toEqual([
+  test("the catalog starts with the three fixture jackets, unchanged (tests, video and scripted disputes)", () => {
+    expect(CATALOG.slice(0, 3).map((p) => p.line)).toEqual([
       compliantCart.contents.lines[0],
       partialCart.contents.lines[0],
       overreachingCart.contents.lines[0],
     ]);
+  });
+
+  test("every product is a valid one-unit cart line, SKUs are unique, every category has demo words", () => {
+    expect(CATALOG).toHaveLength(12);
+    expect(new Set(CATALOG.map((p) => p.line.sku)).size).toBe(CATALOG.length);
+    for (const p of CATALOG) {
+      expect(CartMandate.shape.contents.shape.lines.element.parse(p.line)).toEqual(p.line);
+      expect(Object.keys(p.line.attributes).sort()).toEqual(["category", "color"]);
+      expect(CATEGORIES).toContain(p.line.attributes.category);
+    }
+    expect(PRESETS.map((p) => p.category)).toEqual(CATEGORIES);
+    expect(PRESETS[0]!.description).toBe(greyJacketIntent.natural_language_description);
+  });
+
+  test("each category's demo intent: some product of it passes the hard rules, no other category's does", () => {
+    for (const preset of PRESETS) {
+      const intent = intentFor("shp_x", {
+        description: preset.description,
+        maxPrice: String(preset.amountMax.value / 100),
+        category: preset.category,
+        color: preset.color,
+      });
+      const passes = (sku: string) =>
+        evaluate({ intent, cart: proposeCart(intent, sku, { merchant, now, cartId: "c" }), now: NOW }).pass;
+      const inside = productsIn(preset.category).map((p) => passes(p.line.sku));
+      const outside = CATALOG.filter((p) => p.line.attributes.category !== preset.category).map((p) =>
+        passes(p.line.sku),
+      );
+      expect(inside, preset.category).toContain(true);
+      expect(outside, preset.category).not.toContain(true);
+    }
   });
 
   test("a proposed cart is a valid Cart Mandate bound to the intent", () => {

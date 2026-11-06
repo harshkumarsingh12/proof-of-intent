@@ -7,7 +7,15 @@
 //   4. PayPal approval, then the shopper countersigns the exact cart and the merchant captures or voids
 import type { CheckoutResponse, IntentMandate, ReasonCode } from "@poi/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CATALOG, CATEGORIES, COLORS } from "../../src/catalog";
+import {
+  CATALOG,
+  CATEGORIES,
+  COLORS,
+  PRESETS,
+  categoryLabel,
+  presetFor,
+  type Product,
+} from "../../src/catalog";
 import { buildIntent, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
 import { REASON_TEXT } from "../../src/reasons";
@@ -17,7 +25,19 @@ export interface ShopConfig {
   merchantId: string;
   paypalMode: "mock" | "sandbox";
   paypalClientId?: string;
-  defaultDescription: string;
+}
+
+/** The form for a category's demo words (catalog PRESETS), which replay mode has recorded J1 answers for. */
+function presetForm(category: string, confirmEachCart = false): IntentForm {
+  const preset = presetFor(category) ?? PRESETS[0]!;
+  return {
+    description: preset.description,
+    maxPrice: String(preset.amountMax.value / 100),
+    category: preset.category,
+    color: preset.color,
+    validDays: 7,
+    confirmEachCart,
+  };
 }
 
 interface Signed {
@@ -95,14 +115,8 @@ function Reasons({ reasons }: { reasons: ReasonCode[] }) {
 export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [shopper, setShopper] = useState<StoredShopper>();
   const [keyError, setKeyError] = useState<string>();
-  const [form, setForm] = useState<IntentForm>({
-    description: config.defaultDescription,
-    maxPrice: "80",
-    category: CATEGORIES[0] ?? "",
-    color: COLORS.includes("grey") ? "grey" : (COLORS[0] ?? ""),
-    validDays: 7,
-    confirmEachCart: false,
-  });
+  const [form, setForm] = useState<IntentForm>(() => presetForm(CATEGORIES[0] ?? ""));
+  const [resetting, setResetting] = useState(false);
   const [signed, setSigned] = useState<Signed>();
   const [formError, setFormError] = useState<string>();
   const [busySku, setBusySku] = useState<string>();
@@ -117,13 +131,17 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   }, []);
 
   const newKey = async () => {
+    if (resetting) return;
+    setResetting(true);
     await forgetShopper();
     shopperLoad = undefined;
     setShopper(undefined);
     setSigned(undefined);
     setCheckout(undefined);
     setApproval(undefined);
-    ensureShopper().then(setShopper, (err: Error) => setKeyError(err.message));
+    ensureShopper()
+      .then(setShopper, (err: Error) => setKeyError(err.message))
+      .finally(() => setResetting(false));
   };
 
   const sign = async () => {
@@ -202,6 +220,29 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const hasOrder = Boolean(checkout?.res.paypal_order_id);
   const set = <K extends keyof IntentForm>(k: K, v: IntentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
+  // The signed intent's category first: that's where the agent shops. Everything else is a click away, so a
+  // cross-category cart can still be tried (and refused with ATTRIBUTE_MISMATCH).
+  const shownCategory = signed?.intent.constraints.attributes?.category ?? form.category;
+  const inCategory = CATALOG.filter((p) => p.line.attributes.category === shownCategory);
+  const others = CATALOG.filter((p) => p.line.attributes.category !== shownCategory);
+  const card = (p: Product) => (
+    <div className="product" key={p.line.sku}>
+      <strong>{p.line.title}</strong>
+      <small>
+        {p.line.attributes.color} · {p.line.attributes.category} · {p.line.sku}
+      </small>
+      <small>{p.blurb}</small>
+      <span className="price">{money(p.line.unit_price.value)}</span>
+      <button
+        className="btn btn-ghost btn-small"
+        disabled={!signed || busySku !== undefined}
+        onClick={() => propose(p.line.sku)}
+      >
+        {busySku === p.line.sku ? "Asking the merchant…" : "Propose this cart"}
+      </button>
+    </div>
+  );
+
   return (
     <div className="wrap shop">
       <section className="panel">
@@ -219,7 +260,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             <p className="meta">
               Key id <code>{shopper.kid}</code> · shopper <code>{shopper.shopperId}</code>
             </p>
-            <button className="btn btn-ghost btn-small" onClick={newKey}>
+            <button className="btn btn-ghost btn-small" disabled={resetting} onClick={newKey}>
               Use a new key
             </button>
           </>
@@ -250,9 +291,14 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           </label>
           <label className="field">
             Category
-            <select value={form.category} onChange={(e) => set("category", e.target.value)}>
+            <select
+              value={form.category}
+              onChange={(e) => setForm((f) => presetForm(e.target.value, f.confirmEachCart))}
+            >
               {CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
+                <option key={c} value={c}>
+                  {categoryLabel(c)}
+                </option>
               ))}
             </select>
           </label>
@@ -306,25 +352,12 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           Pick what the agent sends to the merchant. Try one that breaks your limits: it&apos;s refused before
           any PayPal order exists.
         </p>
-        <div className="products">
-          {CATALOG.map((p) => (
-            <div className="product" key={p.line.sku}>
-              <strong>{p.line.title}</strong>
-              <small>
-                {p.line.attributes.color} · {p.line.attributes.category} · {p.line.sku}
-              </small>
-              <small>{p.blurb}</small>
-              <span className="price">{money(p.line.unit_price.value)}</span>
-              <button
-                className="btn btn-ghost btn-small"
-                disabled={!signed || busySku !== undefined}
-                onClick={() => propose(p.line.sku)}
-              >
-                {busySku === p.line.sku ? "Asking the merchant…" : "Propose this cart"}
-              </button>
-            </div>
-          ))}
-        </div>
+        <h3 className="group">{categoryLabel(shownCategory)}</h3>
+        <div className="products">{inCategory.map(card)}</div>
+        <details className="others">
+          <summary>Elsewhere in the store ({others.length})</summary>
+          <div className="products">{others.map(card)}</div>
+        </details>
         {checkoutError && <p className="error">{checkoutError}</p>}
         {verdict && product && (
           <div

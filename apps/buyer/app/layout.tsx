@@ -81,6 +81,9 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
 button.btn { cursor: pointer; font-family: inherit; }
 button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-small { padding: 8px 16px; font-size: 14px; }
+.group { font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 10px; }
+.others { margin-top: 16px; }
+.others summary { cursor: pointer; font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 12px; }
 .products { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .product { border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: grid; gap: 6px; align-content: start; }
 .product strong { font-size: 15px; }

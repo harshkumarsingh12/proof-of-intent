@@ -89,3 +89,8 @@ schema validity 100% after retry.
   0.75, red jacket → `mismatch` 0.99: 3/3, including the `partial` case every model missed on Nov 5 once "partial"
   had a definition and examples. Latency 1.4–1.9 s warm; the first call of a process can exceed the 2 s budget and
   succeed on the retry.
+- **J1 replay widened to the 12-product store (Nov 7), prompt `j1-v1` unchanged:** the three jacket answers were
+  kept as recorded; 9 new cases asked live. 6 of 9 agree with the person's label. Disagreements: wind jacket for
+  "running jacket" → `match` (debatable); grey shoe for "blue shoes" → `partial` (never reaches J1: the color rule
+  rejects it first); **trail shoe for "road running shoes" → `match` 0.95, a real miss**: checkout approves it. Hard
+  limits still hold, so it's wording, not money. A candidate for the eval set and a prompt revision (#43).
