@@ -23,8 +23,9 @@ Dry runs Nov 9 and Nov 10 with a timer. Final cut Nov 11 morning IST. Upload unl
 
 ## Judge click path
 
-Use the judge sandbox shopper and operator credentials from the Devpost testing instructions. For the
-zero-credential local path, follow [SETUP.md](SETUP.md#1-zero-credentials-judges-new-teammates).
+Use the judge sandbox shopper and operator credentials from the Devpost testing instructions. The hosted
+shop demonstrates checkout and sandbox dispute actions. The local mock stack supplies the historical
+overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-new-teammates)
 
 1. Open the [shop](https://poi-buyer.iotkiit.in/shop), keep the grey running jacket and USD 80 defaults, and
    click **Sign my intent**. The page shows the signed mandate and its hash.
@@ -37,15 +38,20 @@ zero-credential local path, follow [SETUP.md](SETUP.md#1-zero-credentials-judges
    supplied with the testing instructions and click **Preview evidence PDF**. An operator testing the action
    on a designated sandbox dispute can click **Escalate to a claim** at inquiry, wait for PayPal to open the
    claim, then click **Submit evidence to PayPal** when PayPal allows it.
-5. **Overreach (concede).** Checkout refuses an overreaching cart before PayPal (step 2), so the hosted sandbox
-   never holds an overreaching capture to dispute. See this path on the zero-credential local stack:
-   `pnpm demo:seed` ([SETUP.md](SETUP.md)) puts the scripted overreach dispute (the red USD 95 jacket against
-   grey under USD 80, captured "before Proof of Intent was installed") second in the queue. Open it, compare the
-   mandate and cart in the diff (`AMOUNT_EXCEEDS_MAX`, `ATTRIBUTE_MISMATCH`) and see **Accept Claim & Refund**
-   recommended; seeded disputes are read-only. On the hosted sandbox an operator can still run the refund
-   itself on a designated compliant dispute through **Override: accept the claim instead**, with a note. The
-   dashboard shows the reason whenever an action is disabled.
+5. **Hosted sandbox refund.** Open the separate refund-test dispute designated in Devpost. When PayPal allows
+   the action, the operator selects **Override: accept the claim instead**, adds a note, and verifies the
+   outcome. Reserve the evidence-submission dispute for step 4.
 6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
+
+### Local mock walkthrough
+
+1. Start a fresh local mock stack in replay mode. From the repository directory, run
+   `docker compose exec api pnpm demo:seed`. [Seed setup](SETUP.md#load-the-mock-demo-dataset)
+2. Open [local Disputes](http://localhost:3002/disputes). In `PP-D-1001`, choose **Preview evidence PDF** to
+   inspect the signed record for the compliant order.
+3. Open `PP-D-1002`. The historical mock capture pairs a red USD 95 jacket with a signed grey-under-USD 80
+   mandate. Compare `AMOUNT_EXCEEDS_MAX` and `ATTRIBUTE_MISMATCH` in the mandate diff and read the recommended
+   **Accept Claim & Refund** response. Seeded disputes are read-only.
 
 ### Before recording and submission
 

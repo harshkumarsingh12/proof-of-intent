@@ -46,7 +46,7 @@ for orders and checkout verdicts. See the [AI spec](docs/specs/0006-ai-jobs.md) 
 |---|---|
 | **Hosted demo** | [Shop](https://poi-buyer.iotkiit.in/shop) · [Operations dashboard](https://poi-dashboard.iotkiit.in). Follow the [judge click path](docs/DEMO.md#judge-click-path). Demo logins are shared through the Devpost testing instructions. |
 | **Your own sandbox** | Judge sandbox shopper accounts are in the Devpost testing instructions. |
-| **Run locally, zero credentials** | Docker. `PAYPAL_MODE=mock` and `AI_MODE=replay` are the defaults. |
+| **Run locally, zero credentials** | Docker. `PAYPAL_MODE=mock` and `AI_MODE=replay` are the defaults. Follow the [local mock walkthrough](docs/DEMO.md#local-mock-walkthrough) to inspect both scripted disputes. |
 
 ```bash
 git clone https://github.com/harshkumarsingh12/proof-of-intent.git
