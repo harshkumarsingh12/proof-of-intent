@@ -16,27 +16,40 @@ phrases so it works muted; no music; agent platforms named in speech only, **no 
 | 0:47 | Agent proposes the red $95 jacket; rejected with reason codes | "A red jacket at $95 does not pass a grey-under-$80 mandate. No order, no charge." |
 | 1:02 | Dispute on the compliant order; workspace; evidence PDF; Submit | "The buyer disputes anyway. The copilot assembles the proof and the operator approves it." |
 | 1:42 | Second dispute; mandate diff widget; Accept | "When the agent really did overreach, we refund without a fight." |
-| 2:02 | Dashboard; Studio agent answers a question | "Which agent platforms cause the most wrong-item disputes?" |
-| 2:17 | Honesty line; end card with repo link | "Any AP2 agent works today. We implement the mandate shape ourselves; PayPal's production systems do not yet read it." |
+| 2:02 | Analytics; disputes by agent platform | "Operators can see which agent platforms produce the most overreach in the demo data." |
+| 2:17 | Integration note; end card with repo link | "The shop and buyer agent send signed mandates to our merchant API. We attach a reference to that record to the PayPal order." |
 
 Dry runs Nov 9 and Nov 10 with a timer. Final cut Nov 11 morning IST. Upload unlisted, test the link, then public.
 
 ## Judge click path
 
-*To be filled in once M3 lands.* Hosted URLs, demo logins (viewer, operator) and the judge sandbox accounts go in
-the Devpost testing instructions, not here.
+Use the judge sandbox shopper and operator credentials from the Devpost testing instructions. For the
+zero-credential local path, follow [SETUP.md](SETUP.md#1-zero-credentials-judges-new-teammates).
 
-1. Shop → sign the example intent → let the agent build a cart → pay with the judge sandbox account.
-2. Watch the agent try the red jacket → see the rejection and its reason codes.
-3. Operations → Disputes → open the compliant-order dispute → **Preview evidence PDF** → at the inquiry stage
-   **Escalate to a claim** (PayPal opens it within about a minute; the page waits) → **Submit evidence to PayPal**.
-   The first action asks for the operator login (user `operator`).
-4. Open the overreach dispute → mandate diff → **Accept Claim & Refund**. On a compliant dispute the operator can
-   still refund through **Override: accept the claim instead**, with a note.
+1. Open the [shop](https://poi-buyer.iotkiit.in/shop), keep the grey running jacket and USD 80 defaults, and
+   click **Sign my intent**. The page shows the signed mandate and its hash.
+2. Under the red USD 95 jacket, click **Propose this cart**. Look for `AMOUNT_EXCEEDS_MAX` and
+   `ATTRIBUTE_MISMATCH`. The shop confirms that PayPal created no order or charge.
+3. Under the grey USD 74 jacket, click **Propose this cart** and approve in PayPal with the sandbox shopper.
+   When **Paid** appears, copy the capture ID. In [Operations → Orders](https://poi-dashboard.iotkiit.in/orders),
+   compare the captured order with the red cart's rejection in **Checkout verdicts**.
+4. In [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), open the compliant-order dispute ID
+   supplied with the testing instructions and click **Preview evidence PDF**. An operator testing the action
+   on a designated sandbox dispute can click **Escalate to a claim** at inquiry, wait for PayPal to open the
+   claim, then click **Submit evidence to PayPal** when PayPal allows it.
+5. Open the designated overreach dispute and compare the mandate and cart in the diff. An operator can use
+   **Accept Claim & Refund** when PayPal offers that action. Read-only reviewers can inspect both paths in
+   the preview. The dashboard labels demo data and shows the reason when an action is disabled.
+6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
 
-Each button follows what PayPal allows at that moment (status line "PayPal: INQUIRY · …"); a disabled button says
-why. Until the buyer app lands (#23), orders for the demo come from `pnpm sandbox:hosted-order` (spec 0003).
-5. Ask the Studio agent: "Which agent platforms cause the most wrong-item disputes this month?"
+### Before recording and submission
+
+- Verify the complete hosted checkout and both designated sandbox disputes with the supplied test accounts.
+- Put the verified dispute IDs and the appropriate sandbox access in the Devpost testing instructions.
+- Add the dated full eval report and its measured numbers to the README when #43 is complete.
+- Use the analytics view at 2:02. If #39 lands and is verified on the hosted demo, time the Studio prompt
+  against the same slot during the dry run.
+- Have a teammate run the click path from a clean browser and time both dry runs.
 
 ## What we will not claim
 

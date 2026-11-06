@@ -11,9 +11,10 @@ into evidence, or into a fair refund when the agent really did overreach. A huma
 
 Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (submissions close Nov 12, 2026).
 
-> **Who sends the mandates?** We accept the AP2 mandate format, so any agent that already speaks AP2 works
-> with no custom integration. Orders that arrive without a mandate still go through the standard dispute
-> path, so installing Proof of Intent never leaves a merchant worse off.
+> **Who sends the mandates?** The demo shop signs the shopper's intent in the browser. Its buyer agent signs
+> the payment mandate and proposes a cart. External agents can integrate through the documented checkout
+> endpoint using our AP2-style schemas and a registered agent key. Disputes on orders without a mandate use
+> the standard PayPal evidence path.
 
 ## How it works
 
@@ -28,20 +29,22 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 
 | PayPal surface | How we use it |
 |---|---|
-| Orders v2 | Authorize then capture or void (human present); create and capture against a vaulted wallet (agent alone) |
-| Vault v3 | One-time wallet save so an agent can buy later without the shopper online |
+| Orders v2 | The shop authorizes then captures or voids an order after the shopper approves the exact cart |
+| Vault v3 | Planned wallet onboarding for the agent-alone checkout path |
 | Webhooks | Signed dispute and capture events, verified, persisted, idempotent |
 | Disputes API | Provide evidence, send message, escalate (operator clicks); sandbox test harness |
 | Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |
 
-AI: a configurable LLM through the Vercel AI SDK for four typed jobs (semantic fit, dispute classification,
-evidence drafting, operator questions), plus the AG Studio Agent Framework in the dashboard.
+The checkout checks semantic fit through the Vercel AI SDK using NVIDIA Nemotron or versioned replay responses.
+The dispute worker replays the checkout rules to recommend a response. The operations dashboard uses AG Grid
+for orders and checkout verdicts. See the [AI spec](docs/specs/0006-ai-jobs.md) and the
+[dashboard spec](docs/specs/0007-dashboard.md) for the remaining jobs and Studio integration.
 
 ## Try it
 
 | Path | What you need |
 |---|---|
-| **Hosted demo** | [Shop](https://poi-buyer.iotkiit.in) · [Operations dashboard](https://poi-dashboard.iotkiit.in) · [API health](https://poi-api.iotkiit.in/healthz). Demo logins are in the Devpost testing instructions. |
+| **Hosted demo** | [Shop](https://poi-buyer.iotkiit.in/shop) · [Operations dashboard](https://poi-dashboard.iotkiit.in). Follow the [judge click path](docs/DEMO.md#judge-click-path). Demo logins are shared through the Devpost testing instructions. |
 | **Your own sandbox** | Judge sandbox shopper accounts are in the Devpost testing instructions. |
 | **Run locally, zero credentials** | Docker. `PAYPAL_MODE=mock` and `AI_MODE=replay` are the defaults. |
 
