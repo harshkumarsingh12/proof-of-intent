@@ -397,6 +397,15 @@ describe("sandbox disputes", () => {
     });
   });
 
+  test("escalate posts the note as JSON (plain REST: not an Agent Toolkit tool)", async () => {
+    const { client, requests } = fakePayPal({ "/escalate": { status: 200, body: { links: [] } } });
+    await client.escalate("PP-D-1", "Escalating to provide the signed record");
+    expect(requests[0]!.path).toBe("/v1/customer/disputes/PP-D-1/escalate");
+    expect(JSON.parse(requests[0]!.body as string)).toEqual({
+      note: "Escalating to provide the signed record",
+    });
+  });
+
   test("a refused dispute action surfaces PayPal's issue", async () => {
     const { client } = fakePayPal({
       "/provide-evidence": {

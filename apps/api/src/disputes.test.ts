@@ -248,6 +248,35 @@ describe("operator actions", () => {
     expect(mem.audit.map((a) => a.action)).toEqual(["operator.accept-claim", "paypal.accept-claim.failed"]);
   });
 
+  test("escalate is an audited operator action like the others", async () => {
+    const { app, mem, paypal } = await setup();
+    expect((await post(app, "/disputes/PP-D-1/actions/escalate")).statusCode).toBe(200);
+    expect((paypal as ReturnType<typeof createMockClient>).disputeActions).toEqual([
+      { kind: "escalate", disputeId: "PP-D-1", note: expect.stringContaining("signed record") },
+    ]);
+    expect(mem.audit.map((a) => a.action)).toEqual(["operator.escalate", "paypal.escalate"]);
+  });
+
+  test("paypal-actions asks PayPal live and maps its links to our action names", async () => {
+    const paypal = createMockClient();
+    paypal.seedDispute({
+      dispute_id: "PP-D-1",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      dispute_life_cycle_stage: "INQUIRY",
+      links: [{ rel: "self" }, { rel: "accept_claim" }, { rel: "escalate" }, { rel: "make_offer" }],
+    });
+    const { app } = await setup(paypal);
+    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/paypal-actions" });
+    expect(res.json()).toEqual({
+      stage: "INQUIRY",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      allowed: ["accept-claim", "escalate"],
+    });
+    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-404/paypal-actions" })).statusCode).toBe(
+      404,
+    );
+  });
+
   test("make-offer is out of scope, unknown actions and disputes are 404", async () => {
     const { app } = await setup();
     expect((await post(app, "/disputes/PP-D-1/actions/make-offer")).statusCode).toBe(501);

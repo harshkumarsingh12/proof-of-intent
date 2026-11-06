@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   executeDisputeAction,
+  fetchPaypalActions,
   fetchDisputeDetail,
   fetchDisputeDetailDetailed,
   getDisputeDetail,
@@ -250,6 +251,13 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     expect(failureResult.success).toBe(false);
     expect(failureResult.status).toBe(501);
     expect(failureResult.error).toBe("not_implemented");
+
+    // What PayPal allows: the parsed answer, or null (unknown) on any failure so nothing is blocked by mistake.
+    const actions = { stage: "INQUIRY", status: "WAITING_FOR_SELLER_RESPONSE", allowed: ["accept-claim", "escalate"] };
+    const okFetch = (async () => ({ ok: true, json: async () => actions })) as unknown as typeof fetch;
+    expect(await fetchPaypalActions("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: okFetch })).toEqual(actions);
+    const downFetch = (async () => ({ ok: false, status: 503, json: async () => ({}) })) as unknown as typeof fetch;
+    expect(await fetchPaypalActions("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: downFetch })).toBeNull();
 
     // The API's human message is what the operator sees, not the bare status.
     const unavailable = (async () => ({

@@ -51,7 +51,10 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
           try {
             res = await config.fetch(`${config.baseUrl}/v1/oauth2/token`, {
               method: "POST",
-              headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
+              headers: {
+                Authorization: `Basic ${basic}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
               body: "grant_type=client_credentials",
             });
           } catch (err) {
@@ -165,6 +168,13 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
       form.append("input", new Blob([JSON.stringify({ message })], { type: "application/json" }));
       await call("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/send-message`, {
         body: form,
+      });
+    },
+
+    // Not an Agent Toolkit tool, so plain REST.
+    async escalate(disputeId, note) {
+      await call("POST", `/v1/customer/disputes/${encodeURIComponent(disputeId)}/escalate`, {
+        body: JSON.stringify({ note }),
       });
     },
 

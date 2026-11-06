@@ -134,7 +134,34 @@ export type DisputeOperatorAction =
   | "provide-evidence"
   | "accept-claim"
   | "make-offer"
-  | "send-message";
+  | "send-message"
+  | "escalate";
+
+export interface PaypalActions {
+  stage: string | null;
+  status: string | null;
+  allowed: Array<"provide-evidence" | "accept-claim" | "send-message" | "escalate">;
+}
+
+/** What PayPal allows on a dispute right now (GET /disputes/:id/paypal-actions). Null when unknown. */
+export async function fetchPaypalActions(
+  disputeId: string,
+  options?: FetchDisputesOptions
+): Promise<PaypalActions | null> {
+  const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  const runner = options?.fetchFn ?? fetch;
+  try {
+    const res = await runner(`${baseUrl}/disputes/${encodeURIComponent(disputeId)}/paypal-actions`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as PaypalActions;
+    return Array.isArray(data?.allowed) ? data : null;
+  } catch {
+    return null;
+  }
+}
 
 export interface DisputeActionResult {
   success: boolean;
