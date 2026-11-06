@@ -148,6 +148,7 @@ On the server: `curl -fsS http://127.0.0.1:3100/healthz` (the API's host port fr
 | `Bind for 0.0.0.0:3001 failed: port is already allocated` | Another service holds that host port | Set `SHOP_HOST_PORT` (or the API/OPS one) to a free port; find the holder with `docker ps --filter publish=3001` |
 | `service "migrate" didn't complete successfully: exit 1` | Usually `DATABASE_URL` missing from the Environment tab, or a password that doesn't match the existing `pgdata` volume | `docker logs <app>-migrate-1`; add the full env set above; Postgres keeps the password it was first created with |
 | Plain-text `404 page not found` on a domain | Dokploy's proxy has no route: domain not redeployed, a typo, or the wrong service | Redeploy; check the host, service and container port in the Domains tab |
+| `getaddrinfo EAI_AGAIN api.sandbox.paypal.com` in api or worker logs | The host's DNS resolver dropped a lookup | Compose sends outside names to `1.1.1.1` / `8.8.8.8` (`dns:` in `docker-compose.yml`); if the host firewall blocks outbound DNS to them, put the host's working resolver there instead. Calls that never reached PayPal are retried automatically |
 | JSON `Route GET:/ not found` on the API domain | Working as intended | Use `/healthz` |
 
 **Without Dokploy** (plain Compose and Caddy on a server you manage):
