@@ -97,6 +97,8 @@ button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .verdict p { margin: 0 0 8px; font-size: 14px; }
 .reasons { margin: 8px 0 0; padding-left: 18px; font-size: 14px; }
 .reasons code { font-size: 12px; color: var(--muted); }
+.trace { margin: 8px 0 0; padding-left: 20px; font-size: 14px; display: grid; gap: 6px; }
+.trace code { font-size: 12px; color: var(--muted); }
 .meta { font-size: 13px; color: var(--muted); word-break: break-all; }
 .error { color: var(--danger); font-size: 14px; margin: 8px 0 0; }
 .paypal-slot { max-width: 360px; margin-top: 12px; }
