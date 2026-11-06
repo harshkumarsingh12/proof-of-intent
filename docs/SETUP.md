@@ -54,6 +54,22 @@ API can't be reached they fall back to seed data and say so in a banner. Operato
 `OPERATOR_PASSWORD` in `.env` (user `operator` at the browser's login prompt); without them they answer
 "operator actions are not configured" rather than faking success.
 
+### Load the mock demo dataset
+
+With the local Compose stack running in mock mode against a fresh database, run:
+
+```bash
+docker compose exec api pnpm demo:seed
+```
+
+The command writes 300 fictional orders across four agent platforms and 24 disputes. In the dashboard's
+dispute queue, `PP-D-1001` shows the compliant order and its PDF preview. `PP-D-1002` shows the historical
+overreach and its failed amount and color checks. The seeded records are for read-only inspection.
+
+For a local Postgres outside Docker, set `DATABASE_URL` and `PAYPAL_MODE=mock`, then run `pnpm demo:seed`
+from the repository root. Seeding refuses remote databases, sandbox mode and databases with existing data.
+A successful run can be repeated safely. The original records and deadlines are kept.
+
 ## 2. Development without Docker
 
 Needs Node 20+ (the repo pins pnpm 9.12.3 in `package.json`).

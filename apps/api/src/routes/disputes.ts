@@ -14,6 +14,7 @@ import type { AppDeps } from "../app";
 
 /** What the worker stores in disputes.recommendation (apps/worker/src/inbox.ts). */
 interface Recommendation {
+  demo?: boolean;
   class: DisputeClass;
   action: "PROVIDE_EVIDENCE" | "ACCEPT_CLAIM" | "MAKE_OFFER" | "STANDARD_EVIDENCE";
   reasons: ReasonCode[];
@@ -234,6 +235,9 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         .code(409)
         .send({ error: "order_not_captured", message: "Tracking needs a captured payment" });
     }
+    if (order.captureId.startsWith("DEMO-CAPTURE-")) {
+      return reply.code(409).send({ error: "demo_read_only", message: "Seeded orders are read-only" });
+    }
     const input = {
       captureId: order.captureId,
       trackingNumber,
@@ -350,6 +354,9 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
     const d = await db.getDispute(req.params.id);
     if (!d) return reply.code(404).send({ error: "dispute_not_found", message: "Unknown dispute" });
     const rec = d.recommendation as Recommendation | undefined;
+    if (rec?.demo) {
+      return reply.code(409).send({ error: "demo_read_only", message: "Seeded disputes are read-only" });
+    }
     const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 2000) : undefined);
     const note = text(req.body?.note);
 

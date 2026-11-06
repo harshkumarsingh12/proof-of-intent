@@ -20,6 +20,7 @@
     "dev:api": "pnpm --filter @poi/api dev",
     "dev:buyer": "pnpm --filter @poi/buyer dev",
     "dev:dashboard": "pnpm --filter @poi/dashboard dev",
+    "demo:seed": "tsx scripts/demo/seed.ts",
     "sandbox:record-orders": "tsx --env-file=.env scripts/sandbox/record-orders.ts",
     "sandbox:checkout-smoke": "tsx --env-file=.env scripts/sandbox/checkout-smoke.ts",
     "sandbox:dispute-cycle": "tsx --env-file=.env scripts/sandbox/dispute-cycle.ts",
