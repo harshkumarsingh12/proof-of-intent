@@ -59,7 +59,7 @@ key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/
 5. A retired key verifies mandates created before `retired_at` and rejects newer ones. _(test, done)_
 6. The browser key is ECDSA P-256 and non-extractable. _(done)_
 7. A mandate signed in the browser verifies on the server. _(done: `apps/buyer/src/buyer.test.ts` runs the page's
-   WebCrypto code against `verifyMandate`; a Playwright smoke of the page itself is still open)_
+   WebCrypto code against `verifyMandate`; `pnpm smoke:shop` drives the page itself and checks the stored key is non-extractable)_
 
 ## As built (apps/buyer)
 

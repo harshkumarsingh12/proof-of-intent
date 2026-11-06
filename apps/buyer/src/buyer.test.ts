@@ -25,8 +25,8 @@ import {
   type ShopperKey,
 } from "./signing";
 
-// Browser code under Node's WebCrypto, which is the same API. A Playwright smoke test of the page itself is
-// still to come; these cover everything the page does with keys, hashes and mandates.
+// Browser code under Node's WebCrypto, which is the same API. These cover everything the page does with keys,
+// hashes and mandates; `pnpm smoke:shop` (scripts/smoke/shop.ts) covers the page itself.
 
 const form: IntentForm = {
   description: greyJacketIntent.natural_language_description,
