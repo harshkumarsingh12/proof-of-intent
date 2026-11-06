@@ -46,10 +46,10 @@ of every `ci` run.
 |---|---|---|
 | Sandbox dispute recipe script | Harsh | ✅ Done (live run Nov 5: dispute `PP-R-NSZ-10196423`) |
 | require-evidence, provide-evidence, send-message | Harsh | provide-evidence + send-message ✅; require-evidence lives in the recipe script (sandbox-only) |
-| Agent Toolkit dispute tools in the worker | Sikruti | Pending |
-| Evidence package (PDF + JSON) | Sikruti | Pending |
-| Recommendation endpoint + operator actions | Sikruti + Harsh | Pending; dashboard side calls the API and reports its real answer (#61); audit panel and override in #74 |
-| Dispute workspace, mandate diff widget, evidence preview widget | Sikruti | Queue and detail with mandate diff and evidence preview ✅ (#60, #61); live data pending the API routes |
+| Agent Toolkit dispute tools in the worker | Sikruti | ✅ `get_dispute`, `list_disputes`, `accept_dispute_claim`, `create_shipment_tracking` through `@paypal/agent-toolkit` (#59) |
+| Evidence package (PDF + JSON) | Sikruti | ✅ Built by the worker for MANDATE_COMPLIANT disputes, served at `/disputes/:id/evidence.pdf` (#82) |
+| Recommendation endpoint + operator actions | Sikruti + Harsh | ✅ `/disputes*` routes, operator actions behind `OPERATOR_TOKEN` and the dashboard login (#82, #83); override to accept with a note (this PR) |
+| Dispute workspace, mandate diff widget, evidence preview widget | Sikruti | ✅ Live data from the API; the preview shows the exact PDF that is submitted (#83) |
 | J2 classification, J3 drafting | Sumedha | Pending |
 | Step-up links; agent-alone flow with vault; buyer agent | Sristee | Pending |
 | Uptime monitor, backups, rate limits | Harsh | Rate limits + backups ✅; external monitor pending (public URLs now live); backups need a Dokploy setup (`server` profile not started) |
@@ -57,8 +57,13 @@ of every `ci` run.
 **Done when:** a real `CUSTOMER.DISPUTE.CREATED` is classified, evidence is submitted and a claim is accepted in
 sandbox through the UI.
 
-**Status (Nov 6):** not passed yet. Blocked on the Agent Toolkit wiring (PR #59, failing CI), the evidence PDF
-(PR #58 was closed unmerged) and the `/disputes` API routes. The cut list applies if it slips past Nov 7.
+**Status (Nov 6):** passed on the PayPal sandbox, with the API, worker and dashboard run locally against a local
+database (the team server's database has no shopper-key registration yet, #22). Dispute `PP-R-TRI-10196690`:
+classified MANDATE_COMPLIANT, escalated, evidence submitted from the dashboard → PayPal UNDER_REVIEW. Dispute
+`PP-R-MMK-10196694`: classified MANDATE_COMPLIANT, operator override → accept claim from the dashboard →
+RESOLVED_BUYER_FAVOUR. In both, the operator's audit row precedes the PayPal call. Still open: real webhook delivery
+check (#19; the `list_disputes` catch-up already covers missed webhooks), J2/J3 (Sumedha), step-up and buyer flows
+(Sristee).
 
 ## M3 Feature freeze (Nov 8)
 

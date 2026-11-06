@@ -343,7 +343,9 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
       }
       const notes = note ?? rec?.draft?.cover_note ?? "Signed mandate attestation attached.";
       const evidenceType = evidenceTypeFor(d.reason ?? "");
-      request = { notes, evidenceType, file: pdfName(d.id), mandateHash: rec?.mandateHash };
+      // The worker re-renders the PDF on each dispute update; the hash records exactly which bytes went to PayPal.
+      const pdfSha256 = createHash("sha256").update(d.evidencePdf).digest("hex");
+      request = { notes, evidenceType, file: pdfName(d.id), pdfSha256, mandateHash: rec?.mandateHash };
       send = () =>
         deps.paypal.provideEvidence(d.id, {
           notes,
