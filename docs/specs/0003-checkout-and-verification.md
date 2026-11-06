@@ -84,6 +84,15 @@ and the agent's response carries no link.
 - **Delivery:** no email provider is wired. The API logs the link (`step-up approval link`), and
   `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin.
 
+### Buyer agent, as built (#37)
+
+`apps/buyer/src/agent.ts`. The agent's tools are `create_intent_mandate`, `search_catalog` and `request_checkout`.
+It holds no PayPal credentials and no shopper key: `create_intent_mandate` returns an unsigned draft that the
+shopper reviews and signs in the browser (spec 0001), and `request_checkout` goes through the same signed
+`POST /checkout` as a hand-picked cart, so nothing here changes the contract. The model sees the verdict outcome
+and reason codes only. Limits per run: three carts, six model calls, the daily AI budget. With `AI_MODE=replay` a
+scripted chooser (catalog filtered by the signed limits, best word match first) stands in for the model.
+
 ### Jobs
 
 Superseded (Nov 6): no job queue. The `webhook_events` rows the receiver stores are the worker's inbox, and the

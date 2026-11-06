@@ -51,7 +51,7 @@ of every `ci` run.
 | Recommendation endpoint + operator actions                      | Sikruti + Harsh | ✅ `/disputes*` routes, operator actions behind `OPERATOR_TOKEN` and the dashboard login (#82, #83); override to accept with a note (this PR) |
 | Dispute workspace, mandate diff widget, evidence preview widget | Sikruti         | ✅ Live data from the API; the preview shows the exact PDF that is submitted (#83)                                                            |
 | J2 classification, J3 drafting                                  | Sumedha         | Pending                                                                                                                                       |
-| Step-up links; agent-alone flow with vault; buyer agent         | Sristee         | Pending                                                                                                                                       |
+| Step-up links; agent-alone flow with vault; buyer agent         | Sristee         | Step-up links ✅ (#35); buyer agent with its three tools ✅ (#37, replay chooser + live model); agent-alone flow with vault pending           |
 | Uptime monitor, backups, rate limits                            | Harsh           | Rate limits + backups ✅; external monitor pending (public URLs now live); backups need a Dokploy setup (`server` profile not started)        |
 
 **Done when:** a real `CUSTOMER.DISPUTE.CREATED` is classified, evidence is submitted and a claim is accepted in

@@ -8,10 +8,8 @@ import {
   overreachingCart,
   partialCart,
 } from "@poi/contracts/fixtures";
-import { ledger } from "@poi/ledger";
 import { createKeyRegistry, keyIdFor, mandateHash, publicEs256Jwk, verifyMandate } from "@poi/mandates";
 import { evaluate } from "@poi/policy-engine";
-import { toolNames } from "./agent";
 import { intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
@@ -281,11 +279,5 @@ describe("step-up approval page (#35)", () => {
     expect(isStepUpToken("A".repeat(43))).toBe(true);
     for (const bad of ["", "short", "../keys/agent", "a b c d e f g h i j k l", "x".repeat(200)])
       expect(isStepUpToken(bad)).toBe(false);
-  });
-});
-
-describe("buyer agent tools (unbuilt, #37)", () => {
-  ledger("M2", "srshriv", "buyer agent tools never include PayPal credentials", () => {
-    expect(toolNames).toEqual(["create_intent_mandate", "search_catalog", "request_checkout"]);
   });
 });

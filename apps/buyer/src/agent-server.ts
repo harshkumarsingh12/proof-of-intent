@@ -3,7 +3,8 @@
  *
  * It holds the **agent's** key (never the shopper's, never PayPal's) and does what an AP2 agent does: take the
  * shopper's signed intent, propose a cart, sign a Payment Mandate over both, and send them to the merchant.
- * Which item to propose is the shopper's pick for now; the LLM agent that chooses on its own is #37.
+ * Which item to propose is either the shopper's pick (`agentCheckout`) or the agent's own choice
+ * (`agentChoose`, src/agent.ts, #37); the merchant's verdict is the authority either way.
  *
  * Env: API_INTERNAL_URL (merchant API), MERCHANT_ID, AGENT_SIGNING_KEY (PKCS#8 PEM from `pnpm keys:gen`,
  * `\n` escaped), AGENT_PLATFORM (default "Northstar"). With OPERATOR_TOKEN set, the agent registers its own key
@@ -15,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { CheckoutResponse, IntentMandate } from "@poi/contracts";
 import { generateSigningKeyPair, keyIdFor, publicEs256Jwk, signMandate } from "@poi/mandates";
 import { exportJWK, importPKCS8, type JWK } from "jose";
+import { parseAgentMode, runChoose, runDraft, type ChooseResult, type DraftResult } from "./agent";
 import { paymentMandate, proposeCart, type Merchant } from "./cart";
 
 export const apiBase = (): string =>
@@ -130,4 +132,18 @@ export async function agentCheckout(intentJws: string, sku: string): Promise<Age
     };
   }
   return { status: res.status, body };
+}
+
+/** The agent picks the item itself under the signed intent and proposes up to three carts (src/agent.ts). */
+export function agentChoose(intentJws: string): Promise<ChooseResult> {
+  return runChoose({
+    intent: intentFromJws(intentJws),
+    mode: parseAgentMode(process.env.AI_MODE),
+    checkout: (sku) => agentCheckout(intentJws, sku),
+  });
+}
+
+/** The agent fills the intent form from the shopper's words. It cannot sign: the shopper does, in the browser. */
+export function agentDraftIntent(text: string): Promise<DraftResult> {
+  return runDraft({ text, mode: parseAgentMode(process.env.AI_MODE) });
 }
