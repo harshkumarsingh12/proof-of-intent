@@ -33,6 +33,13 @@ shop says so; `AI_MODE=live` uses `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY` throug
 every call against `AI_DAILY_CALL_LIMIT`. A live failure answers 503 `agent_unavailable` and the shopper picks a
 cart by hand, which is also how the red $95 demo cart is proposed.
 
+The agent explains itself: the shop lists each search and proposal with the agent's own one-sentence reason and the
+merchant's answer. Before asking the merchant, `request_checkout` checks the product against the signed price,
+category and color and skips (and shows) any that break them, so a shopper's "forget grey, I want red" can't talk the
+agent into a cart the merchant would refuse. The merchant still checks everything. The agent never sets "confirm
+every cart"; that switch belongs to the shopper. `pnpm agent:eval` runs the live agent over eight cases, including a
+budget-override request, and writes `docs/evals/agent-<date>.md`.
+
 **Still to do:** a Playwright smoke test of `/shop`, a recorded live run of the agent for the eval report.
 
 ## Test

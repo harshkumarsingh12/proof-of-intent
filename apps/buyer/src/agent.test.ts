@@ -8,6 +8,8 @@ import {
   MAX_CHECKOUTS,
   chooseTools,
   draftIntent,
+  limitBreaks,
+  limitsOf,
   draftTools,
   parseAgentMode,
   redact,
@@ -49,6 +51,32 @@ const presetIntent = (category: string): IntentMandate => {
 
 const approve = { status: 200, body: { verdict: { outcome: "APPROVE", reasons: [] } } };
 const reject = { status: 200, body: { verdict: { outcome: "REJECT", reasons: ["AMOUNT_EXCEEDS_MAX"] } } };
+
+/** A model that calls `calls` in turn, then answers with `text`. */
+const scriptedModel = (calls: { name: string; args: unknown }[], text = "Proposed the grey jacket.") => {
+  let turn = 0;
+  return new MockLanguageModelV1({
+    doGenerate: async () => {
+      const call = calls[turn++];
+      const usage = { promptTokens: 1, completionTokens: 1 };
+      return call
+        ? {
+            rawCall: { rawPrompt: null, rawSettings: {} },
+            finishReason: "tool-calls" as const,
+            usage,
+            toolCalls: [
+              {
+                toolCallType: "function" as const,
+                toolCallId: `call_${turn}`,
+                toolName: call.name,
+                args: JSON.stringify(call.args),
+              },
+            ],
+          }
+        : { rawCall: { rawPrompt: null, rawSettings: {} }, finishReason: "stop" as const, usage, text };
+    },
+  });
+};
 
 const ctxWith = (checkout: RunContext["checkout"]): RunContext => ({ checkout, attempts: [] });
 
@@ -129,6 +157,119 @@ describe("buyer agent tools (#37)", () => {
   });
 });
 
+describe("agent trace and shopper-owned settings", () => {
+  test("the draft tool can't turn 'confirm every cart' on or off", () => {
+    const draft = draftIntent({
+      description: "grey running jacket",
+      max_price_usd: 80,
+      category: "running-jacket",
+      color: "grey",
+      // @ts-expect-error not an argument any more; a model that sends it is ignored
+      confirm_each_cart: true,
+    });
+    expect(draft.form.confirmEachCart).toBe(false);
+  });
+
+  test("request_checkout records the reason, cleaned and with no personal details", async () => {
+    const ctx: RunContext = { checkout: async () => reject, attempts: [], trace: [] };
+    await requestCheckout(ctx, "JKT-GRY-M", "Fits\n  your budget; mail jo@example.com   now");
+    expect(ctx.trace).toEqual([
+      expect.objectContaining({
+        kind: "propose",
+        sku: "JKT-GRY-M",
+        outcome: "REJECT",
+        reasons: ["AMOUNT_EXCEEDS_MAX"],
+        reason: "Fits your budget; mail [email] now",
+      }),
+    ]);
+    const long = "x".repeat(1000);
+    await requestCheckout(ctx, "JKT-GRY-M", long);
+    expect((ctx.trace![1] as { reason: string }).reason).toHaveLength(240);
+  });
+
+  test("a scripted run explains itself: one search, then each cart with the merchant's answer", async () => {
+    const run = await runChoose({
+      intent: presetIntent("running-jacket"),
+      mode: "replay",
+      checkout: async () => approve,
+    });
+    expect(run.trace.map((t) => t.kind)).toEqual(["search", "propose"]);
+    expect(run.trace[1]).toMatchObject({ outcome: "APPROVE" });
+  });
+
+  test("a live run's trace holds the search and the proposal with the model's reason", async () => {
+    const run = await runChoose({
+      intent: presetIntent("socks"),
+      mode: "live",
+      checkout: async () => approve,
+      model: scriptedModel([
+        { name: "search_catalog", args: { category: "socks" } },
+        { name: "request_checkout", args: { sku: "SOK-3PK-WHT", reason: "White, a 3-pack, under $20." } },
+      ]),
+    });
+    expect(run.trace).toEqual([
+      { kind: "search", query: { category: "socks" }, found: expect.any(Number) },
+      expect.objectContaining({ kind: "propose", sku: "SOK-3PK-WHT", reason: "White, a 3-pack, under $20." }),
+    ]);
+  });
+});
+
+describe("the agent checks the signed limits before asking the merchant", () => {
+  const jacketIntent = presetIntent("running-jacket"); // grey, max $80
+  const product = (sku: string) => CATALOG.find((p) => p.line.sku === sku)!;
+
+  test("it names every signed limit a product breaks", () => {
+    const limits = limitsOf(jacketIntent);
+    expect(limitBreaks(limits, product("JKT-GRY-M"))).toEqual([]);
+    expect(limitBreaks(limits, product("JKT-RED-M"))).toEqual([
+      "price is over the signed maximum",
+      "color is not grey",
+    ]);
+    expect(limitBreaks(limits, product("SOK-3PK-WHT"))).toContain("category is not running-jacket");
+  });
+
+  test("a product outside the limits never reaches the merchant, even if the shopper's words ask for it", async () => {
+    let calls = 0;
+    const ctx: RunContext = {
+      checkout: async () => (calls++, approve),
+      attempts: [],
+      trace: [],
+      limits: limitsOf(jacketIntent),
+    };
+    const out = await requestCheckout(ctx, "JKT-RED-M", "The shopper said the red one.");
+    expect(out).toMatchObject({ error: "outside_signed_limits" });
+    expect(calls).toBe(0);
+    expect(ctx.attempts).toEqual([]);
+    expect(ctx.trace).toEqual([expect.objectContaining({ sku: "JKT-RED-M", outcome: "OUT_OF_LIMITS" })]);
+  });
+
+  test("a live model that goes for the red jacket is stopped and the run ends with no cart sent", async () => {
+    let calls = 0;
+    const run = await runChoose({
+      intent: jacketIntent,
+      mode: "live",
+      checkout: async () => (calls++, approve),
+      model: scriptedModel([
+        { name: "request_checkout", args: { sku: "JKT-RED-M", reason: "They asked for red." } },
+      ]),
+    });
+    expect(calls).toBe(0);
+    expect(run.attempts).toEqual([]);
+    expect(run.trace).toEqual([expect.objectContaining({ outcome: "OUT_OF_LIMITS" })]);
+  });
+
+  test("blocked carts don't use up the three carts the merchant is asked about", async () => {
+    const ctx: RunContext = {
+      checkout: async () => approve,
+      attempts: [],
+      trace: [],
+      limits: limitsOf(jacketIntent),
+    };
+    for (let i = 0; i < 5; i++) await requestCheckout(ctx, "JKT-RED-M");
+    expect(await requestCheckout(ctx, "JKT-GRY-M", "Fits.")).toMatchObject({ outcome: "APPROVE" });
+  });
+});
+
 describe("scripted agent (AI_MODE=replay)", () => {
   test("for every demo preset its first pick passes the hard rules", () => {
     for (const preset of PRESETS) {
@@ -198,41 +339,15 @@ describe("scripted agent (AI_MODE=replay)", () => {
 });
 
 describe("live agent (scripted model, no network)", () => {
-  /** A model that calls `calls` in turn, then answers with `text`. */
-  const model = (calls: { name: string; args: unknown }[], text = "Proposed the grey jacket.") => {
-    let turn = 0;
-    return new MockLanguageModelV1({
-      doGenerate: async () => {
-        const call = calls[turn++];
-        const usage = { promptTokens: 1, completionTokens: 1 };
-        return call
-          ? {
-              rawCall: { rawPrompt: null, rawSettings: {} },
-              finishReason: "tool-calls" as const,
-              usage,
-              toolCalls: [
-                {
-                  toolCallType: "function" as const,
-                  toolCallId: `call_${turn}`,
-                  toolName: call.name,
-                  args: JSON.stringify(call.args),
-                },
-              ],
-            }
-          : { rawCall: { rawPrompt: null, rawSettings: {} }, finishReason: "stop" as const, usage, text };
-      },
-    });
-  };
-
   test("the model searches, proposes, and the merchant's answer comes back", async () => {
     const seen: string[] = [];
     const run = await runChoose({
       intent: presetIntent("running-jacket"),
       mode: "live",
       checkout: async (sku) => (seen.push(sku), approve),
-      model: model([
+      model: scriptedModel([
         { name: "search_catalog", args: { category: "running-jacket", color: "grey", max_price_usd: 80 } },
-        { name: "request_checkout", args: { sku: "JKT-GRY-M" } },
+        { name: "request_checkout", args: { sku: "JKT-GRY-M", reason: "fits" } },
       ]),
     });
     expect(run.source).toBe("live");
@@ -247,7 +362,7 @@ describe("live agent (scripted model, no network)", () => {
       intent: presetIntent("running-jacket"),
       mode: "live",
       checkout: async () => (calls++, approve),
-      model: model([{ name: "request_checkout", args: { sku: "FREE-STUFF" } }]),
+      model: scriptedModel([{ name: "request_checkout", args: { sku: "FREE-STUFF", reason: "free" } }]),
     });
     expect(calls).toBe(0);
     expect(run.attempts).toEqual([]);
@@ -255,12 +370,15 @@ describe("live agent (scripted model, no network)", () => {
 
   test("a model that keeps proposing is cut off at the cart limit", async () => {
     let calls = 0;
-    const many = Array.from({ length: 5 }, () => ({ name: "request_checkout", args: { sku: "JKT-GRY-M" } }));
+    const many = Array.from({ length: 5 }, () => ({
+      name: "request_checkout",
+      args: { sku: "JKT-GRY-M", reason: "r" },
+    }));
     await runChoose({
       intent: presetIntent("running-jacket"),
       mode: "live",
       checkout: async () => (calls++, reject),
-      model: model(many),
+      model: scriptedModel(many),
     });
     expect(calls).toBeLessThanOrEqual(MAX_CHECKOUTS);
   });
@@ -269,7 +387,7 @@ describe("live agent (scripted model, no network)", () => {
     const out = await runDraft({
       text: "grey running jacket under $80",
       mode: "live",
-      model: model([
+      model: scriptedModel([
         {
           name: "create_intent_mandate",
           args: {
