@@ -131,3 +131,35 @@ describe("POST /webhooks/paypal", () => {
     expect(res.statusCode).toBe(503);
   });
 });
+
+describe("GET /readyz webhook receipt (#19)", () => {
+  const readyz = async (app: ReturnType<typeof buildApp>) =>
+    (await app.inject({ method: "GET", url: "/readyz" })).json() as {
+      webhooks?: { received: number; lastReceivedAt: string | null; lastEventType: string | null } | null;
+    };
+
+  test("starts empty, counts a verified delivery once, and ignores a redelivery", async () => {
+    const app = buildApp({ paypal: createMockClient(), db: memoryDb().db });
+    expect((await readyz(app)).webhooks).toEqual({ received: 0, lastReceivedAt: null, lastEventType: null });
+
+    expect((await deliver(app, JSON.stringify(event))).json()).toEqual({ status: "stored" });
+    const first = (await readyz(app)).webhooks!;
+    expect(first.received).toBe(1);
+    expect(first.lastEventType).toBe("PAYMENT.CAPTURE.COMPLETED");
+    expect(Date.parse(first.lastReceivedAt!)).not.toBeNaN();
+
+    expect((await deliver(app, JSON.stringify(event))).json()).toEqual({ status: "duplicate" });
+    expect((await readyz(app)).webhooks!.received).toBe(1);
+  });
+
+  test("a forged delivery is not counted", async () => {
+    const app = buildApp({ paypal: createMockClient(), db: memoryDb().db });
+    const res = await deliver(app, JSON.stringify(event), paypalHeaders("forged"));
+    expect(res.statusCode).toBe(400);
+    expect((await readyz(app)).webhooks!.received).toBe(0);
+  });
+
+  test("without a database readyz still answers and reports no webhook stats", async () => {
+    expect((await readyz(buildApp({ paypal: createMockClient() }))).webhooks).toBeUndefined();
+  });
+});

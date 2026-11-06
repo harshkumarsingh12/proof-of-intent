@@ -33,7 +33,8 @@ hasn't approved on PayPal yet; 502 if PayPal fails (retry is safe). Details in s
 
 ## POST /webhooks/paypal
 
-Verify with PayPal, store once, answer fast (spec 0004 §Webhooks).
+Verify with PayPal, store once, answer fast (spec 0004 §Webhooks). `GET /readyz` reports `webhooks`: how many verified
+deliveries the API holds and when the last arrived (`pnpm sandbox:webhook-check` uses it to prove real delivery).
 
 | Delivery                                                  | Answer                                                   | Stored    |
 | --------------------------------------------------------- | -------------------------------------------------------- | --------- |
@@ -48,11 +49,11 @@ The body is kept as the exact string PayPal signed (a raw parser scoped to this 
 
 ## Keys (`src/routes/keys.ts`, spec 0001)
 
-| Route | Who | Answer |
-|---|---|---|
-| `POST /keys/shopper` `{ public_jwk }` | public, 10/min/IP | 201 new / 200 same key again → `{ kid, shopper_id }`; 400 for private or non-P-256 keys |
-| `POST /keys/agent` `{ public_jwk, platform }` | operator token | 201 / 200 → `{ kid, platform }`; 409 if the key belongs to another platform |
-| `POST /keys/:kind/:kid/retire` `{ at? }` | operator token | `{ kid, retired_at }`; the first date wins |
+| Route                                         | Who               | Answer                                                                                  |
+| --------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------- |
+| `POST /keys/shopper` `{ public_jwk }`         | public, 10/min/IP | 201 new / 200 same key again → `{ kid, shopper_id }`; 400 for private or non-P-256 keys |
+| `POST /keys/agent` `{ public_jwk, platform }` | operator token    | 201 / 200 → `{ kid, platform }`; 409 if the key belongs to another platform             |
+| `POST /keys/:kind/:kid/retire` `{ at? }`      | operator token    | `{ kid, retired_at }`; the first date wins                                              |
 
 `kid` is `shp_` / `agt_` plus the key's RFC 7638 thumbprint. Every registration and retirement is audited.
 

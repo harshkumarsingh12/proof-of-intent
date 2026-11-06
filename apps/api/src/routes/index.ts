@@ -8,9 +8,7 @@ type Method = "GET" | "POST";
 
 const SPEC = "docs/specs/0003-checkout-and-verification.md";
 
-const routes: [Method, string, string][] = [
-  ["GET", "/analytics/:report", "hoursgotviral-dev"],
-];
+const routes: [Method, string, string][] = [["GET", "/analytics/:report", "hoursgotviral-dev"]];
 
 export function registerRoutes(app: FastifyInstance): void {
   for (const [method, url, owner] of routes) {

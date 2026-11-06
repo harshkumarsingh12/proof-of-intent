@@ -148,6 +148,12 @@ export interface Page {
   offset: number;
 }
 
+export interface WebhookStats {
+  received: number;
+  lastReceivedAt: string | null;
+  lastEventType: string | null;
+}
+
 export interface Db {
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
@@ -159,12 +165,22 @@ export interface Db {
    * receiver acknowledges without doing anything twice. Rows with no processed_at are the worker's inbox.
    */
   recordWebhookEvent(event: WebhookEventRecord): Promise<boolean>;
+  /** How many distinct deliveries we hold and when the last one arrived: a public sign that PayPal reaches us. */
+  webhookStats(): Promise<WebhookStats>;
   /** A registered public key, or null. Retired keys are returned with retiredAt; the caller applies the rule. */
   findKey(kind: "shopper" | "agent", kid: string): Promise<KeyRecord | null>;
   /** Registers a shopper's public key under a new shopper. The same kid again returns its shopper (created false). */
-  registerShopperKey(k: { kid: string; publicJwk: Record<string, unknown> }): Promise<{ shopperId: string; created: boolean }>;
+  registerShopperKey(k: {
+    kid: string;
+    publicJwk: Record<string, unknown>;
+  }): Promise<{ shopperId: string; created: boolean }>;
   /** Registers an agent platform's key. False when the kid already exists (the caller compares). */
-  registerAgentKey(k: { kid: string; platform: string; owner: string; publicJwk: Record<string, unknown> }): Promise<boolean>;
+  registerAgentKey(k: {
+    kid: string;
+    platform: string;
+    owner: string;
+    publicJwk: Record<string, unknown>;
+  }): Promise<boolean>;
   /** Retires a key once (a later call keeps the first date). The effective retired_at, or null for an unknown key. */
   retireKey(kind: "shopper" | "agent", kid: string, at: string): Promise<string | null>;
   /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
@@ -195,7 +211,10 @@ export interface Db {
    */
   claimStepUp(id: string, now: string): Promise<boolean>;
   /** Sets the outcome. Back to PENDING releases a claim that charged nothing (no vaulted wallet yet). */
-  finishStepUp(id: string, patch: { status: StepUpStatus; orderId?: string; approvedAt?: string }): Promise<void>;
+  finishStepUp(
+    id: string,
+    patch: { status: StepUpStatus; orderId?: string; approvedAt?: string },
+  ): Promise<void>;
   /** Dispute deliveries the worker hasn't handled yet, oldest first. */
   pendingDisputeEvents(limit: number): Promise<PendingEvent[]>;
   markEventProcessed(eventId: string): Promise<void>;
@@ -245,6 +264,21 @@ export function createDb(databaseUrl: string): Db {
       return res.rowCount === 1;
     },
 
+    async webhookStats() {
+      const { rows } = await pool.query(
+        `select (select count(*)::int from webhook_events) as received,
+                last.received_at, last.event_type
+           from (select 1) one
+           left join lateral (select received_at, event_type from webhook_events order by received_at desc limit 1) last on true`,
+      );
+      const r = rows[0] as { received: number; received_at: Date | null; event_type: string | null };
+      return {
+        received: r.received,
+        lastReceivedAt: r.received_at ? r.received_at.toISOString() : null,
+        lastEventType: r.event_type,
+      };
+    },
+
     async findKey(kind, kid) {
       const sql =
         kind === "shopper"
@@ -264,7 +298,10 @@ export function createDb(databaseUrl: string): Db {
     },
 
     async registerShopperKey({ kid, publicJwk }) {
-      const existing = await pool.query<{ shopper_id: string }>("select shopper_id from shopper_keys where kid = $1", [kid]);
+      const existing = await pool.query<{ shopper_id: string }>(
+        "select shopper_id from shopper_keys where kid = $1",
+        [kid],
+      );
       if (existing.rows[0]) return { shopperId: existing.rows[0].shopper_id, created: false };
       const shopperId = `shopper_${randomUUID()}`;
       const client = await pool.connect();
@@ -286,7 +323,10 @@ export function createDb(databaseUrl: string): Db {
       } finally {
         client.release();
       }
-      const winner = await pool.query<{ shopper_id: string }>("select shopper_id from shopper_keys where kid = $1", [kid]);
+      const winner = await pool.query<{ shopper_id: string }>(
+        "select shopper_id from shopper_keys where kid = $1",
+        [kid],
+      );
       return { shopperId: winner.rows[0]!.shopper_id, created: false };
     },
 

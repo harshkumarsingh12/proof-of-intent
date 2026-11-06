@@ -22,6 +22,7 @@ import { exportJWK } from "jose";
 export function memoryDb() {
   const nonces = new Set<string>();
   const events = new Map<string, WebhookEventRecord>();
+  let lastWebhook: { at: string; type: string } | undefined;
   const keys = new Map<string, KeyRecord & { kind: "shopper" | "agent" }>();
   const mandates = new Map<string, MandateRecord>();
   const orders = new Map<string, OrderRecord & Partial<OrderPatch> & { createdAt?: string }>();
@@ -42,7 +43,17 @@ export function memoryDb() {
           ? [{ ...a, id: i + 1, at: new Date(Date.UTC(2026, 10, 1) + i * 1000).toISOString() }]
           : [],
       ),
-    recordWebhookEvent: async (e) => (events.has(e.eventId) ? false : (events.set(e.eventId, e), true)),
+    recordWebhookEvent: async (e) => {
+      if (events.has(e.eventId)) return false;
+      events.set(e.eventId, e);
+      lastWebhook = { at: new Date().toISOString(), type: e.eventType };
+      return true;
+    },
+    webhookStats: async () => ({
+      received: events.size,
+      lastReceivedAt: lastWebhook?.at ?? null,
+      lastEventType: lastWebhook?.type ?? null,
+    }),
     findKey: async (kind, kid) => {
       const k = keys.get(kid);
       if (!k || k.kind !== kind) return null;

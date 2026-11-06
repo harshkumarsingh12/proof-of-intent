@@ -127,6 +127,7 @@ describe.runIf(ADMIN_URL)("db", () => {
     };
     expect(await db.recordWebhookEvent(event)).toBe(true);
     expect(await db.recordWebhookEvent({ ...event, payload: { id: "WH-1", n: 2 } })).toBe(false);
+    expect(await db.webhookStats()).toMatchObject({ received: 1, lastEventType: event.eventType });
     const rows = (await raw.query("select * from webhook_events where event_id = 'WH-1'")).rows;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -291,10 +292,18 @@ describe.runIf(ADMIN_URL)("db", () => {
     ]);
     expect(a.shopperId).toBe(b.shopperId);
     expect([a.created, b.created].sort()).toEqual([false, true]);
-    expect(await db.findKey("shopper", "shp_reg")).toEqual({ kid: "shp_reg", publicJwk: jwk, shopperId: a.shopperId });
+    expect(await db.findKey("shopper", "shp_reg")).toEqual({
+      kid: "shp_reg",
+      publicJwk: jwk,
+      shopperId: a.shopperId,
+    });
 
-    expect(await db.registerAgentKey({ kid: "agt_reg", platform: "Northstar", owner: "operator", publicJwk: jwk })).toBe(true);
-    expect(await db.registerAgentKey({ kid: "agt_reg", platform: "Other", owner: "x", publicJwk: jwk })).toBe(false);
+    expect(
+      await db.registerAgentKey({ kid: "agt_reg", platform: "Northstar", owner: "operator", publicJwk: jwk }),
+    ).toBe(true);
+    expect(await db.registerAgentKey({ kid: "agt_reg", platform: "Other", owner: "x", publicJwk: jwk })).toBe(
+      false,
+    );
     expect(await db.findKey("agent", "agt_reg")).toMatchObject({ platform: "Northstar" });
 
     expect(await db.retireKey("shopper", "shp_reg", "2026-11-06T10:00:00Z")).toBe("2026-11-06T10:00:00.000Z");
