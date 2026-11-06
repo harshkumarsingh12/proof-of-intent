@@ -74,10 +74,20 @@ check (#19; the `list_disputes` catch-up already covers missed webhooks), J2/J3 
 | Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | Pending                                                          |
 | Security checklist                                                       | Sristee                  | Pending                                                          |
 | Full evals and report                                                    | Sumedha                  | Pending                                                          |
-| Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | Pending                                                          |
+| Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | ✅ Nov 7, see the status below                                   |
 | Dashboard and buyer polish: phone layout, no fake controls, landing page | Harsh                    | ✅ Done (#78, #79)                                               |
 
 **Done when:** journeys A–D pass on sandbox twice in a row; only fixes and docs after this.
+
+**Status (Nov 7, #44):** on the hosted sandbox. A (human-present purchase through the shop and PayPal's popup, 4 runs,
+all `CAPTURED` with the mandate pointer in `custom_id`), B (`pnpm sandbox:checkout-smoke`, 2 runs: red $95 refused with no
+order, grey $74 ordered), C twice, each time one dispute defended (`PP-R-IFB-10196898`, `PP-R-LSI-10196902`: escalated,
+claim opened about 3 minutes later, evidence submitted, `UNDER_REVIEW`) and one conceded by override
+(`PP-R-VZL-10196900`, `PP-R-FZE-10196903`: `RESOLVED`). D twice on a fresh local seeded stack (`PP-D-1002` is
+`AGENT_OVERREACH` with `AMOUNT_EXCEEDS_MAX` and `ATTRIBUTE_MISMATCH`, `PP-D-1001` is `MANDATE_COMPLIANT` with its PDF), since the
+hosted sandbox has no overreaching capture. Still open: disputes reached the API 3 to 4.5 minutes after filing, which fits
+the 5-minute `list_disputes` catch-up better than webhooks, so real webhook delivery (#19) is unproven; and the
+operator-row-before-PayPal-call order was checked in tests, not on the hosted server (no audit route, #74).
 
 ## M4 Submission (Nov 11)
 
