@@ -93,6 +93,15 @@ importers:
       '@poi/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@poi/mandates':
+        specifier: workspace:*
+        version: link:../../packages/mandates
+      canonicalize:
+        specifier: ^2.0.0
+        version: 2.1.0
+      jose:
+        specifier: ^5.9.6
+        version: 5.10.0
       next:
         specifier: ^15.0.3
         version: 15.5.28(@opentelemetry/api@1.9.0)(@types/node@20.19.43)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -106,6 +115,9 @@ importers:
       '@poi/ledger':
         specifier: workspace:*
         version: link:../../packages/ledger
+      '@poi/policy-engine':
+        specifier: workspace:*
+        version: link:../../packages/policy-engine
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0

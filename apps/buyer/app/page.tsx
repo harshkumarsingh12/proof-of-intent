@@ -1,8 +1,7 @@
 import { compliantCart, greyJacketIntent, overreachingCart } from "@poi/contracts/fixtures";
 import type { CartMandate } from "@poi/contracts";
 
-// Landing page for shoppers. The signing and checkout flow (docs/specs/0001, 0003) replaces the example card
-// with the real form. Owner: @srshriv.
+// Landing page for shoppers; the signing and checkout flow (docs/specs/0001, 0003) is at /shop. Owner: @srshriv.
 
 // Runtime env (Dokploy .env), not build time, so the dashboard link follows the deployment.
 export const dynamic = "force-dynamic";
@@ -16,7 +15,8 @@ const color = (cart: CartMandate) => cart.contents.lines[0]?.attributes.color ??
 
 export default function Home() {
   const opsHost = process.env.OPS_HOST;
-  const dashboardUrl = opsHost && !opsHost.endsWith("example.com") ? `https://${opsHost}` : "http://localhost:3002";
+  const dashboardUrl =
+    opsHost && !opsHost.endsWith("example.com") ? `https://${opsHost}` : "http://localhost:3002";
   const c = greyJacketIntent.constraints;
 
   return (
@@ -40,11 +40,15 @@ export default function Home() {
             <span className="eyebrow">Agent shopping on PayPal</span>
             <h1>Sign what you want, not just what you pay.</h1>
             <p className="lead">
-              Tell your shopping agent what you&apos;re after and sign it. Before PayPal takes any money, the merchant
-              checks the agent&apos;s cart against what you signed, and a cart that doesn&apos;t match never gets charged.
+              Tell your shopping agent what you&apos;re after and sign it. Before PayPal takes any money, the
+              merchant checks the agent&apos;s cart against what you signed, and a cart that doesn&apos;t
+              match never gets charged.
             </p>
             <div className="ctas">
-              <a className="btn btn-primary" href="#how">
+              <a className="btn btn-primary" href="/shop">
+                Start shopping
+              </a>
+              <a className="btn btn-ghost" href="#how">
                 See how it works
               </a>
               <a className="btn btn-ghost" href={dashboardUrl}>
@@ -102,17 +106,26 @@ export default function Home() {
               <div className="step">
                 <span className="num">1</span>
                 <h3>Say what you want</h3>
-                <p>Type it the way you&apos;d tell a friend. The app turns it into clear limits: price, color, size, merchant.</p>
+                <p>
+                  Type it the way you&apos;d tell a friend. The app turns it into clear limits: price, color,
+                  size, merchant.
+                </p>
               </div>
               <div className="step">
                 <span className="num">2</span>
                 <h3>Sign it once</h3>
-                <p>Your browser signs those limits with a key that never leaves your device. Nobody can change them afterwards.</p>
+                <p>
+                  Your browser signs those limits with a key that never leaves your device. Nobody can change
+                  them afterwards.
+                </p>
               </div>
               <div className="step">
                 <span className="num">3</span>
                 <h3>Let the agent shop</h3>
-                <p>The merchant checks every cart against your signature before PayPal charges you. Off-limits carts are refused.</p>
+                <p>
+                  The merchant checks every cart against your signature before PayPal charges you. Off-limits
+                  carts are refused.
+                </p>
               </div>
             </div>
           </div>
@@ -121,7 +134,9 @@ export default function Home() {
         <section id="merchants" className="band">
           <div className="wrap">
             <h2>Why merchants use it</h2>
-            <p className="sub">When an AI agent buys the wrong thing, the merchant usually pays. A signed intent changes that.</p>
+            <p className="sub">
+              When an AI agent buys the wrong thing, the merchant usually pays. A signed intent changes that.
+            </p>
             <div className="steps">
               <div className="step">
                 <h3>Stop bad carts before capture</h3>
@@ -129,11 +144,16 @@ export default function Home() {
               </div>
               <div className="step">
                 <h3>Defend disputes with proof</h3>
-                <p>The signed intent and cart become an evidence package for PayPal&apos;s dispute process.</p>
+                <p>
+                  The signed intent and cart become an evidence package for PayPal&apos;s dispute process.
+                </p>
               </div>
               <div className="step">
                 <h3>Refund fairly when the agent erred</h3>
-                <p>When the agent really overreached, the copilot recommends accepting the claim. A person always decides.</p>
+                <p>
+                  When the agent really overreached, the copilot recommends accepting the claim. A person
+                  always decides.
+                </p>
               </div>
             </div>
           </div>
