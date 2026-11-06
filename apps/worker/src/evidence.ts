@@ -4,12 +4,7 @@
  * or a cart that fails the hard rules means no defence package.
  */
 import { draftEvidence, isAiUnavailable, parseAiMode, type AiMode, type EvidenceDraft } from "@poi/ai";
-import {
-  type CartMandate,
-  type IntentMandate,
-  type Money,
-  type ReasonCode,
-} from "@poi/contracts";
+import { type CartMandate, type IntentMandate, type Money, type ReasonCode } from "@poi/contracts";
 import type { Db } from "@poi/db";
 import { mandateHash, verifyMandate, type KeyResolver } from "@poi/mandates";
 import { evaluate, type MandateLedger } from "@poi/policy-engine";
@@ -92,6 +87,12 @@ export function buildConstraintChecks(
     });
   }
   for (const [key, val] of Object.entries(c.attributes ?? {})) {
+    // One check per attribute, judged the way the policy engine judges it (exact, case-insensitive, and a line
+    // without the attribute fails): the engine reports one ATTRIBUTE_MISMATCH for all of them, so reading that
+    // code would mark a matching category as broken whenever the color was wrong.
+    const norm = (t: string) => t.trim().toLowerCase();
+    const have = (line: CartMandate["contents"]["lines"][number]) =>
+      Object.entries(line.attributes).find(([k]) => norm(k) === norm(key))?.[1];
     checks.push({
       name: `attributes.${key}`,
       rule: val,
@@ -100,7 +101,10 @@ export function buildConstraintChecks(
           .map((l) => l.attributes[key])
           .filter(Boolean)
           .join(", ") || "not available",
-      passed: !reasons.includes("ATTRIBUTE_MISMATCH"),
+      passed: cart.contents.lines.every((l) => {
+        const got = have(l);
+        return got !== undefined && norm(got) === norm(val);
+      }),
     });
   }
   if (c.quantity_max) {
@@ -176,7 +180,8 @@ export async function draftEvidenceForDefend(
           // words stay out of its input (J2, which only explains, still sees them).
           ...disputeFacts({ ...dispute, buyerNote: undefined }, intent, cart),
           capture_record: `PayPal recorded a capture of ${money(captureRecord.amount)}.`,
-          policy_evaluation: "The Intent Mandate signature verified, the order pointer matched and every hard rule passed.",
+          policy_evaluation:
+            "The Intent Mandate signature verified, the order pointer matched and every hard rule passed.",
         },
       },
       options.mode ?? parseAiMode(process.env.AI_MODE),
