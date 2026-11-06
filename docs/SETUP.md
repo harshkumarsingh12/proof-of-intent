@@ -32,12 +32,14 @@ ledger in the latest CI run for what is open.)_
 refuses to load.
 
 **The shop** (http://localhost:3001/shop) runs journey A: your browser makes a key and keeps it, you sign an
-intent, the buyer agent proposes one of three jackets, and the merchant approves, steps up or refuses it before any
+intent, the buyer agent proposes a product from the store (12 products in four categories: running jackets, road running shoes, base layers, socks), and the merchant approves, steps up or refuses it before any
 PayPal order exists. In `PAYPAL_MODE=mock` an "Approve with PayPal (mock)" button stands in for PayPal; in sandbox
 the real PayPal button appears (it needs `PAYPAL_CLIENT_ID`). The agent's key has to be registered with the API:
 set `OPERATOR_TOKEN` in `.env` (any long random string) and the shop registers it on the first checkout. Without it,
-proposing a cart answers "the merchant doesn't know this shop's agent key". Keep the intent's default words for the
-demo: `AI_MODE=replay` has recorded J1 answers for exactly those.
+proposing a cart answers "the merchant doesn't know this shop's agent key". Picking a category fills in its demo words, price and color; keep those words in replay mode, because
+`AI_MODE=replay` has recorded J1 answers for exactly those (one per product in the category). The store is
+`packages/contracts/src/catalog.ts`; after adding a product, add its label to `packages/ai/src/j1-cases.ts` and run
+`pnpm ai:record` (it asks the live model only about the cases without an answer; `--all` re-asks every one).
 
 **What's in the dashboard** (http://localhost:3002):
 
