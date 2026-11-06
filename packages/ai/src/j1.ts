@@ -104,23 +104,12 @@ export async function semanticFit(
     };
   }
 
-  if (
+  // A trail shoe for a road request needs the shopper's word. Applied after the model as a ceiling, never a
+  // floor: it turns a "match" into "partial" but leaves a model's "mismatch" alone (J1 only lowers verdicts).
+  const trailForRoad =
     ROAD_SHOES.test(description) &&
     !TRAIL_SHOES.test(description) &&
-    cart.contents.lines.some((line) => TRAIL_SHOES.test(line.title) && !ROAD_SHOES.test(line.title))
-  ) {
-    return {
-      fit: "partial",
-      confidence: 1,
-      reasons: [
-        "The cart contains a trail shoe for a road running request. Ask the shopper to confirm the substitution.",
-      ],
-      matched_attributes: [],
-      conflicting_attributes: ["running surface"],
-      ...meta,
-      source: "guard",
-    };
-  }
+    cart.contents.lines.some((line) => TRAIL_SHOES.test(line.title) && !ROAD_SHOES.test(line.title));
 
   const input = j1Input(description, cart);
   let fit: SemanticFit;
@@ -142,5 +131,16 @@ export async function semanticFit(
 
   // The model's own words can't support a "match" it contradicts.
   if (fit.fit === "match" && fit.conflicting_attributes.length > 0) fit = { ...fit, fit: "partial" };
+  if (trailForRoad && fit.fit === "match") {
+    fit = {
+      ...fit,
+      fit: "partial",
+      reasons: [
+        ...fit.reasons,
+        "The cart contains a trail shoe for a road running request. Ask the shopper to confirm the substitution.",
+      ],
+      conflicting_attributes: [...fit.conflicting_attributes, "running surface"],
+    };
+  }
   return { ...fit, ...meta, source: mode };
 }

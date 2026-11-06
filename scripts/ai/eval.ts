@@ -23,7 +23,7 @@ const report = [
   "",
   `Live model: \`${config.provider}\` / \`${config.model}\`. Prompts: \`${J1_PROMPT_VERSION}\` and \`${J2_PROMPT_VERSION}\`.`,
   "",
-  `- J1 accuracy: ${result.j1Correct}/20. Mismatches labelled match: ${result.falseApprovals}.`,
+  `- J1 accuracy: ${result.j1Correct}/20, measured after the local checks checkout also applies (injection guard, road-versus-trail ceiling). Mismatches labelled match: ${result.falseApprovals}.`,
   `- J2 policy agreement with a reason citing the policy finding: ${result.j2Correct}/12. J2 receives the deterministic policy decision.`,
   `- Schema validity after retries: ${result.schemaValid}/${result.schemaTotal} model cases. Local checkout guards are excluded.`,
   `- Gate: ${result.passed ? "passed" : "failed"}.`,

@@ -12,9 +12,8 @@ test("the golden sets have the milestone's labels and coverage", () => {
 });
 
 test("the harness counts retries, skips the local guard and rejects false approvals and uncited J2 output", async () => {
-  const j1 = J1_EVAL_CASES.filter(
-    (c) => !["injected cart title", "trail shoes for road running"].includes(c.label),
-  );
+  // The injection guard answers without the model; every other J1 case reaches it.
+  const j1 = J1_EVAL_CASES.filter((c) => c.label !== "injected cart title");
   let j1Index = 0;
   let j2Index = 0;
   let first = true;
@@ -50,10 +49,10 @@ test("the harness counts retries, skips the local guard and rejects false approv
     j1Correct: 15,
     j2Correct: 0,
     falseApprovals: 5,
-    schemaValid: 30,
-    schemaTotal: 30,
+    schemaValid: 31,
+    schemaTotal: 31,
     passed: false,
   });
-  expect(Object.keys(result.j1Replay)).toHaveLength(18);
+  expect(Object.keys(result.j1Replay)).toHaveLength(19);
   expect(Object.keys(result.j2Replay)).toHaveLength(12);
 });

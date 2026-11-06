@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import { semanticFit as realJ1, type SemanticFit } from "@poi/ai";
+import { semanticFit as realJ1, type Generate, type SemanticFit } from "@poi/ai";
 import { NotImplementedError } from "@poi/contracts";
 import {
   compliantCart,
@@ -189,14 +189,25 @@ describe("POST /checkout: decisions", () => {
         total: amount,
       },
     };
-    const provider = vi.fn(async () => { throw new Error("The provider must not be called"); });
+    // What the live model really answered for this cart (#103): a confident match.
+    const calls = vi.fn();
+    const provider: Generate = async ({ schema }) => {
+      calls();
+      return schema.parse({
+        fit: "match",
+        confidence: 0.95,
+        reasons: ["Running shoe, blue, size 10, under budget."],
+        matched_attributes: ["category", "color"],
+        conflicting_attributes: [],
+      });
+    };
     const s = setup({ aiMode, vaultId: "VAULT-1", semanticFit: (words, proposed, mode) => realJ1(words, proposed, mode, { generate: provider }) });
     const { body } = await signedCheckout({ shopper, agent, intent, cart, humanPresent: false });
     const res = await s.checkout(body);
     expect(res.statusCode).toBe(200);
     expect(res.json().verdict).toEqual({ outcome: "STEP_UP", reasons: ["SEMANTIC_UNCERTAIN"] });
     expect(res.json().paypal_order_id).toBeUndefined();
-    expect(provider).not.toHaveBeenCalled();
+    expect(calls).toHaveBeenCalledTimes(aiMode === "live" ? 1 : 0);
     expect(s.createOrder).not.toHaveBeenCalled();
   });
 
