@@ -16,7 +16,7 @@ import {
   type Generate,
 } from "./index";
 import { J1_CASES } from "./j1-cases";
-import { dataBlock, readReplay } from "./runtime";
+import { dataBlock, readReplay, takeAiCall } from "./runtime";
 
 const words = greyJacketIntent.natural_language_description;
 
@@ -134,6 +134,31 @@ describe("J1 semantic fit: live", () => {
   test("a 'match' the model contradicts with its own conflicting attributes becomes partial", async () => {
     const { generate } = fakeModel(answer("match", 0.95, ["color: red vs grey"]));
     expect((await semanticFit(words, compliantCart, "live", { generate })).fit).toBe("partial");
+  });
+
+  test("the daily live-call budget stops calls once used up, and resets the next UTC day", async () => {
+    const env = { AI_DAILY_CALL_LIMIT: "2" };
+    const day1 = new Date("2030-01-01T10:00:00Z");
+    takeAiCall("J1", env, day1);
+    takeAiCall("J1", env, day1);
+    expect(() => takeAiCall("J1", env, day1)).toThrow(AiUnavailableError);
+    expect(() => takeAiCall("J1", env, new Date("2030-01-02T00:00:00Z"))).not.toThrow();
+    expect(() => takeAiCall("J1", { AI_DAILY_CALL_LIMIT: "0" }, new Date("2030-01-03T00:00:00Z"))).toThrow(
+      /daily budget of 0/,
+    );
+  });
+
+  test("with the budget used up, J1 is unavailable without calling the model", async () => {
+    vi.stubEnv("AI_DAILY_CALL_LIMIT", "0");
+    try {
+      const { generate } = fakeModel(answer("match", 0.9));
+      await expect(semanticFit(words, compliantCart, "live", { generate })).rejects.toBeInstanceOf(
+        AiUnavailableError,
+      );
+      expect(generate).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("instructions in a cart never reach the model", async () => {

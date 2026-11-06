@@ -133,7 +133,7 @@ like `api.poi.iotkiit.in` would fail HTTPS. `https://poi-api.iotkiit.in/` return
    ```bash
    PAYPAL_MODE=mock                 # sandbox once the PayPal variables below are filled in
    AI_MODE=replay
-   DAILY_AI_BUDGET_USD=5
+   AI_DAILY_CALL_LIMIT=500
    POSTGRES_PASSWORD=poi            # must match the password in DATABASE_URL
    DATABASE_URL=postgres://poi:poi@postgres:5432/poi
    MERCHANT_ID=merchant-trailhead

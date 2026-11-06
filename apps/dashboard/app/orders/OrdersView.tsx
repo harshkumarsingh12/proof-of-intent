@@ -58,10 +58,10 @@ function Reasons({ value }: { value?: string[] }) {
 }
 
 const when = (iso?: string) =>
-  iso ? new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "";
+  iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
 
 const orderColumns: ColDef<OrderRow>[] = [
-  { field: "orderId", headerName: "Order", cellStyle: monoCell, minWidth: 330, tooltipField: "orderId" },
+  { field: "orderId", headerName: "Order", cellStyle: monoCell, minWidth: 300, tooltipField: "orderId" },
   { field: "agentPlatform", headerName: "Agent platform", filter: true },
   {
     colId: "humanPresent",
@@ -80,8 +80,8 @@ const orderColumns: ColDef<OrderRow>[] = [
     type: "rightAligned",
   },
   { field: "status", headerName: "PayPal status", filter: true },
-  { field: "createdAt", headerName: "Created", valueFormatter: (p) => when(p.value), sort: "desc" },
-  { field: "capturedAt", headerName: "Captured", valueFormatter: (p) => when(p.value) },
+  { field: "createdAt", headerName: "Created", valueFormatter: (p) => when(p.value), sort: "desc", minWidth: 150 },
+  { field: "capturedAt", headerName: "Captured", valueFormatter: (p) => when(p.value), minWidth: 150 },
 ];
 
 const verdictColumns: ColDef<VerdictRow>[] = [
