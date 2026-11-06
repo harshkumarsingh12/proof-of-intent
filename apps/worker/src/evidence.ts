@@ -172,7 +172,9 @@ export async function draftEvidenceForDefend(
       {
         decision: { class: "MANDATE_COMPLIANT", action: "PROVIDE_EVIDENCE" },
         bundle: {
-          ...disputeFacts(dispute, intent, cart),
+          // Not the buyer's note: J3 writes the text sent to PayPal under the merchant's name, so buyer-written
+          // words stay out of its input (J2, which only explains, still sees them).
+          ...disputeFacts({ ...dispute, buyerNote: undefined }, intent, cart),
           capture_record: `PayPal recorded a capture of ${money(captureRecord.amount)}.`,
           policy_evaluation: "The Intent Mandate signature verified, the order pointer matched and every hard rule passed.",
         },

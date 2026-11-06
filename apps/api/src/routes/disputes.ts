@@ -28,6 +28,11 @@ interface Recommendation {
   mandateHash?: string;
   customId?: string;
   evidenceError?: string;
+  /** J2 (packages/ai): cited explanation of the deterministic class. Absent when the model couldn't answer. */
+  ai?: {
+    reasons: { text: string; cites: string[] }[];
+    evidence_plan: { text: string; cites: string[] }[];
+  };
   analyzedAt: string;
 }
 
@@ -141,14 +146,17 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
       recommendedAction: rec.action,
       reasons: [
         { text: EXPLANATION[rec.class], cites: rec.mandateHash ? [`intent_mandate:${rec.mandateHash}`] : [] },
+        // J2 explains the class in the dispute's own terms; every line cites a fact the model was given.
+        ...(rec.ai?.reasons ?? []),
         ...rec.reasons.map((r) => ({
           text: r,
           cites: intent ? [`intent_mandate:${intent.mandate_id}`] : [],
         })),
         ...(rec.evidenceError ? [{ text: `No evidence package: ${rec.evidenceError}`, cites: [] }] : []),
       ],
-      evidencePlan:
-        rec.action === "PROVIDE_EVIDENCE"
+      evidencePlan: rec.ai?.evidence_plan.length
+        ? rec.ai.evidence_plan.map((p) => p.text)
+        : rec.action === "PROVIDE_EVIDENCE"
           ? ["Attestation PDF generated from the audit log", "JSON bundle: signed mandates and hashes"]
           : rec.action === "ACCEPT_CLAIM"
             ? ["Accept the claim; PayPal refunds the buyer"]

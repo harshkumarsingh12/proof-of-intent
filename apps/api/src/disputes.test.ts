@@ -125,6 +125,32 @@ describe("dispute reads", () => {
     ).toBe(404);
   });
 
+  test("the detail shows J2's cited reasons and evidence plan when the worker stored them", async () => {
+    const { app, mem } = await setup();
+    await mem.db.saveDispute({
+      id: "PP-D-AI",
+      orderId: "ord_1",
+      paypal: {},
+      recommendation: {
+        ...compliantRec,
+        ai: {
+          reasons: [{ text: "The buyer received the grey jacket the shopper asked for.", cites: ["cart_mandate"] }],
+          evidence_plan: [{ text: "Attach the signed intent and the matching cart.", cites: ["intent_mandate"] }],
+        },
+      },
+    });
+    const info = (await app.inject({ method: "GET", url: "/disputes/PP-D-AI/recommendation" })).json()
+      .classificationInfo;
+    expect(info.reasons).toContainEqual({
+      text: "The buyer received the grey jacket the shopper asked for.",
+      cites: ["cart_mandate"],
+    });
+    expect(info.evidencePlan).toEqual(["Attach the signed intent and the matching cart."]);
+    // Without J2, the rule-only plan stays.
+    const plain = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/recommendation" })).json();
+    expect(plain.classificationInfo.evidencePlan[0]).toBe("Attestation PDF generated from the audit log");
+  });
+
   test("GET /disputes/:id/evidence.pdf serves the stored package", async () => {
     const { app } = await setup();
     const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/evidence.pdf" });
