@@ -1,0 +1,22 @@
+{
+  "ed904c6d45d09e640e8207568c92fb8e344cb53cce6db5dd9e38e8d8929e5885": {
+    "label": "Canonical compliant dispute (hand-authored demo response)",
+    "output": {
+      "cover_note": {
+        "text": "The signed purchase record supports the cart checked at capture. PayPal recorded a capture of USD 74.00. The reported reason was MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED.",
+        "cites": ["dispute_reason", "policy_evaluation", "capture_record"]
+      },
+      "attestation_sections": [
+        {
+          "heading": "Verified purchase record",
+          "body": "The cart contained one Stride Running Jacket. Its signed Intent Mandate verified and every hard rule passed.",
+          "cites": ["cart_mandate", "policy_evaluation"]
+        }
+      ],
+      "buyer_message": {
+        "text": "We reviewed the signed instructions and the cart checked at purchase. We have the purchase record available for your dispute.",
+        "cites": ["intent_mandate", "cart_mandate", "policy_evaluation"]
+      }
+    }
+  }
+}

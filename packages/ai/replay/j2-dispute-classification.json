@@ -1,0 +1,22 @@
+{
+  "e2e33408dc72316a87848bdbdac8ed36c035397a8c57a069f4c9d7764931d606": {
+    "label": "Canonical overreach dispute (hand-authored demo response)",
+    "output": {
+      "class": "AGENT_OVERREACH",
+      "confidence": 0.95,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "The policy replay found that the cart exceeded the amount limit and conflicted with a required attribute.",
+          "cites": ["policy_evaluation"]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Review the failed checks against the shopper's request before responding.",
+          "cites": ["policy_evaluation", "intent_mandate"]
+        }
+      ]
+    }
+  }
+}

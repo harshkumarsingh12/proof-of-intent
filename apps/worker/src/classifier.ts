@@ -15,6 +15,7 @@ export interface DisputeRecord {
   orderId?: string;
   status?: string;
   reason?: string;
+  buyerNote?: string;
   amount?: Money;
   responseDueDate?: string;
 }
@@ -55,6 +56,18 @@ export interface Recommendation {
   class: DisputeClass;
   action: "PROVIDE_EVIDENCE" | "ACCEPT_CLAIM" | "MAKE_OFFER" | "STANDARD_EVIDENCE";
   reasons: ReasonCode[];
+}
+
+/** Only product facts are needed for the AI jobs. Keep JWS, keys, hashes and addresses out. */
+export function disputeFacts(dispute: DisputeRecord, intent?: IntentMandate, cart?: CartMandate): Record<string, string> {
+  return {
+    ...(dispute.reason ? { dispute_reason: dispute.reason } : {}),
+    ...(dispute.buyerNote ? { buyer_note: dispute.buyerNote } : {}),
+    ...(intent ? { intent_mandate: intent.natural_language_description } : {}),
+    ...(cart ? {
+      cart_mandate: cart.contents.lines.map((line) => `${line.quantity} × ${line.title}`).join(", "),
+    } : {}),
+  };
 }
 
 export function parseCustomId(rawCustomId?: string): { mandateId: string; hashPrefix: string } | null {
