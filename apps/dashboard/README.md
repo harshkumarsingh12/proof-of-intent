@@ -13,6 +13,11 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 | Dispute detail | `/disputes/<id>` | `app/disputes/[id]/page.tsx`, `DisputeDetailView.tsx`            |
 | Analytics      | `/analytics`     | `app/analytics/page.tsx`, `AnalyticsView.tsx`                    |
 
+Studio (`/analytics/studio`, needs a license key, `OPERATOR_PASSWORD` and `OPERATOR_TOKEN`): three AG Studio custom widgets
+(mandate diff, evidence preview, agent platform breakdown) over two tables built from the disputes API, the Studio theme in
+`src/studio-theme.ts`, and the DisputeExplainer chat. Layout, data and gotchas: spec 0007. Without a key the page says Studio
+is unavailable; analytics and disputes work either way.
+
 Also built: `/orders` (AG Grid: agent orders, plus a read-only "Checkout verdicts" tab that stands in for the
 verification queue; approve and reject there wait on the step-up flow) and the AG Studio view under
 `/analytics/studio` (`app/analytics/studio/`, `src/studio-agent.ts`), which needs `AG_STUDIO_LICENSE_KEY` and live AI.

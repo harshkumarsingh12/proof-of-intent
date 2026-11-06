@@ -67,15 +67,15 @@ check (#19; the `list_disputes` catch-up already covers missed webhooks), J2/J3 
 
 ## M3 Feature freeze (Nov 8)
 
-| Deliverable                                                              | Owner                    | Status                                                           |
-| ------------------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------- |
-| Studio agent harness + DisputeExplainer                                  | Sumedha + Sikruti        | Pending                                                          |
-| Analytics page + agent platform widget                                   | Sikruti (Harsh backup)   | ✅ Analytics page with platform breakdown (#73), polished in #78 |
-| Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | Pending                                                          |
-| Security checklist                                                       | Sristee                  | Pending                                                          |
-| Full evals and report                                                    | Sumedha                  | Pending                                                          |
-| Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | ✅ Nov 7, see the status below                                   |
-| Dashboard and buyer polish: phone layout, no fake controls, landing page | Harsh                    | ✅ Done (#78, #79)                                               |
+| Deliverable                                                              | Owner                    | Status                                                                                                           |
+| ------------------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Studio agent harness + DisputeExplainer                                  | Sumedha + Sikruti        | Harness ✅ (#105); custom widgets, theme and the opening report ✅; needs a license key on the server (#15, #51) |
+| Analytics page + agent platform widget                                   | Sikruti (Harsh backup)   | ✅ Analytics page with platform breakdown (#73), polished in #78                                                 |
+| Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | Pending                                                                                                          |
+| Security checklist                                                       | Sristee                  | Pending                                                                                                          |
+| Full evals and report                                                    | Sumedha                  | Pending                                                                                                          |
+| Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | ✅ Nov 7, see the status below                                                                                   |
+| Dashboard and buyer polish: phone layout, no fake controls, landing page | Harsh                    | ✅ Done (#78, #79)                                                                                               |
 
 **Done when:** journeys A–D pass on sandbox twice in a row; only fixes and docs after this.
 
