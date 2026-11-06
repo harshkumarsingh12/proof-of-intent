@@ -7,8 +7,9 @@ Fastify service on port 3000 (`pnpm dev:api`).
 **Built:** `/healthz`, `/readyz`, checkout (`POST /checkout`, `POST /checkout/:id/approve`), `POST /webhooks/paypal`,
 keys (`POST /keys/shopper`, `POST /keys/agent`, `POST /keys/:kind/:kid/retire`), disputes (`GET /disputes`,
 `/disputes/:id/recommendation`, `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions`,
-`POST /disputes/:id/actions/:action`), `GET /orders`, `GET /verifications`, `POST /orders/:id/tracking`. Still 501
-with their owner: `POST /stepup/:token/approve`, `GET /analytics/:report`, `POST /ai/studio`.
+`POST /disputes/:id/actions/:action`), `GET /orders`, `GET /verifications`, `POST /orders/:id/tracking`, step-up links
+(`GET /stepup/:token`, `POST /stepup/:token/approve`) and `POST /ai/studio`. Still 501 with its owner:
+`GET /analytics/:report` (the dashboard's analytics page computes from the disputes and orders it already reads).
 
 `buildApp(deps)` takes `{ paypal, db?, merchant?, aiMode?, operatorToken?, semanticFit?, now? }`; `await depsFromEnv()`
 builds them from `PAYPAL_MODE` (mock by default), `DATABASE_URL`, `AI_MODE`, `OPERATOR_TOKEN` and the `MERCHANT_*`

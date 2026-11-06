@@ -13,8 +13,9 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 | Dispute detail | `/disputes/<id>` | `app/disputes/[id]/page.tsx`, `DisputeDetailView.tsx`            |
 | Analytics      | `/analytics`     | `app/analytics/page.tsx`, `AnalyticsView.tsx`                    |
 
-Not built yet: agent orders and the verification queue (greyed out as "Soon" in the sidebar; their API routes
-`/orders` and `/verifications` exist), and AG Studio.
+Also built: `/orders` (AG Grid: agent orders, plus a read-only "Checkout verdicts" tab that stands in for the
+verification queue; approve and reject there wait on the step-up flow) and the AG Studio view under
+`/analytics/studio` (`app/analytics/studio/`, `src/studio-agent.ts`), which needs `AG_STUDIO_LICENSE_KEY` and live AI.
 
 ## Layout
 

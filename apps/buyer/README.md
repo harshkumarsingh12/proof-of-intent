@@ -40,7 +40,10 @@ agent into a cart the merchant would refuse. The merchant still checks everythin
 every cart"; that switch belongs to the shopper. `pnpm agent:eval` runs the live agent over eight cases, including a
 budget-override request, and writes `docs/evals/agent-<date>.md`.
 
-**Still to do:** a Playwright smoke test of `/shop`, a recorded live run of the agent for the eval report.
+**Browser smoke test.** `pnpm smoke:shop` drives `/shop` in Chrome against a running mock stack: the browser key is
+ECDSA P-256 and can't be exported, the red $95 cart is refused with no order, the grey $74 cart is approved and
+captured through mock PayPal, and the agent's draft and choose buttons work (it never signs). `SHOP_URL=… pnpm smoke:shop`
+points it at a hosted shop and stops before the PayPal step. It's a script you run, not a CI job.
 
 ## Test
 
