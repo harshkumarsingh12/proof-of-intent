@@ -134,8 +134,12 @@ describe("dispute reads", () => {
       recommendation: {
         ...compliantRec,
         ai: {
-          reasons: [{ text: "The buyer received the grey jacket the shopper asked for.", cites: ["cart_mandate"] }],
-          evidence_plan: [{ text: "Attach the signed intent and the matching cart.", cites: ["intent_mandate"] }],
+          reasons: [
+            { text: "The buyer received the grey jacket the shopper asked for.", cites: ["cart_mandate"] },
+          ],
+          evidence_plan: [
+            { text: "Attach the signed intent and the matching cart.", cites: ["intent_mandate"] },
+          ],
         },
       },
     });

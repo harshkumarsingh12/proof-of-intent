@@ -85,6 +85,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     status: "ok",
     paypalMode: parseMode(process.env.PAYPAL_MODE),
     database: deps.db ? "configured" : "not_configured",
+    // Deliveries PayPal has made to POST /webhooks/paypal and passed verification (spec 0004 §Webhooks, #19).
+    webhooks: await deps.db?.webhookStats().catch(() => null),
   }));
 
   app.register(webhookRoutes, deps);

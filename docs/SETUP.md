@@ -111,12 +111,13 @@ Postgres for local work: `docker compose up -d postgres` and set
 
 Sandbox scripts (all need the PayPal variables in `.env`):
 
-| Command                                                                  | What it does                                                                                                                      |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm sandbox:checkout-smoke`                                            | Journey B against the sandbox: the red $95 cart is rejected, no PayPal order                                                      |
-| `pnpm sandbox:dispute-cycle start`                                       | A compliant order through a local API and database, then waits for you to file a dispute                                          |
-| `pnpm sandbox:dispute-cycle escalate\|evidence\|adjudicate\|status <id>` | Sandbox dispute steps (spec 0004 §Sandbox dispute recipe)                                                                         |
-| `POI_API_URL=… OPERATOR_TOKEN=… pnpm sandbox:hosted-order`               | A compliant order through a **deployed** API over HTTP only: registers keys, checks out, waits for your PayPal approval, captures |
+| Command                                                                  | What it does                                                                                                                                                                                           |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm sandbox:checkout-smoke`                                            | Journey B against the sandbox: the red $95 cart is rejected, no PayPal order                                                                                                                           |
+| `pnpm sandbox:dispute-cycle start`                                       | A compliant order through a local API and database, then waits for you to file a dispute                                                                                                               |
+| `pnpm sandbox:dispute-cycle escalate\|evidence\|adjudicate\|status <id>` | Sandbox dispute steps (spec 0004 §Sandbox dispute recipe)                                                                                                                                              |
+| `POI_API_URL=… pnpm sandbox:webhook-check`                               | Asks PayPal to resend an old capture event to the registered webhook and reads `GET /readyz` `webhooks` (verified deliveries held): a new event raises the count by one, the same event again must not |
+| `POI_API_URL=… OPERATOR_TOKEN=… pnpm sandbox:hosted-order`               | A compliant order through a **deployed** API over HTTP only: registers keys, checks out, waits for your PayPal approval, captures                                                                      |
 
 Filing the dispute is a manual step as the sandbox shopper: Activity → the payment → **Report a problem** →
 "different or not as described" → item (Physical product, Other) → "I got a different item" → Color, a

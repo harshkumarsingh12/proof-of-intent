@@ -90,12 +90,10 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         };
       } catch (error) {
         if (isAiUnavailable(error))
-          return reply
-            .code(503)
-            .send({
-              error: "studio_ai_unavailable",
-              message: "Studio AI is unavailable. The Analytics and Disputes views are still available.",
-            });
+          return reply.code(503).send({
+            error: "studio_ai_unavailable",
+            message: "Studio AI is unavailable. The Analytics and Disputes views are still available.",
+          });
         if (error instanceof PayPalError && error.status === 404) {
           return reply.code(404).send({ error: "dispute_not_found", message: "PayPal has no such dispute" });
         }

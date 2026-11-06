@@ -29,7 +29,7 @@ of every `ci` run.
 | Vault v3 spike                                                      | Harsh           | ⚠️ Overdue (D2 gate was Nov 3). The app's token already has the vault scope; decide at the M2 check-in whether to build it or drop F6                           |
 | DB schema, migrations, nonce table                                  | Harsh           | ✅ Done                                                                                                                                                         |
 | Checkout route end to end                                           | Harsh + Sristee | ✅ Done (stage 2 live run on integration day)                                                                                                                   |
-| Webhook receiver with verification                                  | Harsh           | Built; public URL live, real sandbox delivery check pending                                                                                                     |
+| Webhook receiver with verification                                  | Harsh           | Built; deliveries evidently reach it (Nov 7 timing); `pnpm sandbox:webhook-check` to prove                                                                      |
 | Remaining hard rules (budget, recurrence, address, attributes, SKU) | Sristee         | ✅ Done (#21); the red $95 jacket now gives `AMOUNT_EXCEEDS_MAX` + `ATTRIBUTE_MISMATCH`                                                                         |
 | Key registry with retirement                                        | Sristee         | ✅ `createKeyRegistry`, `/keys/shopper` (public), `/keys/agent` and retire (operator); hosted orders via `pnpm sandbox:hosted-order`                            |
 | Buyer app: intent form, browser key, signing, PayPal button         | Sristee         | ✅ `/shop`: browser key, signed intent, agent cart, PayPal button (mock + sandbox) (#23); Playwright smoke ✅ (`pnpm smoke:shop`)                               |
@@ -85,9 +85,12 @@ order, grey $74 ordered), C twice, each time one dispute defended (`PP-R-IFB-101
 claim opened about 3 minutes later, evidence submitted, `UNDER_REVIEW`) and one conceded by override
 (`PP-R-VZL-10196900`, `PP-R-FZE-10196903`: `RESOLVED`). D twice on a fresh local seeded stack (`PP-D-1002` is
 `AGENT_OVERREACH` with `AMOUNT_EXCEEDS_MAX` and `ATTRIBUTE_MISMATCH`, `PP-D-1001` is `MANDATE_COMPLIANT` with its PDF), since the
-hosted sandbox has no overreaching capture. Still open: disputes reached the API 3 to 4.5 minutes after filing, which fits
-the 5-minute `list_disputes` catch-up better than webhooks, so real webhook delivery (#19) is unproven; and the
-operator-row-before-PayPal-call order was checked in tests, not on the hosted server (no audit route, #74).
+hosted sandbox has no overreaching capture. Disputes reached the API 3 to 4.5 minutes after filing, but that delay is
+PayPal's: the sandbox emitted each `CUSTOMER.DISPUTE.CREATED` 4 to 5 minutes after the shopper filed, and the dispute
+was in our API 10 to 30 seconds after its own event every time (VZL, LSI, FZE), which a 5-minute catch-up could not do
+three times running. So webhooks are delivering; `pnpm sandbox:webhook-check` (#19) proves it directly once the build
+with `/readyz` delivery counts is deployed. Still open: the operator-row-before-PayPal-call order was checked in tests,
+not on the hosted server (no audit route, #74).
 
 ## M4 Submission (Nov 11)
 
