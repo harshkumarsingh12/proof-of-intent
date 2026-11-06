@@ -125,6 +125,10 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [approval, setApproval] = useState<Approval>();
   const [approveError, setApproveError] = useState<string>();
   const [approving, setApproving] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftNote, setDraftNote] = useState<string>();
+  const [choosing, setChoosing] = useState(false);
+  const [agentNote, setAgentNote] = useState<string>();
 
   useEffect(() => {
     ensureShopper().then(setShopper, (err: Error) => setKeyError(err.message));
@@ -180,6 +184,67 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       }
     } finally {
       setBusySku(undefined);
+    }
+  };
+
+  /** The agent fills the form from the shopper's words. It only drafts: the shopper still signs. */
+  const draftWithAgent = async () => {
+    setDrafting(true);
+    setDraftNote(undefined);
+    setFormError(undefined);
+    try {
+      const res = await postJson<{ source: "live" | "scripted"; draft: { form: IntentForm } }>(
+        "/api/agent/draft-intent",
+        { text: form.description },
+      );
+      if (isError(res.body)) {
+        setFormError(res.body.message);
+      } else {
+        const { draft, source } = res.body;
+        setForm((f) => ({ ...draft.form, confirmEachCart: f.confirmEachCart }));
+        setDraftNote(
+          `${source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} filled in the limits below. Check them, then sign.`,
+        );
+      }
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  /** The agent picks the item itself; the merchant still answers for each cart it tries. */
+  const chooseWithAgent = async () => {
+    if (!signed) return;
+    setChoosing(true);
+    setCheckoutError(undefined);
+    setAgentNote(undefined);
+    setApproval(undefined);
+    setApproveError(undefined);
+    try {
+      const res = await postJson<{
+        source: "live" | "scripted";
+        attempts: { sku: string; body: CheckoutResponse | ApiError }[];
+        message?: string;
+      }>("/api/agent/choose", { intent_jws: signed.jws });
+      if (isError(res.body)) {
+        setCheckout(undefined);
+        setCheckoutError(res.body.message);
+        return;
+      }
+      const last = res.body.attempts.at(-1);
+      if (!last || isError(last.body)) {
+        setCheckout(undefined);
+        setAgentNote(
+          "The agent didn't find anything to propose within your limits. Pick a cart yourself below.",
+        );
+        return;
+      }
+      setCheckout({ sku: last.sku, res: last.body });
+      const refused = res.body.attempts.length - 1;
+      setAgentNote(
+        `${res.body.source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} proposed ${res.body.attempts.length} cart${res.body.attempts.length === 1 ? "" : "s"}${refused > 0 ? `; the merchant refused ${refused} before this one` : ""}.${res.body.message ? ` ${res.body.message}` : ""}`,
+      );
+    } finally {
+      setChoosing(false);
     }
   };
 
@@ -329,9 +394,13 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           />
           Ask me to confirm every cart, even ones that fit
         </label>
+        <button className="btn btn-ghost" disabled={!shopper || drafting} onClick={draftWithAgent}>
+          {drafting ? "Agent is reading…" : "Let the agent fill in the limits from my words"}
+        </button>{" "}
         <button className="btn btn-primary" disabled={!shopper} onClick={sign}>
           Sign my intent
         </button>
+        {draftNote && <p className="meta">{draftNote}</p>}
         {formError && <p className="error">{formError}</p>}
         {signed && (
           <div className="verdict ok">
@@ -352,6 +421,14 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           Pick what the agent sends to the merchant. Try one that breaks your limits: it&apos;s refused before
           any PayPal order exists.
         </p>
+        <button
+          className="btn btn-primary"
+          disabled={!signed || choosing || busySku !== undefined}
+          onClick={chooseWithAgent}
+        >
+          {choosing ? "The agent is shopping…" : "Let the agent choose"}
+        </button>
+        {agentNote && <p className="meta">{agentNote}</p>}
         <h3 className="group">{categoryLabel(shownCategory)}</h3>
         <div className="products">{inCategory.map(card)}</div>
         <details className="others">
