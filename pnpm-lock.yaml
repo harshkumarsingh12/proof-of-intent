@@ -184,7 +184,7 @@ importers:
         specifier: workspace:*
         version: link:../contracts
       '@poi/mandates':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../mandates
       ai:
         specifier: 4.3.19
