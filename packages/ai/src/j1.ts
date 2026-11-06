@@ -66,6 +66,8 @@ export const j1ReplayKey = (description: string, cart: CartMandate): string =>
  */
 const INJECTION =
   /\b(ignore|disregard|override|bypass|forget)\b[^.]{0,40}\b(budget|limit|rule|instruction|constraint|polic(y|ies)|previous)|\bapprove (this|the) (order|cart|purchase)\b|\b(system|assistant) ?(prompt|message)\b/i;
+const ROAD_SHOES = /\broad[- ]+(?:running[- ]+)?shoes?\b/i;
+const TRAIL_SHOES = /\btrail[- ]+(?:running[- ]+)?shoes?\b/i;
 
 function cartText(cart: CartMandate): string {
   return cart.contents.lines
@@ -97,6 +99,24 @@ export async function semanticFit(
       reasons: ["The cart contains text that tries to instruct the checker, so it is treated as a mismatch."],
       matched_attributes: [],
       conflicting_attributes: [],
+      ...meta,
+      source: "guard",
+    };
+  }
+
+  if (
+    ROAD_SHOES.test(description) &&
+    !TRAIL_SHOES.test(description) &&
+    cart.contents.lines.some((line) => TRAIL_SHOES.test(line.title) && !ROAD_SHOES.test(line.title))
+  ) {
+    return {
+      fit: "partial",
+      confidence: 1,
+      reasons: [
+        "The cart contains a trail shoe for a road running request. Ask the shopper to confirm the substitution.",
+      ],
+      matched_attributes: [],
+      conflicting_attributes: ["running surface"],
       ...meta,
       source: "guard",
     };

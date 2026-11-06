@@ -25,7 +25,7 @@ const report = [
   "",
   `- J1 accuracy: ${result.j1Correct}/20. Mismatches labelled match: ${result.falseApprovals}.`,
   `- J2 policy agreement with a reason citing the policy finding: ${result.j2Correct}/12. J2 receives the deterministic policy decision.`,
-  `- Schema validity after retries: ${result.schemaValid}/${result.schemaTotal} model cases. Local injection guards are excluded.`,
+  `- Schema validity after retries: ${result.schemaValid}/${result.schemaTotal} model cases. Local checkout guards are excluded.`,
   `- Gate: ${result.passed ? "passed" : "failed"}.`,
   "",
   "| Job | Case | Expected | Actual | Result | Attempts | Elapsed ms |",

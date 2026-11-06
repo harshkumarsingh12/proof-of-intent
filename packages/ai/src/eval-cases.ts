@@ -1,7 +1,7 @@
 import type { CartMandate } from "@poi/contracts";
-import { compliantCart } from "@poi/contracts/fixtures";
+import { compliantCart, greyJacketIntent, overreachingCart, partialCart } from "@poi/contracts/fixtures";
 import type { DisputeJobInput } from "./dispute-jobs";
-import { J1_CASES, type J1Case } from "./j1-cases";
+import type { J1Case } from "./j1-cases";
 
 type ProductCase = [label: string, description: string, title: string, category: string, color: string];
 
@@ -18,8 +18,29 @@ function productCases(expected: J1Case["expected"], examples: ProductCase[]): J1
   });
 }
 
+const jacketCases: J1Case[] = [
+  {
+    label: "grey running jacket",
+    cart: compliantCart,
+    expected: "match",
+    description: greyJacketIntent.natural_language_description,
+  },
+  {
+    label: "hooded rain shell",
+    cart: partialCart,
+    expected: "partial",
+    description: greyJacketIntent.natural_language_description,
+  },
+  {
+    label: "red running jacket",
+    cart: overreachingCart,
+    expected: "mismatch",
+    description: greyJacketIntent.natural_language_description,
+  },
+];
+
 export const J1_EVAL_CASES = [
-  ...J1_CASES,
+  ...jacketCases,
   ...productCases("match", [
     ["navy rain shell", "A navy waterproof rain shell", "Navy Waterproof Rain Shell", "rain-shell", "navy"],
     [
