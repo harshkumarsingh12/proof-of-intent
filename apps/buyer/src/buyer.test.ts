@@ -15,6 +15,7 @@ import { toolNames } from "./agent";
 import { intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
+import { canApprove, isStepUpToken, stepUpApproval } from "./stepup";
 import { buildIntent, CLOCK_SKEW_MS, dollarsToCents, type IntentForm } from "./intent";
 import {
   generateShopperKey,
@@ -240,6 +241,46 @@ describe("buyer agent: cart and Payment Mandate", () => {
     expect(intentFromJws(jws)).toEqual(signed);
     expect(mandateHash(intentFromJws(jws))).toBe(mandateHash(signed));
     expect(() => intentFromJws("not-a-jws")).toThrow();
+  });
+});
+
+describe("step-up approval page (#35)", () => {
+  const view = {
+    stepup_id: "stp_1",
+    status: "PENDING" as const,
+    lines: partialCart.contents.lines,
+    total: partialCart.contents.total,
+    merchant_name: "Trailhead Outfitters",
+    agent_platform: "Northstar",
+    reasons: ["SEMANTIC_UNCERTAIN" as const],
+    cart_mandate_hash: mandateHash(partialCart),
+    shopper_kid: "shp_me",
+    expires_at: "2026-11-03T10:00:00Z",
+  };
+
+  test("the page signs a CartApproval for this step-up and this cart, which the merchant verifies", async () => {
+    const { key, kid, registry } = await registeredShopper();
+    const mine = { ...view, shopper_kid: kid };
+    const jws = await signCompact(stepUpApproval(mine, new Date(NOW)), key.privateKey, kid);
+    const res = await verifyMandate(jws, (k) => registry.resolve(k, NOW));
+    expect(res.ok && CartApproval.parse(res.payload)).toEqual({
+      order_id: "stp_1",
+      cart_mandate_hash: mandateHash(partialCart),
+      approved_at: new Date(NOW).toISOString(),
+    });
+  });
+
+  test("only the browser holding the intent's key, on a pending link, gets the approve button", () => {
+    expect(canApprove(view, "shp_me")).toBe(true);
+    expect(canApprove(view, "shp_other")).toBe(false);
+    expect(canApprove(view, undefined)).toBe(false);
+    expect(canApprove({ ...view, status: "EXPIRED" }, "shp_me")).toBe(false);
+  });
+
+  test("link tokens are checked before they are forwarded", () => {
+    expect(isStepUpToken("A".repeat(43))).toBe(true);
+    for (const bad of ["", "short", "../keys/agent", "a b c d e f g h i j k l", "x".repeat(200)])
+      expect(isStepUpToken(bad)).toBe(false);
   });
 });
 

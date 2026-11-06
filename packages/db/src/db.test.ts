@@ -48,7 +48,7 @@ describe.runIf(ADMIN_URL)("db", () => {
     const other = createDb(url.toString());
     const [a, b] = await Promise.all([db.migrate(), other.migrate()]);
     await other.close();
-    expect([...a, ...b]).toEqual(["0001_init.sql", "0002_dispute_copilot.sql"]);
+    expect([...a, ...b]).toEqual(["0001_init.sql", "0002_dispute_copilot.sql", "0003_stepups.sql"]);
     expect(await db.migrate()).toEqual([]);
   });
 

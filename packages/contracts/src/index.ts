@@ -176,6 +176,34 @@ export const ApproveResponse = z.object({
 });
 export type ApproveResponse = z.infer<typeof ApproveResponse>;
 
+/**
+ * GET /stepup/:token: what the shopper is asked to approve (agent alone, docs/specs/0003, #35). The shopper signs
+ * a CartApproval with `order_id` = `stepup_id` and this `cart_mandate_hash`, using the key named by `shopper_kid`.
+ */
+export const StepUpView = z.object({
+  stepup_id: z.string().min(1),
+  status: z.enum(["PENDING", "APPROVING", "APPROVED", "REJECTED", "EXPIRED", "FAILED"]),
+  lines: z.array(CartLine),
+  total: Money,
+  merchant_name: z.string(),
+  agent_platform: z.string(),
+  reasons: z.array(ReasonCode),
+  cart_mandate_hash: sha256Hex,
+  shopper_kid: z.string().min(1),
+  expires_at: isoDateTime,
+  order_id: z.string().optional(),
+});
+export type StepUpView = z.infer<typeof StepUpView>;
+
+/** POST /stepup/:token/approve, body ApproveRequest. The order exists only from here. */
+export const StepUpApproveResponse = z.object({
+  status: z.literal("CAPTURED"),
+  order_id: z.string(),
+  paypal_order_id: z.string().optional(),
+  capture_id: z.string().optional(),
+});
+export type StepUpApproveResponse = z.infer<typeof StepUpApproveResponse>;
+
 export const DisputeClass = z.enum(["MANDATE_COMPLIANT", "AGENT_OVERREACH", "INTENT_MISREAD", "NO_MANDATE"]);
 export type DisputeClass = z.infer<typeof DisputeClass>;
 

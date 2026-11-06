@@ -60,6 +60,30 @@ Authorizing before re-checking means a failed check releases the hold instead of
 held. A retry after completion returns the same outcome; a PayPal failure answers 502 and leaves the order at its
 last state (`AUTHORIZED`), so a retry finishes the job with the same idempotent capture request.
 
+### Step-up links (agent alone), as built (#35)
+
+`apps/api/src/stepup.ts`. When checkout steps up a cart with nobody present, it records the verdict, stores the
+cart in `stepups` and sends the shopper a link to the buyer app's `/approve/<token>` page. Nothing goes to PayPal
+and the agent's response carries no link.
+
+- **The token only locates the step-up.** It is 32 random bytes, and only its SHA-256 is stored. Approving takes a
+  `CartApproval` signed with **the key that signed the Intent Mandate**, naming the step-up id as `order_id` and
+  the stored cart's hash. So the agent, or anyone else who sees the link, can't approve on the shopper's behalf.
+  D3 called for a signed token. The shopper's signature is what carries the authority, so the link token is a
+  plain random secret.
+- **Expiry:** 24 h, or the cart's `cart_expiry` or the intent's `intent_expiry` if sooner. An expired link answers
+  410 `stepup_expired` and creates nothing. An agent that wants the full day sets `cart_expiry` accordingly.
+- **At approval:** check the signature (403 `approval_invalid` with reason codes, and the link stays usable). Then
+  claim the row (`PENDING → APPROVING`, so exactly one request goes on) and run the hard rules again with the
+  current capture ledger, because budget may have been spent since the link was sent (409
+  `stepup_no_longer_valid`). Then require a vaulted wallet (409 `no_vaulted_wallet`, and the link stays usable).
+  Finally, sign the Cart Mandate and create the order with intent `CAPTURE` against the vault id, through the same
+  `placeOrder` as checkout. The order's verdict is `STEP_UP`. A retry after success returns the same answer.
+- **PayPal failing at approval** marks the step-up `FAILED` and answers 502. The link doesn't retry blind,
+  because PayPal may have charged before the error reached us. The agent starts a new checkout.
+- **Delivery:** no email provider is wired. The API logs the link (`step-up approval link`), and
+  `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin.
+
 ### Jobs
 
 Superseded (Nov 6): no job queue. The `webhook_events` rows the receiver stores are the worker's inbox, and the
@@ -68,7 +92,7 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 ### Tables (`packages/db`)
 
 `shoppers`, `shopper_keys`, `agent_keys`, `mandates` (canonical bytes + JWS), `nonces` (UNIQUE), `orders`,
-`verdicts`, `webhook_events` (UNIQUE event id), `disputes`, `audit_log` (append-only).
+`verdicts`, `webhook_events` (UNIQUE event id), `disputes`, `stepups` (UNIQUE token hash), `audit_log` (append-only).
 
 ## Interfaces
 
@@ -76,7 +100,8 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 |---|---|---|---|
 | POST | `/checkout` | Harsh | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, cart_mandate_jws?, paypal_order_id?, approval_url? }` |
 | POST | `/checkout/:id/approve` | Harsh | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }` |
-| POST | `/stepup/:token/approve` | Sristee | shopper approval → create (and capture) the order |
+| GET | `/stepup/:token` | Sristee | the waiting cart for the approval page → `StepUpView`; `cache-control: no-store` |
+| POST | `/stepup/:token/approve` | Sristee | `{ approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse` |
 | GET | `/orders`, `/verifications` | Harsh | paginated grids for the dashboard |
 | GET | `/disputes`, `/disputes/:id/recommendation` | Sikruti | spec 0005 |
 | POST | `/disputes/:id/actions/:action` | Sikruti | operator token; `action ∈ provide-evidence, accept-claim, send-message, escalate` (`make-offer` → 501, out of scope) |
@@ -97,7 +122,8 @@ A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVE
 2. A replayed nonce is rejected with `NONCE_REPLAYED`. *(done)*
 3. An approved human-present cart is authorized, re-checked and captured; a modified cart is voided. *(done with the
    mock; live on integration day, needs a sandbox shopper to approve)*
-4. Step-up: no order exists until the shopper approves; an expired link creates nothing. *(ledger M2 @srshriv)*
+4. Step-up: no order exists until the shopper approves; an expired link creates nothing. *(done, #35:
+   `apps/api/src/stepup.test.ts`, with Postgres)*
 5. Every verdict and PayPal call is in `audit_log` with the request body. *(done for stage 1)*
 
 ## Out of scope
