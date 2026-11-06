@@ -283,6 +283,25 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect(await db.getDispute("PP-D-NONE")).toBeNull();
   });
 
+  test("key registration: idempotent per kid, concurrent-safe, retirement keeps the first date", async () => {
+    const jwk = { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) };
+    const [a, b] = await Promise.all([
+      db.registerShopperKey({ kid: "shp_reg", publicJwk: jwk }),
+      db.registerShopperKey({ kid: "shp_reg", publicJwk: jwk }),
+    ]);
+    expect(a.shopperId).toBe(b.shopperId);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(await db.findKey("shopper", "shp_reg")).toEqual({ kid: "shp_reg", publicJwk: jwk, shopperId: a.shopperId });
+
+    expect(await db.registerAgentKey({ kid: "agt_reg", platform: "Northstar", owner: "operator", publicJwk: jwk })).toBe(true);
+    expect(await db.registerAgentKey({ kid: "agt_reg", platform: "Other", owner: "x", publicJwk: jwk })).toBe(false);
+    expect(await db.findKey("agent", "agt_reg")).toMatchObject({ platform: "Northstar" });
+
+    expect(await db.retireKey("shopper", "shp_reg", "2026-11-06T10:00:00Z")).toBe("2026-11-06T10:00:00.000Z");
+    expect(await db.retireKey("shopper", "shp_reg", "2026-12-01T00:00:00Z")).toBe("2026-11-06T10:00:00.000Z");
+    expect(await db.retireKey("agent", "agt_missing", "2026-11-06T10:00:00Z")).toBeNull();
+  });
+
   test("the schema refuses malformed hashes and oversized custom_id", async () => {
     await expect(
       raw.query(

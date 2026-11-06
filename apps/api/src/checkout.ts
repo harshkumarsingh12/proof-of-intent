@@ -24,7 +24,7 @@ import {
   type ReasonCode,
 } from "@poi/contracts";
 import type { Db, KeyRecord } from "@poi/db";
-import { customId, mandateHash, signMandate, verifyMandate, type SigningKey } from "@poi/mandates";
+import { customId, keyValidAt, mandateHash, signMandate, verifyMandate, type SigningKey } from "@poi/mandates";
 import type { PayPalClient } from "@poi/paypal";
 import { evaluate } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
@@ -89,10 +89,8 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
   // A retired key still verifies mandates created before it was retired, nothing newer (spec 0001).
   const shopper = shopperKey as KeyRecord | null;
   const agent = agentKey as KeyRecord | null;
-  if (shopper?.retiredAt && Date.parse(intent.created_at) >= Date.parse(shopper.retiredAt))
-    return reject(["UNKNOWN_KEY"]);
-  if (agent?.retiredAt && Date.parse(payment.timestamp) >= Date.parse(agent.retiredAt))
-    return reject(["UNKNOWN_KEY"]);
+  if (shopper && !keyValidAt(shopper, intent.created_at)) return reject(["UNKNOWN_KEY"]);
+  if (agent && !keyValidAt(agent, payment.timestamp)) return reject(["UNKNOWN_KEY"]);
 
   // 3. Bindings: one intent, one cart, one payment, all pointing at each other, addressed to us.
   const intentHash = mandateHash(intent);

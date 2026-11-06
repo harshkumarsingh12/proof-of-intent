@@ -47,6 +47,21 @@ export function memoryDb() {
       const { kind: _kind, ...rest } = k;
       return rest;
     },
+    registerShopperKey: async ({ kid, publicJwk }) => {
+      const k = keys.get(kid);
+      if (k) return { shopperId: k.shopperId!, created: false };
+      const shopperId = `shopper_${randomUUID()}`;
+      keys.set(kid, { kind: "shopper", kid, publicJwk, shopperId });
+      return { shopperId, created: true };
+    },
+    registerAgentKey: async ({ kid, platform, publicJwk }) =>
+      keys.has(kid) ? false : (keys.set(kid, { kind: "agent", kid, publicJwk, platform }), true),
+    retireKey: async (kind, kid, at) => {
+      const k = keys.get(kid);
+      if (!k || k.kind !== kind) return null;
+      k.retiredAt ??= new Date(at).toISOString();
+      return k.retiredAt;
+    },
     saveMandate: async (m) => void (mandates.has(m.hash) || mandates.set(m.hash, m)),
     mandateLedger: async (intentMandateId, asOfOrderId) => {
       const asOf = asOfOrderId ? orders.get(asOfOrderId)?.createdAt : undefined;

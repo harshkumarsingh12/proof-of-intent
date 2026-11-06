@@ -9,6 +9,8 @@ export const RATE_LIMITS = {
   checkout: { max: 30, timeWindow: "1 minute" },
   /** PayPal delivers bursts and retries on any non-2xx, so this only stops floods. */
   webhook: { max: 300, timeWindow: "1 minute" },
+  /** A shopper registers one browser key; more than a few a minute from one IP is a script. */
+  keys: { max: 10, timeWindow: "1 minute" },
   /** Every call costs model tokens. */
   studio: { max: 10, timeWindow: "1 minute" },
 } as const;

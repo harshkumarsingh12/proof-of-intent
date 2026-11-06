@@ -5,6 +5,7 @@
  * Tables live in ../migrations/*.sql. Unique indexes carry idempotency and replay protection;
  * the app never "checks then inserts".
  */
+import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
@@ -135,6 +136,12 @@ export interface Db {
   recordWebhookEvent(event: WebhookEventRecord): Promise<boolean>;
   /** A registered public key, or null. Retired keys are returned with retiredAt; the caller applies the rule. */
   findKey(kind: "shopper" | "agent", kid: string): Promise<KeyRecord | null>;
+  /** Registers a shopper's public key under a new shopper. The same kid again returns its shopper (created false). */
+  registerShopperKey(k: { kid: string; publicJwk: Record<string, unknown> }): Promise<{ shopperId: string; created: boolean }>;
+  /** Registers an agent platform's key. False when the kid already exists (the caller compares). */
+  registerAgentKey(k: { kid: string; platform: string; owner: string; publicJwk: Record<string, unknown> }): Promise<boolean>;
+  /** Retires a key once (a later call keeps the first date). The effective retired_at, or null for an unknown key. */
+  retireKey(kind: "shopper" | "agent", kid: string, at: string): Promise<string | null>;
   /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
   saveMandate(m: MandateRecord): Promise<void>;
   /**
@@ -220,6 +227,50 @@ export function createDb(databaseUrl: string): Db {
         ...(row.vault_id ? { vaultId: row.vault_id } : {}),
         ...(row.platform ? { platform: row.platform } : {}),
       };
+    },
+
+    async registerShopperKey({ kid, publicJwk }) {
+      const existing = await pool.query<{ shopper_id: string }>("select shopper_id from shopper_keys where kid = $1", [kid]);
+      if (existing.rows[0]) return { shopperId: existing.rows[0].shopper_id, created: false };
+      const shopperId = `shopper_${randomUUID()}`;
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query("insert into shoppers (id) values ($1)", [shopperId]);
+        const res = await client.query(
+          "insert into shopper_keys (kid, shopper_id, public_jwk) values ($1, $2, $3) on conflict (kid) do nothing",
+          [kid, shopperId, json(publicJwk)],
+        );
+        if (res.rowCount === 1) {
+          await client.query("commit");
+          return { shopperId, created: true };
+        }
+        await client.query("rollback"); // registered concurrently: answer with the winner
+      } catch (err) {
+        await client.query("rollback").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+      const winner = await pool.query<{ shopper_id: string }>("select shopper_id from shopper_keys where kid = $1", [kid]);
+      return { shopperId: winner.rows[0]!.shopper_id, created: false };
+    },
+
+    async registerAgentKey({ kid, platform, owner, publicJwk }) {
+      const res = await pool.query(
+        "insert into agent_keys (kid, platform, owner, public_jwk) values ($1, $2, $3, $4) on conflict (kid) do nothing",
+        [kid, platform, owner, json(publicJwk)],
+      );
+      return res.rowCount === 1;
+    },
+
+    async retireKey(kind, kid, at) {
+      const table = kind === "shopper" ? "shopper_keys" : "agent_keys";
+      const res = await pool.query<{ retired_at: Date }>(
+        `update ${table} set retired_at = coalesce(retired_at, $2) where kid = $1 returning retired_at`,
+        [kid, at],
+      );
+      return res.rows[0] ? res.rows[0].retired_at.toISOString() : null;
     },
 
     async saveMandate(m) {

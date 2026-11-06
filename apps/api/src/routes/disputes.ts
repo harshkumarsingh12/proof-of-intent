@@ -172,7 +172,7 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
 const pdfName = (id: string) => `evidence-${id}.pdf`;
 
 /** Bearer OPERATOR_TOKEN. Unset → operator actions are off; nobody can move money by default. */
-function operator(req: FastifyRequest, reply: FastifyReply, token: string | undefined): string | null {
+export function operator(req: FastifyRequest, reply: FastifyReply, token: string | undefined): string | null {
   if (!token) {
     reply.code(503).send({ error: "operator_actions_disabled", message: "OPERATOR_TOKEN is not set" });
     return null;

@@ -82,6 +82,9 @@ last state (`AUTHORIZED`), so a retry finishes the job with the same idempotent 
 | POST | `/disputes/:id/actions/:action` | Sikruti | operator action; `action ∈ provide-evidence, accept-claim, make-offer, send-message` |
 | GET | `/analytics/:report` | Sikruti | spec 0007 |
 | POST | `/webhooks/paypal` | Harsh | spec 0004 |
+| POST | `/keys/shopper` | Sristee | `{ public_jwk }` (P-256) → `{ kid, shopper_id }`; public, rate-limited, `kid` = `shp_<RFC 7638 thumbprint>` (spec 0001) |
+| POST | `/keys/agent` | Sristee | `{ public_jwk, platform }` → `{ kid }`; operator token; `kid` = `agt_<thumbprint>` |
+| POST | `/keys/:kind/:kid/retire` | Sristee | `{ at? }` → `{ kid, retired_at }`; operator token; first retirement date wins |
 | POST | `/ai/studio` | Sumedha | Studio harness proxy, spec 0007 |
 
 A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVENTIONS.md.

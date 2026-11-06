@@ -44,7 +44,11 @@ Functions (`packages/mandates`, already merged): `canonicalJson`, `mandateHash`,
 `verifyMandate(jws, resolveKey) → { ok, kid, payload, canonical } | { ok: false, reason: "UNKNOWN_KEY" | "SIGNATURE_INVALID" }`,
 `generateSigningKeyPair`.
 
-To add: `createKeyRegistry()` with `register(kid, jwk, owner)`, `retire(kid, at)`, `resolve(kid, mandateCreatedAt)`.
+Key registry (`packages/mandates`): `createKeyRegistry()` with `register(kid, jwk, owner)`, `retire(kid, at)`,
+`resolve(kid, mandateCreatedAt)`; `keyValidAt(key, createdAt)` is the one retirement rule (checkout uses it too);
+`publicEs256Jwk(input)` accepts P-256 public keys only; `keyIdFor("shp" | "agt", jwk)` derives the `kid` from the
+key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/keys/*` in spec 0003, stored in
+`shopper_keys` / `agent_keys`.
 
 ## Acceptance criteria
 
@@ -52,7 +56,7 @@ To add: `createKeyRegistry()` with `register(kid, jwk, owner)`, `retire(kid, at)
 2. `customId` is 57 characters for a UUID mandate id. *(test, done)*
 3. Sign/verify round trip returns the exact canonical payload. *(test, done)*
 4. A tampered payload, a wrong key and an unknown `kid` are each rejected with the right reason. *(tests, done)*
-5. A retired key verifies mandates created before `retired_at` and rejects newer ones. *(ledger M1 @srshriv)*
+5. A retired key verifies mandates created before `retired_at` and rejects newer ones. *(test, done)*
 6. The browser key is ECDSA P-256 and non-extractable. *(ledger M1 @srshriv)*
 7. A mandate signed in the browser verifies on the server. *(M1, Playwright smoke)*
 
