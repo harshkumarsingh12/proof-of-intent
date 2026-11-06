@@ -22,8 +22,8 @@ Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 | Page | Content | Data |
 |---|---|---|
 | Home *(built, #76)* | disputes due in 24 h; tabs: action required, defend, concede, resolved; quick links | seed until `/disputes` |
-| Agent orders *(API built, page not yet)* | grid (order, platform, mandate status, verdict, reason codes, amount, captured at); KPI tiles | `/orders` |
-| Verification queue *(API built, page not yet)* | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
+| Agent orders *(built: `/orders` page, AG Grid Community)* | grid (order, platform, shopper present, verdict, reason codes, amount, PayPal status, captured at); KPI tiles | `/orders` + `/verifications` |
+| Verification queue *(read-only "Checkout verdicts" tab on `/orders`; approve / reject waits for step-up links, #35)* | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
 | Disputes *(built: queue #60, detail #61; live data #82, actions #83 #84 #87)* | sorted by due date; class + action chips; SLA countdown; evidence preview (the exact PDF sent); Submit / Escalate / Accept / override | `/disputes`, `/disputes/:id/paypal-actions` |
 | Analytics *(built, #73)* | disputes by class per week; overreach rate by platform; defended vs conceded; median response window | `/analytics/*` |
 

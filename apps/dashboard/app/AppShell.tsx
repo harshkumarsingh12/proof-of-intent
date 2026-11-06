@@ -13,6 +13,7 @@ import {
   HomeIcon,
   InfoIcon,
   MenuIcon,
+  ReceiptIcon,
   ScaleIcon,
 } from "./icons";
 import { MERCHANT_NAME, merchantInitials, REPO_URL, type PayPalMode } from "../src/merchant";
@@ -29,6 +30,7 @@ type NavItem = { label: string; icon: ReactNode; href?: string; external?: boole
 
 const PRIMARY: NavItem[] = [
   { label: "Home", icon: <HomeIcon />, href: "/" },
+  { label: "Orders", icon: <ReceiptIcon />, href: "/orders" },
   { label: "Disputes", icon: <ScaleIcon />, href: "/disputes" },
   { label: "Analytics", icon: <ChartIcon />, href: "/analytics" },
 ];
