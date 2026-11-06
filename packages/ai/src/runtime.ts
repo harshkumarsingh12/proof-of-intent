@@ -148,7 +148,25 @@ export function generateFromEnv(job: string): Generate {
   return defaultGenerate;
 }
 
-/** Spec 0006: invalid output → retry once → a person decides. */
+const DEFAULT_DAILY_CALLS = 500;
+const budget = { day: "", used: 0 };
+
+/**
+ * R11 kill switch: at most AI_DAILY_CALL_LIMIT live model calls per UTC day (default 500; 0 turns live calls
+ * off). Past it the job is unavailable, so checkout steps up to the shopper instead of spending more.
+ * ponytail: counted per process (api and worker each get the limit) and reset on restart; move the counter to
+ * Postgres if the public demo ever needs one shared cap.
+ */
+export function takeAiCall(job: string, env: NodeJS.ProcessEnv = process.env, now = new Date()): void {
+  const raw = Number(env.AI_DAILY_CALL_LIMIT);
+  const limit = env.AI_DAILY_CALL_LIMIT?.trim() && Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_DAILY_CALLS;
+  const day = now.toISOString().slice(0, 10);
+  if (budget.day !== day) Object.assign(budget, { day, used: 0 });
+  if (budget.used >= limit) throw new AiUnavailableError(job, `daily budget of ${limit} live calls is used up`);
+  budget.used++;
+}
+
+/** Spec 0006: invalid output → retry once → a person decides. Every attempt counts against the daily budget. */
 export async function generateWithRetry<T>(
   job: string,
   generate: Generate,
@@ -156,6 +174,7 @@ export async function generateWithRetry<T>(
 ): Promise<T> {
   let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
+    takeAiCall(job);
     try {
       const out = await generate(req);
       const parsed = req.schema.safeParse(out);
