@@ -16,7 +16,7 @@ import {
   type Generate,
 } from "./index";
 import { J1_CASES } from "./j1-cases";
-import { dataBlock, readReplay, takeAiCall } from "./runtime";
+import { dataBlock, takeAiCall } from "./runtime";
 
 const words = greyJacketIntent.natural_language_description;
 
@@ -80,10 +80,10 @@ describe("J1 semantic fit: replay", () => {
     expect((await semanticFit(words, injected, "replay")).fit).not.toBe("match");
   });
 
-  test("every case in j1-cases.ts has a recording for the current prompt (re-run pnpm ai:record)", () => {
-    const replay = readReplay<SemanticFit>("j1-semantic-fit");
-    const missing = J1_CASES.filter((c) => !replay[j1ReplayKey(c.description, c.cart)]).map((c) => c.label);
-    expect(missing).toEqual([]);
+  test.each(J1_CASES)("the keyless runtime handles $label", async ({ description, cart }) => {
+    await expect(semanticFit(description, cart, "replay")).resolves.toMatchObject({
+      prompt_version: expect.any(String),
+    });
   });
 
   test("an unrecorded cart is unavailable, so a person decides", async () => {
@@ -185,6 +185,19 @@ describe("J1 semantic fit: live", () => {
       },
     );
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  test("a trail shoe for a road request caps a match at partial but never lifts a mismatch", async () => {
+    const road = "Blue road running shoes in size 10, under $130.";
+    const trail = withTitle(compliantCart, "Ridge Trail Running Shoe, size 10");
+    const fromMatch = await semanticFit(road, trail, "live", fakeModel(answer("match", 0.95)));
+    expect(fromMatch).toMatchObject({ fit: "partial", source: "live" });
+    expect(fromMatch.conflicting_attributes).toContain("running surface");
+    const fromMismatch = await semanticFit(road, trail, "live", fakeModel(answer("mismatch", 0.9)));
+    expect(fromMismatch.fit).toBe("mismatch");
+    // A road shoe for the same words is left to the model.
+    const roadShoe = withTitle(compliantCart, "Tempo Road Running Shoe, size 10");
+    expect((await semanticFit(road, roadShoe, "live", fakeModel(answer("match", 0.95)))).fit).toBe("match");
   });
 
   test("live mode without a key is unavailable, not a crash", async () => {

@@ -66,6 +66,8 @@ export const j1ReplayKey = (description: string, cart: CartMandate): string =>
  */
 const INJECTION =
   /\b(ignore|disregard|override|bypass|forget)\b[^.]{0,40}\b(budget|limit|rule|instruction|constraint|polic(y|ies)|previous)|\bapprove (this|the) (order|cart|purchase)\b|\b(system|assistant) ?(prompt|message)\b/i;
+const ROAD_SHOES = /\broad[- ]+(?:running[- ]+)?shoes?\b/i;
+const TRAIL_SHOES = /\btrail[- ]+(?:running[- ]+)?shoes?\b/i;
 
 function cartText(cart: CartMandate): string {
   return cart.contents.lines
@@ -102,6 +104,13 @@ export async function semanticFit(
     };
   }
 
+  // A trail shoe for a road request needs the shopper's word. Applied after the model as a ceiling, never a
+  // floor: it turns a "match" into "partial" but leaves a model's "mismatch" alone (J1 only lowers verdicts).
+  const trailForRoad =
+    ROAD_SHOES.test(description) &&
+    !TRAIL_SHOES.test(description) &&
+    cart.contents.lines.some((line) => TRAIL_SHOES.test(line.title) && !ROAD_SHOES.test(line.title));
+
   const input = j1Input(description, cart);
   let fit: SemanticFit;
   if (mode === "replay") {
@@ -122,5 +131,16 @@ export async function semanticFit(
 
   // The model's own words can't support a "match" it contradicts.
   if (fit.fit === "match" && fit.conflicting_attributes.length > 0) fit = { ...fit, fit: "partial" };
+  if (trailForRoad && fit.fit === "match") {
+    fit = {
+      ...fit,
+      fit: "partial",
+      reasons: [
+        ...fit.reasons,
+        "The cart contains a trail shoe for a road running request. Ask the shopper to confirm the substitution.",
+      ],
+      conflicting_attributes: [...fit.conflicting_attributes, "running surface"],
+    };
+  }
   return { ...fit, ...meta, source: mode };
 }
