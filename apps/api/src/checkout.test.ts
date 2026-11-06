@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import type { SemanticFit } from "@poi/ai";
+import { semanticFit as realJ1, type SemanticFit } from "@poi/ai";
 import { NotImplementedError } from "@poi/contracts";
 import {
   compliantCart,
@@ -149,6 +149,27 @@ describe("POST /checkout: decisions", () => {
     const s = setup({ semanticFit: j1("match", 1) });
     await s.checkout((await signedCheckout({ shopper, agent, cart: overreachingCart })).body);
     expect(s.semanticFit).not.toHaveBeenCalled();
+  });
+
+  test("the real J1 in replay mode, no API key: compliant approves, rain shell and unknown carts step up", async () => {
+    const unknownCart = {
+      ...compliantCart,
+      contents: {
+        ...compliantCart.contents,
+        lines: compliantCart.contents.lines.map((l) => ({ ...l, title: "Trail Running Vest" })),
+      },
+    };
+    const cases = [
+      [compliantCart, "APPROVE", []],
+      [partialCart, "STEP_UP", ["SEMANTIC_UNCERTAIN"]],
+      [unknownCart, "STEP_UP", ["SEMANTIC_UNCERTAIN"]],
+    ] as const;
+    for (const [cart, outcome, reasons] of cases) {
+      const s = setup({ semanticFit: realJ1, aiMode: "replay" });
+      const res = await s.checkout((await signedCheckout({ shopper, agent, cart })).body);
+      expect(res.json().verdict).toEqual({ outcome, reasons: [...reasons] });
+      expect(s.createOrder).toHaveBeenCalledTimes(1);
+    }
   });
 
   test("while J1 is unbuilt, a passing cart steps up to the shopper instead of auto-approving", async () => {

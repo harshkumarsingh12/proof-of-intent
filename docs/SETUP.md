@@ -13,18 +13,18 @@ cp .env.example .env
 docker compose up --build
 ```
 
-| Service | URL |
-|---|---|
-| Shop (buyer app) | http://localhost:3001 |
-| Operations dashboard | http://localhost:3002 |
-| API health | http://localhost:3000/healthz |
+| Service              | URL                           |
+| -------------------- | ----------------------------- |
+| Shop (buyer app)     | http://localhost:3001         |
+| Operations dashboard | http://localhost:3002         |
+| API health           | http://localhost:3000/healthz |
 
 Ports already taken on your machine? Set `API_HOST_PORT`, `SHOP_HOST_PORT` or `OPS_HOST_PORT` in `.env` (they
 default to 3000, 3001 and 3002), then open the matching `localhost` port. Host ports bind to `127.0.0.1` only.
 
 `PAYPAL_MODE=mock` serves PayPal responses from fixtures and `AI_MODE=replay` serves recorded model responses,
-so journeys A–D run end to end without any account. *(Journeys are wired in as the milestones land; see the
-ledger in the latest CI run for what is open.)*
+so journeys A–D run end to end without any account. _(Journeys are wired in as the milestones land; see the
+ledger in the latest CI run for what is open.)_
 
 **AG Studio license.** The dashboard doesn't use AG Grid or AG Studio yet (no dependency in
 `apps/dashboard/package.json`), so it runs without `AG_STUDIO_LICENSE_KEY`.
@@ -33,12 +33,12 @@ refuses to load.
 
 **What's in the dashboard** (http://localhost:3002):
 
-| Page | Path | Notes |
-|---|---|---|
-| Home | `/` | Disputes due in the next 24 hours, tabs (action required, defend, concede, resolved), quick links |
-| Dispute queue | `/disputes` | Filters and sorting by deadline, age or amount |
-| Dispute detail | `/disputes/<id>` | Mandate diff, constraint checks, copilot recommendation, evidence preview, operator actions |
-| Analytics | `/analytics` | Defended vs. conceded, blocked carts, platform breakdown, disputes by class per week |
+| Page           | Path             | Notes                                                                                             |
+| -------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| Home           | `/`              | Disputes due in the next 24 hours, tabs (action required, defend, concede, resolved), quick links |
+| Dispute queue  | `/disputes`      | Filters and sorting by deadline, age or amount                                                    |
+| Dispute detail | `/disputes/<id>` | Mandate diff, constraint checks, copilot recommendation, evidence preview, operator actions       |
+| Analytics      | `/analytics`     | Defended vs. conceded, blocked carts, platform breakdown, disputes by class per week              |
 
 The top-bar search finds a dispute by dispute id, order id or PayPal order id (press `/` to focus it). The badge
 and banner show the dashboard's `PAYPAL_MODE` (keep it the same as the API's). Pages show the API's disputes; if the
@@ -76,18 +76,19 @@ Postgres for local work: `docker compose up -d postgres` and set
    `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.CAPTURE.COMPLETED`,
    `PAYMENT.CAPTURE.DENIED`, `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`,
    `CUSTOMER.DISPUTE.RESOLVED`, `VAULT.PAYMENT-TOKEN.CREATED`. Put its id in `PAYPAL_WEBHOOK_ID`.
-5. For live model calls: `AI_MODE=live` plus `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`.
+5. For live model calls: `AI_MODE=live` plus `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`. After editing a prompt in
+   `packages/ai/prompts/`, run `pnpm ai:record` to re-record the replay answers (it uses the live model).
 6. Merchant signing key: `pnpm keys:gen > merchant-key.pem`, then put it in `MERCHANT_SIGNING_KEY`.
 7. Operator actions: `OPERATOR_TOKEN` (e.g. `openssl rand -hex 32`) and `OPERATOR_PASSWORD`.
 
 Sandbox scripts (all need the PayPal variables in `.env`):
 
-| Command | What it does |
-|---|---|
-| `pnpm sandbox:checkout-smoke` | Journey B against the sandbox: the red $95 cart is rejected, no PayPal order |
-| `pnpm sandbox:dispute-cycle start` | A compliant order through a local API and database, then waits for you to file a dispute |
-| `pnpm sandbox:dispute-cycle escalate\|evidence\|adjudicate\|status <id>` | Sandbox dispute steps (spec 0004 §Sandbox dispute recipe) |
-| `POI_API_URL=… OPERATOR_TOKEN=… pnpm sandbox:hosted-order` | A compliant order through a **deployed** API over HTTP only: registers keys, checks out, waits for your PayPal approval, captures |
+| Command                                                                  | What it does                                                                                                                      |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm sandbox:checkout-smoke`                                            | Journey B against the sandbox: the red $95 cart is rejected, no PayPal order                                                      |
+| `pnpm sandbox:dispute-cycle start`                                       | A compliant order through a local API and database, then waits for you to file a dispute                                          |
+| `pnpm sandbox:dispute-cycle escalate\|evidence\|adjudicate\|status <id>` | Sandbox dispute steps (spec 0004 §Sandbox dispute recipe)                                                                         |
+| `POI_API_URL=… OPERATOR_TOKEN=… pnpm sandbox:hosted-order`               | A compliant order through a **deployed** API over HTTP only: registers keys, checks out, waits for your PayPal approval, captures |
 
 Filing the dispute is a manual step as the sandbox shopper: Activity → the payment → **Report a problem** →
 "different or not as described" → item (Physical product, Other) → "I got a different item" → Color, a
@@ -99,11 +100,11 @@ optional → a short note → Submit. PayPal shows it to the API a few minutes l
 See [spec 0008](specs/0008-hosting-and-deploy.md) for the full plan. The team demo runs on **Dokploy** on the
 team server, behind Cloudflare.
 
-| App | Public URL | Compose service | Container port |
-|---|---|---|---|
-| Shop | https://poi-buyer.iotkiit.in | `buyer` | 3001 |
-| API (and PayPal webhooks) | https://poi-api.iotkiit.in | `api` | 3000 |
-| Operations dashboard | https://poi-dashboard.iotkiit.in | `dashboard` | 3002 |
+| App                       | Public URL                       | Compose service | Container port |
+| ------------------------- | -------------------------------- | --------------- | -------------- |
+| Shop                      | https://poi-buyer.iotkiit.in     | `buyer`         | 3001           |
+| API (and PayPal webhooks) | https://poi-api.iotkiit.in       | `api`           | 3000           |
+| Operations dashboard      | https://poi-dashboard.iotkiit.in | `dashboard`     | 3002           |
 
 Single-level names under `iotkiit.in` on purpose: Cloudflare's free certificate covers only one level, so names
 like `api.poi.iotkiit.in` would fail HTTPS. `https://poi-api.iotkiit.in/` returns a JSON 404 by design; check
@@ -143,6 +144,7 @@ like `api.poi.iotkiit.in` would fail HTTPS. `https://poi-api.iotkiit.in/` return
 
    For sandbox, add `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` and `MERCHANT_SIGNING_KEY`
    (see section 3), plus the AI and AG Studio variables from `.env.example` when you need them.
+
 4. **Don't start the `server` profile** (Caddy) on Dokploy: Dokploy's proxy already holds ports 80 and 443. The
    `backup` service is in the same profile, so on Dokploy run backups from Dokploy's own scheduled backups or a
    separate job until that's split out.
@@ -161,13 +163,13 @@ On the server: `curl -fsS http://127.0.0.1:3100/healthz` (the API's host port fr
 
 **Troubleshooting**
 
-| Symptom in the deploy log | Cause | Fix |
-|---|---|---|
-| `Bind for 0.0.0.0:3001 failed: port is already allocated` | Another service holds that host port | Set `SHOP_HOST_PORT` (or the API/OPS one) to a free port; find the holder with `docker ps --filter publish=3001` |
-| `service "migrate" didn't complete successfully: exit 1` | Usually `DATABASE_URL` missing from the Environment tab, or a password that doesn't match the existing `pgdata` volume | `docker logs <app>-migrate-1`; add the full env set above; Postgres keeps the password it was first created with |
-| Plain-text `404 page not found` on a domain | Dokploy's proxy has no route: domain not redeployed, a typo, or the wrong service | Redeploy; check the host, service and container port in the Domains tab |
-| `getaddrinfo EAI_AGAIN api.sandbox.paypal.com` in api or worker logs | The host's DNS resolver dropped a lookup | Compose sends outside names to `1.1.1.1` / `8.8.8.8` (`dns:` in `docker-compose.yml`); if the host firewall blocks outbound DNS to them, put the host's working resolver there instead. Calls that never reached PayPal are retried automatically |
-| JSON `Route GET:/ not found` on the API domain | Working as intended | Use `/healthz` |
+| Symptom in the deploy log                                            | Cause                                                                                                                  | Fix                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Bind for 0.0.0.0:3001 failed: port is already allocated`            | Another service holds that host port                                                                                   | Set `SHOP_HOST_PORT` (or the API/OPS one) to a free port; find the holder with `docker ps --filter publish=3001`                                                                                                                                  |
+| `service "migrate" didn't complete successfully: exit 1`             | Usually `DATABASE_URL` missing from the Environment tab, or a password that doesn't match the existing `pgdata` volume | `docker logs <app>-migrate-1`; add the full env set above; Postgres keeps the password it was first created with                                                                                                                                  |
+| Plain-text `404 page not found` on a domain                          | Dokploy's proxy has no route: domain not redeployed, a typo, or the wrong service                                      | Redeploy; check the host, service and container port in the Domains tab                                                                                                                                                                           |
+| `getaddrinfo EAI_AGAIN api.sandbox.paypal.com` in api or worker logs | The host's DNS resolver dropped a lookup                                                                               | Compose sends outside names to `1.1.1.1` / `8.8.8.8` (`dns:` in `docker-compose.yml`); if the host firewall blocks outbound DNS to them, put the host's working resolver there instead. Calls that never reached PayPal are retried automatically |
+| JSON `Route GET:/ not found` on the API domain                       | Working as intended                                                                                                    | Use `/healthz`                                                                                                                                                                                                                                    |
 
 **Without Dokploy** (plain Compose and Caddy on a server you manage):
 

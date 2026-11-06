@@ -6,25 +6,29 @@
  * `AI_MODE=replay` serves recorded responses so the stack runs with no API key.
  */
 import { z } from "zod";
-import { DisputeClass, NotImplementedError, type CartMandate } from "@poi/contracts";
+import { DisputeClass, NotImplementedError } from "@poi/contracts";
+import type { AiMode } from "./runtime";
 
-export type AiMode = "live" | "replay";
-
-export function parseAiMode(value: string | undefined): AiMode {
-  if (value === undefined || value === "" || value === "replay") return "replay";
-  if (value === "live") return "live";
-  throw new Error(`AI_MODE must be "live" or "replay", got "${value}"`);
-}
-
-/** J1: does the cart fit the shopper's words? */
-export const SemanticFit = z.object({
-  fit: z.enum(["match", "partial", "mismatch"]),
-  confidence: z.number().min(0).max(1),
-  reasons: z.array(z.string()),
-  matched_attributes: z.array(z.string()),
-  conflicting_attributes: z.array(z.string()),
-});
-export type SemanticFit = z.infer<typeof SemanticFit>;
+export {
+  AiUnavailableError,
+  isAiUnavailable,
+  liveConfigFromEnv,
+  parseAiMode,
+  redact,
+  type AiMode,
+  type Generate,
+  type GenerateRequest,
+} from "./runtime";
+export {
+  J1_PROMPT_VERSION,
+  J1_TIMEOUT_MS,
+  SemanticFit,
+  j1Input,
+  j1ReplayKey,
+  semanticFit,
+  type J1Result,
+  type SemanticFitOptions,
+} from "./j1";
 
 /** J2: which of the four classes is this dispute? */
 export const DisputeClassification = z.object({
@@ -50,10 +54,6 @@ export const STEP_UP_AT = 0.5;
 
 const OWNER = "sumedhag28";
 const SPEC = "docs/specs/0006-ai-jobs.md";
-
-export async function semanticFit(_description: string, _cart: CartMandate, _mode: AiMode): Promise<SemanticFit> {
-  throw new NotImplementedError("J1 semanticFit", OWNER, SPEC);
-}
 
 export async function classifyDispute(_input: unknown, _mode: AiMode): Promise<DisputeClassification> {
   throw new NotImplementedError("J2 classifyDispute", OWNER, SPEC);
