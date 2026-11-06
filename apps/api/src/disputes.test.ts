@@ -225,6 +225,29 @@ describe("operator actions", () => {
     expect(mem.audit.map((a) => a.action)).toEqual(["operator.accept-claim", "paypal.accept-claim.failed"]);
   });
 
+  test("PayPal unreachable is a retryable 503 with a message, and the failure is audited", async () => {
+    const paypal = {
+      ...createMockClient(),
+      acceptClaim: async () => {
+        throw new PayPalError(
+          502,
+          "AGENT_TOOLKIT_ERROR",
+          undefined,
+          "getaddrinfo EAI_AGAIN api.sandbox.paypal.com",
+        );
+      },
+    };
+    const { app, mem } = await setup(paypal);
+    const res = await post(app, "/disputes/PP-D-2/actions/accept-claim");
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["retry-after"]).toBe("5");
+    expect(res.json()).toEqual({
+      error: "paypal_unavailable",
+      message: "PayPal accept-claim failed; try again",
+    });
+    expect(mem.audit.map((a) => a.action)).toEqual(["operator.accept-claim", "paypal.accept-claim.failed"]);
+  });
+
   test("make-offer is out of scope, unknown actions and disputes are 404", async () => {
     const { app } = await setup();
     expect((await post(app, "/disputes/PP-D-1/actions/make-offer")).statusCode).toBe(501);

@@ -45,11 +45,20 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
     pending ??= (async () => {
       try {
         const basic = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64");
-        const res = await config.fetch(`${config.baseUrl}/v1/oauth2/token`, {
-          method: "POST",
-          headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
-          body: "grant_type=client_credentials",
-        });
+        // Asking for a token is always safe to repeat; a DNS blip or reset connection gets two more tries.
+        let res: Response | undefined;
+        for (let attempt = 1; !res; attempt++) {
+          try {
+            res = await config.fetch(`${config.baseUrl}/v1/oauth2/token`, {
+              method: "POST",
+              headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
+              body: "grant_type=client_credentials",
+            });
+          } catch (err) {
+            if (attempt >= 3) throw err;
+            await new Promise((r) => setTimeout(r, 500 * attempt));
+          }
+        }
         if (!res.ok) throw await toError(res);
         const json = (await res.json()) as { access_token: string; expires_in: number };
         token = { value: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };

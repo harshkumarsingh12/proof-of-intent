@@ -173,10 +173,13 @@ export async function executeDisputeAction(
     }
 
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    // The API's human message first ("PayPal accept-claim failed; try again"), then its code, then the status.
     const errorMessage =
-      typeof body?.error === "string"
-        ? body.error
-        : `Action rejected by API (${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
+      typeof body?.message === "string"
+        ? body.message
+        : typeof body?.error === "string"
+          ? body.error
+          : `Action rejected by API (${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
 
     return {
       success: false,

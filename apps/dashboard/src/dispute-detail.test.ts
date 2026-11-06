@@ -251,6 +251,16 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     expect(failureResult.status).toBe(501);
     expect(failureResult.error).toBe("not_implemented");
 
+    // The API's human message is what the operator sees, not the bare status.
+    const unavailable = (async () => ({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      json: async () => ({ error: "paypal_unavailable", message: "PayPal accept-claim failed; try again" }),
+    })) as unknown as typeof fetch;
+    const retry = await executeDisputeAction("PP-D-1001", "accept-claim", {}, { apiBaseUrl: "http://example.test", fetchFn: unavailable });
+    expect(retry.error).toBe("PayPal accept-claim failed; try again");
+
     // 3. Network error returns failure, never success
     const mockNetworkErrorFetch = (async () => {
       throw new Error("network timeout");

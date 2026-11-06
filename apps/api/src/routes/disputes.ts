@@ -254,7 +254,8 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         return reply.code(409).send({ error: "paypal_refused", message: err.message, issue: err.issue });
       }
       return reply
-        .code(502)
+        .code(503)
+        .header("retry-after", "5")
         .send({ error: "paypal_unavailable", message: "PayPal tracking failed; try again" });
     }
     await db.appendAudit({
@@ -396,7 +397,8 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
       }
       req.log.error({ err, disputeId: d.id, action }, "dispute action failed");
       return reply
-        .code(502)
+        .code(503)
+        .header("retry-after", "5")
         .send({ error: "paypal_unavailable", message: `PayPal ${action} failed; try again` });
     }
     await db.appendAudit({ actor: "api", action: `paypal.${action}`, subjectId: d.id, requestBody: request });

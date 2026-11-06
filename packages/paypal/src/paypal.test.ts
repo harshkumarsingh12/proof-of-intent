@@ -508,6 +508,62 @@ describe("Agent Toolkit transport (sandbox disputes and tracking)", () => {
     ).rejects.toMatchObject({ status: 422, issue: "INVALID_TRANSACTION_ID" });
   });
 
+  test("a token or DNS failure is retried (nothing reached PayPal); a PayPal refusal is not", async () => {
+    let calls = 0;
+    const flaky: Record<string, ToolkitTool> = {
+      accept_dispute_claim: {
+        execute: (async () => {
+          calls++;
+          return JSON.stringify(
+            calls === 1
+              ? {
+                  error: {
+                    message: "Failed to fetch access token: getaddrinfo EAI_AGAIN api.sandbox.paypal.com",
+                    type: "paypal_error",
+                  },
+                }
+              : { links: [] },
+          );
+        }) as ToolkitTool["execute"],
+      },
+      get_dispute: {
+        execute: (async () => {
+          calls++;
+          return JSON.stringify({
+            ok: false,
+            status: 422,
+            code: "PAYPAL_API_HTTP_ERROR",
+            message: "NOT_ELIGIBLE",
+          });
+        }) as ToolkitTool["execute"],
+      },
+    };
+    await toolkitDisputes(flaky).acceptClaim("PP-D-1", "note");
+    expect(calls).toBe(2);
+    calls = 0;
+    await expect(toolkitDisputes(flaky).getDispute("PP-D-1")).rejects.toMatchObject({ status: 422 });
+    expect(calls).toBe(1);
+  });
+
+  test("the sandbox client retries its own token request on a network error", async () => {
+    let tokenTries = 0;
+    const client = createPayPalClient("sandbox", {
+      clientId: "id",
+      clientSecret: "secret",
+      webhookId: "WH-1",
+      fetch: async (url) => {
+        if (String(url).endsWith("/v1/oauth2/token")) {
+          tokenTries++;
+          if (tokenTries === 1) throw new TypeError("fetch failed (getaddrinfo EAI_AGAIN)");
+          return Response.json({ access_token: "t", expires_in: 32400 });
+        }
+        return Response.json({ links: [] });
+      },
+    });
+    await client.sendMessage("PP-D-1", "hello");
+    expect(tokenTries).toBe(2);
+  });
+
   test("a tool that isn't enabled fails loudly", async () => {
     await expect(toolkitDisputes({}).getDispute("PP-D-1")).rejects.toThrow("not enabled");
   });
