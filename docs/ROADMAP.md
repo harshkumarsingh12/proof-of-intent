@@ -35,7 +35,7 @@ of every `ci` run.
 | Buyer app: intent form, browser key, signing, PayPal button         | Sristee         | ✅ `/shop`: browser key, signed intent, agent cart, PayPal button (mock + sandbox) (#23); Playwright smoke ✅ (`pnpm smoke:shop`)                               |
 | J1 semantic fit + replay mode                                       | Sumedha         | ✅ J1 (prompt `j1-v1`), replay for the fixture carts, `pnpm ai:record`; full eval set is #43                                                                    |
 | Worker skeleton on fixtures                                         | Sikruti         | ✅ Intake, classification and evidence (#54–#57); runs as an inbox poller over `webhook_events` instead of pg-boss (#82), with a `list_disputes` catch-up (#59) |
-| Dashboard shell: orders grid, verification queue, theme             | Sikruti         | Shell, theme and home ✅ (#75, #76); orders grid and verification queue pending                                                                                 |
+| Dashboard shell: orders grid, verification queue, theme             | Sikruti         | Shell, theme, home ✅ (#75, #76); orders grid ✅, verification queue as a read-only "Checkout verdicts" tab ✅ (approve and reject wait on step-up)             |
 
 **Done when:** a signed mandate is verified, a sandbox order is authorized and captured with the pointer in
 `custom_id`, and the dashboard grid shows it.

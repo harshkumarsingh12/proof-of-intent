@@ -39,7 +39,8 @@ the team must be able to work before the sandbox is wired, hence a mock with the
 - **Stages, as observed on the sandbox (Nov 5, dispute `PP-R-NSZ-10196423`).** A buyer's report opens at the
   `INQUIRY` stage, where PayPal offers the seller only `send_message`, `make_offer`, `accept_claim` and `escalate`.
   `provide-evidence` and `require-evidence` are refused there (`ACTION_NOT_ALLOWED_IN_CURRENT_DISPUTE_STATE`).
-  After the seller escalates, PayPal moves it to `CHARGEBACK` within about a minute and offers `provide_evidence`.
+  After the seller escalates, PayPal moves it to `CHARGEBACK` and offers `provide_evidence`: about a minute on Nov 5, about three minutes on the
+  hosted runs of Nov 7, so poll `GET /disputes/:id/paypal-actions` instead of waiting a fixed time.
   So the copilot's **defend** path is: at inquiry, send the buyer a message summarizing the signed mandate (and
   escalate if they don't withdraw); at claim, submit the attestation PDF. **Concede** is `accept_claim` at either
   stage. The worker (spec 0005) must read the allowed actions from the links, not assume them.
