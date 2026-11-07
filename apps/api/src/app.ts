@@ -34,6 +34,30 @@ export interface AppDeps {
    * email provider is wired yet (the link only locates the cart: approving it needs the shopper's own key).
    */
   stepUp?: Partial<StepUpConfig>;
+  /** How long `/readyz` waits for the database to answer `select 1`. Default 2000 ms. */
+  readyDbTimeoutMs?: number;
+}
+
+/**
+ * Whether Postgres answers `select 1` within `timeoutMs`. The pool has no connect timeout of its own, so a host that
+ * accepts nothing (a stale network, a dropped route) would otherwise hang the request instead of failing it.
+ */
+async function databaseAnswers(db: Db, timeoutMs: number, log: (reason: string) => void): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      db.ping(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`no answer within ${timeoutMs} ms`)), timeoutMs);
+      }),
+    ]);
+    return true;
+  } catch (err) {
+    log((err as Error).message);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -95,14 +119,26 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get("/healthz", async () => ({ status: "ok" }));
 
-  // Simplification: readiness reports config only; add a DB ping once a route depends on it at startup.
-  app.get("/readyz", async () => ({
-    status: "ok",
-    paypalMode: parseMode(process.env.PAYPAL_MODE),
-    database: deps.db ? "configured" : "not_configured",
-    // Deliveries PayPal has made to POST /webhooks/paypal and passed verification (spec 0004 §Webhooks, #19).
-    webhooks: await deps.db?.webhookStats().catch(() => null),
-  }));
+  // Readiness means the routes can do their work, so it asks the database (#120). On Nov 6 and Nov 7 the API lost its
+  // route to Postgres (`getaddrinfo ENOTFOUND postgres`): every route answered 500 while this said ok. Without a
+  // DATABASE_URL (mock demos) there is nothing to ask and it stays ok. /healthz is liveness only and never touches Postgres.
+  app.get("/readyz", async (_req, reply) => {
+    const paypalMode = parseMode(process.env.PAYPAL_MODE);
+    if (!deps.db) return { status: "ok", paypalMode, database: "not_configured", webhooks: undefined };
+    const up = await databaseAnswers(deps.db, deps.readyDbTimeoutMs ?? 2000, (reason) =>
+      app.log.error({ reason }, "readyz: the database did not answer"),
+    );
+    if (!up) {
+      return reply.code(503).send({ status: "unavailable", paypalMode, database: "unreachable", webhooks: null });
+    }
+    return {
+      status: "ok",
+      paypalMode,
+      database: "configured",
+      // Deliveries PayPal has made to POST /webhooks/paypal and passed verification (spec 0004 §Webhooks, #19).
+      webhooks: await deps.db.webhookStats().catch(() => null),
+    };
+  });
 
   app.register(webhookRoutes, deps);
   app.register(disputeRoutes, deps);

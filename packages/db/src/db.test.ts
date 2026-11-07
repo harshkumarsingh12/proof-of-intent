@@ -73,6 +73,10 @@ describe.runIf(ADMIN_URL)("db", () => {
     await victim.close();
   });
 
+  test("ping resolves against a live database", async () => {
+    await expect(db.ping()).resolves.toBeUndefined();
+  });
+
   test("a nonce can be claimed once; the second claim returns false", async () => {
     expect(await db.claimNonce("n-test-1")).toBe(true);
     expect(await db.claimNonce("n-test-1")).toBe(false);
@@ -375,5 +379,14 @@ describe.runIf(ADMIN_URL)("db", () => {
         ["x".repeat(128), "a".repeat(64)],
       ),
     ).rejects.toThrow();
+  });
+});
+
+// Needs no Postgres: nothing listens on port 1, which is how an unreachable database looks to /readyz (#120).
+describe("db ping", () => {
+  test("rejects when the database can't be reached", async () => {
+    const db = createDb("postgres://poi:poi@127.0.0.1:1/poi");
+    await expect(db.ping()).rejects.toThrow();
+    await db.close();
   });
 });

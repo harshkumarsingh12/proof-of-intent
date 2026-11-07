@@ -155,6 +155,8 @@ export interface WebhookStats {
 }
 
 export interface Db {
+  /** A cheap `select 1`: resolves when Postgres answers, rejects when it can't be reached. Used by `/readyz`. */
+  ping(): Promise<void>;
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
   appendAudit(entry: AuditEntry): Promise<void>;
@@ -257,6 +259,10 @@ export function createDb(databaseUrl: string): Db {
   );
 
   return {
+    async ping() {
+      await pool.query("select 1");
+    },
+
     async claimNonce(nonce) {
       const res = await pool.query("insert into nonces (nonce) values ($1) on conflict (nonce) do nothing", [
         nonce,
