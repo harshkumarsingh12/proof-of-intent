@@ -13,6 +13,10 @@ function relay(res: Response): Response {
   const headers = new Headers({ "content-type": res.headers.get("content-type") ?? "application/json" });
   const disposition = res.headers.get("content-disposition");
   if (disposition) headers.set("content-disposition", disposition);
+  for (const name of ["x-poi-ai-mode", "x-poi-ai-prompt-version"]) {
+    const value = res.headers.get(name);
+    if (value) headers.set(name, value);
+  }
   return new Response(res.body, { status: res.status, headers });
 }
 

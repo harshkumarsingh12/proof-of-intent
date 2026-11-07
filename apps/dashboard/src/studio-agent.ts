@@ -8,6 +8,10 @@ import {
   type AgLlmResponse,
 } from "ag-studio";
 
+/** The "what needs my attention" starter. The AI package answers this exact question locally (packages/ai/src/studio.ts). */
+export const ATTENTION_STARTER_PROMPT =
+  "List the disputes and tell me which ones are waiting for my response.";
+
 export const tools = [
   {
     name: "explain_dispute",
@@ -205,7 +209,7 @@ export const createStudioAi =
           },
           {
             label: "What needs my attention?",
-            prompt: "List the disputes and tell me which ones are waiting for my response.",
+            prompt: ATTENTION_STARTER_PROMPT,
           },
         ],
         agents: [
