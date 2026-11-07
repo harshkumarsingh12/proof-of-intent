@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { parsePayPalMode } from "../src/merchant";
 import { fontStack, themeCss, v } from "../src/theme";
 import { AppShell } from "./AppShell";
+import { studioEnabled } from "./analytics/studio/enabled";
 
 export const metadata = { title: "Proof of Intent · Operations" };
 
@@ -17,8 +18,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <style dangerouslySetInnerHTML={{ __html: themeCss() }} />
       </head>
-      <body style={{ fontFamily: fontStack, margin: 0, background: v("bg"), color: v("text"), lineHeight: 1.5 }}>
-        <AppShell mode={mode}>{children}</AppShell>
+      <body
+        style={{ fontFamily: fontStack, margin: 0, background: v("bg"), color: v("text"), lineHeight: 1.5 }}
+      >
+        <AppShell mode={mode} studio={studioEnabled()}>
+          {children}
+        </AppShell>
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fetchDisputeDetailDetailed, fetchDisputesDetailed, serverApiBaseUrl } from "../../../src/api";
+import { studioExamples } from "../../../src/studio-agent";
 import { checkRows, disputeRows } from "../../../src/studio-data";
 import { pageSubtitle, pageTitle } from "../../../src/theme";
 import { studioEnabled } from "./enabled";
@@ -33,7 +34,13 @@ export default async function StudioPage() {
         Read policy findings, compare agent platforms, and prepare buyer replies for review.
       </p>
       {licenseKey && data && !data.isFallback ? (
-        <StudioView licenseKey={licenseKey} disputes={disputeRows(details)} checks={checkRows(details)} />
+        <StudioView
+          licenseKey={licenseKey}
+          disputes={disputeRows(details)}
+          checks={checkRows(details)}
+          examples={studioExamples(details)}
+          aiLive={process.env.AI_MODE === "live"}
+        />
       ) : (
         <p>
           Studio is unavailable on this deployment. Analytics and Disputes are available from the dashboard.

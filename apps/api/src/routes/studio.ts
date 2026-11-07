@@ -89,11 +89,14 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           ...(rec.mandateHash ? { mandateHash: rec.mandateHash } : {}),
         };
       } catch (error) {
-        if (isAiUnavailable(error))
+        if (isAiUnavailable(error)) {
+          // The caller only sees "unavailable"; the log says why (no recording, invalid output, timeout, budget).
+          req.log.warn({ reason: (error as Error).message }, "Studio AI unavailable");
           return reply.code(503).send({
             error: "studio_ai_unavailable",
             message: "Studio AI is unavailable. The Analytics and Disputes views are still available.",
           });
+        }
         if (error instanceof PayPalError && error.status === 404) {
           return reply.code(404).send({ error: "dispute_not_found", message: "PayPal has no such dispute" });
         }
