@@ -60,6 +60,48 @@ No API or contract changes. Buyer app only: `src/voice.ts`, `app/shop/useVoice.t
 4. Voice code never touches the "agent pays alone" setting. _(unit + browser smoke)_
 5. Without speech recognition the microphone is hidden and the shop still works. _(browser smoke)_
 
+## Chat design (`apps/buyer/src/chat.ts`, `chat-server.ts`, `app/shop/ChatPanel.tsx`)
+
+`POST /api/agent/chat` with `{ messages, context? }` answers `{ source, text, products, suggestion?, note? }`. One JSON reply (no
+streaming). Off unless `BUYER_CHAT=1` (runtime, default off).
+
+- **Retrieval first.** The free models don't reliably decide to look something up themselves (Nemotron answered "black" for a
+  product's color without calling the lookup tool; spec 0006), so the server gathers every fact by plain code (`gatherFacts`:
+  catalog search by the words of the last few messages, a comparison, the limits, the last verdict) and the model only phrases
+  them (`factsForModel`: prices as `$74.00`, never cents). No tools are offered to the model at all.
+- **Two things are never left to a model.** What the merchant decided about the shopper's money (a refusal, a hold, an approval)
+  is fixed text, because it has exact wording ("no PayPal order was created and nothing was charged") that both free models
+  paraphrased away or blurred in testing. And when the shopper asks the assistant to buy, sign or pay, the answer always starts by
+  saying plainly that it can't, whatever the model wrote.
+- **A guard** (`answerIsGrounded`) rejects an answer that states a price or SKU that isn't in the facts, or talks in cents; the plain
+  answer (`scriptedChat`, composed from the same facts) is used instead, and also when there is no model, the model fails or says
+  nothing. So what the shopper reads is never worse than the store's own data. The guard catches hallucination, not a determined
+  shopper: the assistant can't buy or change anything either way.
+- **What the client may send** (strict, unknown keys refused): up to 8 messages of at most 500 characters (3,000 in total), the last
+  from the shopper; as context only the limits (price, item, color, days, confirm-each-cart) and the last verdict's outcome and reason
+  codes. Never the signed intent, ids, wallet state or an address. Text that looks like a key, a token, a signed record or one of our
+  ids is refused with a 400, not answered. Emails are removed before any model sees the words.
+- **Cost and abuse:** a per-IP limit (10 a minute, 60 an hour; `cf-connecting-ip`, else `x-forwarded-for`; in memory, one process),
+  and `BUYER_CHAT_DAILY_LIMIT` (default 150 live model calls a day per process; 0 answers everything from the store's data) separate
+  from the shop's overall `AI_DAILY_CALL_LIMIT`, so chat can't use up the calls checkout needs. Past the cap, or in replay mode, the
+  answer is the plain one and says so.
+- **The only action** the chat offers is "Use these limits", which fills the limits form (the shopper's own "ask me before every
+  purchase" switch is kept) for them to review and sign. The suggested wording is the demo preset's when the request is exactly a
+  preset (the merchant's recorded checks are keyed on it), the shopper's own words when they phrased a purchase, and a clean statement
+  ("Grey running jackets under $70.") for a question like "show me…".
+- `pnpm chat:eval` runs the hard cases against the real model (an invented product, a prompt injection, "buy it for me", a refusal,
+  a comparison); `--backup` runs them on the backup. Result on Nov 7: 6 of 6 on NVIDIA Nemotron 3.5 Lightning and on Groq
+  `gpt-oss-120b`, after fixing what the first run found (prices read as cents, "nothing was charged" paraphrased away, markdown).
+
+## Chat acceptance criteria
+
+6. The chat only ever returns text, product information and unsigned limits; it has no way to sign, buy or propose a checkout. _(unit + browser smoke)_
+7. A price or SKU the store doesn't have never reaches the shopper; an invented one is replaced by the plain answer. _(unit)_
+8. A refusal is always explained with "nothing was charged", in fixed text. _(unit + browser smoke + live eval)_
+9. Asked to buy, sign or pay, the answer says plainly that it can't. _(unit + live eval)_
+10. A pasted key, token or signed record is refused; context outside the allowed shape is refused; the per-IP limit and the daily cap hold. _(unit)_
+
 ## Out of scope here
 
-The buyer chat (next PR in this spec), streaming replies, on-device or server-side speech recognition.
+Streaming replies, on-device or server-side speech recognition, voice input for the chat, near-miss suggestions (next PR), and a
+chat on the merchant dashboard (the Studio chat, spec 0007).

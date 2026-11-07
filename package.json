@@ -28,6 +28,7 @@
     "sandbox:vault-wallet": "tsx --env-file=.env scripts/sandbox/vault-wallet.ts",
     "sandbox:webhook-check": "tsx --env-file=.env scripts/sandbox/webhook-check.ts",
     "ai:record": "tsx --env-file=.env scripts/ai/record-j1.ts",
+    "chat:eval": "tsx --env-file=.env scripts/ai/chat-eval.ts",
     "ai:check": "tsx --env-file=.env scripts/ai/check-providers.ts",
     "studio:record": "tsx scripts/ai/record-studio.ts",
     "eval": "tsx scripts/ai/eval.ts",

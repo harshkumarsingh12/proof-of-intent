@@ -131,27 +131,40 @@ export function draftIntent(args: DraftArgs): IntentDraft {
 const PRICE =
   /\$\s*(\d{1,6}(?:\.\d{1,2})?)|(\d{1,6}(?:\.\d{1,2})?)\s*(?:usd|dollars?|bucks)|(?:under|below|max(?:imum)?|up to|at most)\s*(\d{1,6}(?:\.\d{1,2})?)/;
 
-/** The replay-mode drafter: no model, so read the price, color and category straight out of the words. */
-export function scriptedDraft(text: string): IntentDraft {
-  const lower = text.toLowerCase();
-  const m = PRICE.exec(lower);
+/** The dollar amount in a sentence ("under $80", "80 dollars", "up to 79.99"), or undefined. */
+export function priceUsd(text: string): number | undefined {
+  const m = PRICE.exec(text.toLowerCase());
   const amount = m?.[1] ?? m?.[2] ?? m?.[3];
-  const color = COLORS.find((c) => lower.includes(c));
-  const have = new Set(words(lower).map(stem));
-  const category = CATEGORIES.map((c) => ({
+  return amount === undefined ? undefined : Number(amount);
+}
+
+/** The first store color the sentence names, or undefined. */
+export const colorFrom = (text: string): string | undefined => {
+  const lower = text.toLowerCase();
+  return COLORS.find((c) => lower.includes(c));
+};
+
+/** The store category the sentence is most about, or undefined when no word of any category appears. */
+export function categoryFrom(text: string): string | undefined {
+  const have = new Set(words(text.toLowerCase()).map(stem));
+  const best = CATEGORIES.map((c) => ({
     c,
     score: words(categoryLabel(c)).filter((w) => have.has(stem(w))).length,
   })).sort((a, b) => b.score - a.score)[0];
-  if (!amount) throw new Error("Say the most you want to spend, like “under $80”.");
-  if (!color) throw new Error(`Say a color (${COLORS.join(", ")}).`);
-  if (!category || category.score === 0)
-    throw new Error("Say what kind of item: jacket, shoes, base layer or socks.");
-  return draftIntent({ description: text, max_price_usd: Number(amount), category: category.c, color });
+  return best && best.score > 0 ? best.c : undefined;
 }
 
-// ---------- request_checkout ----------
+/** The replay-mode drafter: no model, so read the price, color and category straight out of the words. */
+export function scriptedDraft(text: string): IntentDraft {
+  const amount = priceUsd(text);
+  const color = colorFrom(text);
+  const category = categoryFrom(text);
+  if (amount === undefined) throw new Error("Say the most you want to spend, like “under $80”.");
+  if (!color) throw new Error(`Say a color (${COLORS.join(", ")}).`);
+  if (!category) throw new Error("Say what kind of item: jacket, shoes, base layer or socks.");
+  return draftIntent({ description: text, max_price_usd: amount, category, color });
+}
 
-/** What the agent server answers for one proposed cart. Kept structural so tests don't need the network. */
 export interface CheckoutAnswer {
   status: number;
   body: unknown;
@@ -500,7 +513,7 @@ export function liveModelFromEnv(env: NodeJS.ProcessEnv = process.env): Language
 export const redact = (text: string): string =>
   text.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]").replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]");
 
-const dataBlock = (tag: string, value: unknown): string =>
+export const dataBlock = (tag: string, value: unknown): string =>
   `<${tag}>\n${JSON.stringify(value, null, 2).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")}\n</${tag}>`;
 
 const SHARED_RULES =

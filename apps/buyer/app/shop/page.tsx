@@ -26,6 +26,8 @@ export default function Shop() {
             paypalClientId: sandbox ? process.env.PAYPAL_CLIENT_ID || undefined : undefined,
             // Voice ordering (spec 0010) is off until BUYER_VOICE=1; read at runtime like the PayPal mode.
             voiceEnabled: process.env.BUYER_VOICE === "1",
+            // The shop assistant (spec 0010) is off until BUYER_CHAT=1, also read at runtime.
+            chatEnabled: process.env.BUYER_CHAT === "1",
           }}
         />
       </main>

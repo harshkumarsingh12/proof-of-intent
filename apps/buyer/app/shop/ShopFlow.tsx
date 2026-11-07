@@ -32,6 +32,7 @@ import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact }
 import { stepUpApproval, stepUpListProof } from "../../src/stepup";
 import { initialVoice, MIN_READBACK_MS, READBACK_TIMEOUT_MS, readBack, voiceReducer } from "../../src/voice";
 import { removeProof, setupProof } from "../../src/wallet";
+import ChatPanel from "./ChatPanel";
 import { useSpeech } from "./useVoice";
 
 export interface ShopConfig {
@@ -40,6 +41,8 @@ export interface ShopConfig {
   paypalClientId?: string;
   /** Voice ordering (spec 0010), off unless BUYER_VOICE=1. */
   voiceEnabled?: boolean;
+  /** The shop assistant (spec 0010), off unless BUYER_CHAT=1. */
+  chatEnabled?: boolean;
 }
 
 /** The form for a category's demo words (catalog PRESETS), which replay mode has recorded J1 answers for. */
@@ -840,6 +843,22 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           </div>
         )}
       </section>
+
+      {config.chatEnabled && (
+        <ChatPanel
+          form={form}
+          lastVerdict={
+            checkout
+              ? { outcome: checkout.res.verdict.outcome, reasons: checkout.res.verdict.reasons }
+              : undefined
+          }
+          onUseLimits={(suggested) => {
+            // Only the limits move: the shopper's own "ask me before every purchase" switch stays as they set it.
+            setForm({ ...suggested, confirmEachCart: formRef.current.confirmEachCart });
+            setDraftNote("Filled in from the assistant. Check the limits, then sign.");
+          }}
+        />
+      )}
 
       <section className={`panel${signed ? "" : " muted"}`}>
         <h2>
