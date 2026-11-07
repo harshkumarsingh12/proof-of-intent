@@ -7,7 +7,9 @@
  */
 export {
   AiUnavailableError,
+  fallbackFromEnv,
   isAiUnavailable,
+  isFailoverError,
   isModelUnavailableError,
   liveConfigFromEnv,
   parseAiMode,

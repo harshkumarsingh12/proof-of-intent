@@ -11,6 +11,8 @@ import {
   limitBreaks,
   limitsOf,
   draftTools,
+  fallbackFromEnv,
+  isFailoverError,
   isModelUnavailableError,
   parseAgentMode,
   providerOptionsFor,
@@ -29,6 +31,8 @@ import {
 } from "./agent";
 // The buyer keeps its own copy of the provider rules (it doesn't depend on packages/ai); these tests keep them identical.
 import {
+  fallbackFromEnv as sharedFallbackFromEnv,
+  isFailoverError as sharedIsFailoverError,
   isModelUnavailableError as sharedIsModelUnavailableError,
   providerOptionsFor as sharedProviderOptionsFor,
 } from "../../../packages/ai/src/runtime";
@@ -532,6 +536,41 @@ describe("provider rules (copy of packages/ai)", () => {
       expect(isModelUnavailableError(err)).toBe(sharedIsModelUnavailableError(err));
   });
 
+  test("what counts as a failover, and how the backup is read from the environment, match packages/ai exactly", () => {
+    for (const err of [
+      ...[400, 401, 403, 404, 408, 410, 422, 429, 500, 503].map((statusCode) =>
+        Object.assign(new Error(`HTTP ${statusCode}`), { statusCode }),
+      ),
+      Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }),
+      new Error("fetch failed"),
+      new Error("getaddrinfo EAI_AGAIN host"),
+      new Error("invalid api key"),
+      new Error("No object generated"),
+      undefined,
+    ])
+      expect(isFailoverError(err)).toBe(sharedIsFailoverError(err));
+
+    const primary = { provider: "nvidia", model: "m-1", apiKey: "key", baseURL: "https://nv.test/v1" };
+    const quiet = vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const env of [
+      {},
+      { AI_FALLBACK_MODEL: "m-2" },
+      { AI_FALLBACK_MODEL: "m-1" },
+      { AI_FALLBACK_PROVIDER: "groq", AI_FALLBACK_MODEL: "g-1", AI_FALLBACK_API_KEY: "gsk" },
+      { AI_FALLBACK_PROVIDER: "groq", AI_FALLBACK_MODEL: "g-1" },
+      { AI_FALLBACK_PROVIDER: "groq", AI_FALLBACK_API_KEY: "gsk" },
+      { AI_FALLBACK_PROVIDER: "other", AI_FALLBACK_MODEL: "x", AI_FALLBACK_API_KEY: "k" },
+      {
+        AI_FALLBACK_PROVIDER: "other",
+        AI_FALLBACK_MODEL: "x",
+        AI_FALLBACK_API_KEY: "k",
+        AI_FALLBACK_BASE_URL: "https://o.test/v1",
+      },
+    ] as NodeJS.ProcessEnv[])
+      expect(fallbackFromEnv(env, primary)).toEqual(sharedFallbackFromEnv(env, primary));
+    quiet.mockRestore();
+  });
+
   test("the agent's model call carries the thinking switch for nvidia and nothing for another provider", async () => {
     const seen: Record<string, unknown>[] = [];
     const record = (params: unknown) => seen.push(params as Record<string, unknown>);
@@ -545,7 +584,7 @@ describe("provider rules (copy of packages/ai)", () => {
     expect(seen.at(-1)?.providerMetadata).toBeUndefined();
   });
 
-  test("a gone primary model is answered by the fallback once; other failures are not retried", async () => {
+  test("a primary that fails in a way a backup can fix is answered by the backup, once; other failures surface", async () => {
     const calls: string[] = [];
     const model = (name: string, fail?: unknown) =>
       new MockLanguageModelV1({
@@ -561,22 +600,26 @@ describe("provider rules (copy of packages/ai)", () => {
           };
         },
       });
-    const goneError = Object.assign(new Error("model not found"), { statusCode: 404 });
+    const http = (statusCode: number) => Object.assign(new Error(`HTTP ${statusCode}`), { statusCode });
     const params = { inputFormat: "prompt", mode: { type: "regular" }, prompt: [] } as never;
 
-    const withBackup = withFallback(model("primary", goneError), model("backup"));
-    expect((await withBackup.doGenerate(params)).text).toBe("backup");
-    expect(calls).toEqual(["primary", "backup"]);
+    for (const fail of [http(404), http(429), http(503), new Error("fetch failed")]) {
+      calls.length = 0;
+      const withBackup = withFallback(model("primary", fail), model("backup"));
+      expect((await withBackup.doGenerate(params)).text).toBe("backup");
+      expect(calls).toEqual(["primary", "backup"]);
+    }
 
-    calls.length = 0;
-    const limited = withFallback(
-      model("primary", Object.assign(new Error("slow down"), { statusCode: 429 })),
-      model("backup"),
-    );
-    await expect(limited.doGenerate(params)).rejects.toThrow("slow down");
-    expect(calls).toEqual(["primary"]);
+    // A bad key or a rejected request is not hidden by the backup.
+    for (const fail of [http(400), http(401), http(403)]) {
+      calls.length = 0;
+      await expect(withFallback(model("primary", fail), model("backup")).doGenerate(params)).rejects.toThrow(
+        /HTTP/,
+      );
+      expect(calls).toEqual(["primary"]);
+    }
 
-    // No fallback configured: the very same model comes back, untouched.
+    // No backup configured: the very same model comes back, untouched.
     const only = model("only");
     expect(withFallback(only)).toBe(only);
   });

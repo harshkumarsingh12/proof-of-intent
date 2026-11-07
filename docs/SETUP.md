@@ -116,8 +116,11 @@ Postgres for local work: `docker compose up -d postgres` and set
    `CUSTOMER.DISPUTE.RESOLVED`, `VAULT.PAYMENT-TOKEN.CREATED`. Put its id in `PAYPAL_WEBHOOK_ID`.
 5. For live model calls: `AI_MODE=live` plus `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`. NVIDIA is the default; `gemini`,
    `groq` and `openrouter` have their endpoints built in (any other OpenAI-compatible host needs `AI_BASE_URL`), and the
-   Nemotron thinking switch is sent to NVIDIA only. Optionally set `AI_FALLBACK_MODEL`: it is tried once, on the same
-   provider, when `AI_MODEL` has been retired or renamed (the free model lineups change without notice). After editing a prompt in
+   Nemotron thinking switch is sent to NVIDIA only. Optionally set a backup: `AI_FALLBACK_MODEL` alone is another
+   model on the same provider; with `AI_FALLBACK_PROVIDER=groq` and its own `AI_FALLBACK_API_KEY` it is a different provider
+   (Groq's endpoint is built in). It is tried once when the primary model is gone, rate limited (429), erroring (5xx) or
+   timing out; a bad key or a rejected request is never hidden by it. `pnpm ai:check` tests the primary and the backup
+   separately (a structured answer and a tool call each). After editing a prompt in
    `packages/ai/prompts/`, run `pnpm ai:record` to re-record the replay answers (it uses the live model).
 6. Merchant signing key: `pnpm keys:gen > merchant-key.pem`, then put it in `MERCHANT_SIGNING_KEY`.
 7. Operator actions: `OPERATOR_TOKEN` (e.g. `openssl rand -hex 32`) and `OPERATOR_PASSWORD`.
@@ -174,8 +177,9 @@ like `api.poi.iotkiit.in` would fail HTTPS. `https://poi-api.iotkiit.in/` return
 
    ```bash
    PAYPAL_MODE=mock                 # sandbox once the PayPal variables below are filled in
-   AI_MODE=replay
+   AI_MODE=replay                   # live for real model calls; then also AI_PROVIDER, AI_MODEL, AI_API_KEY
    AI_DAILY_CALL_LIMIT=500
+   # Optional backup model (Groq): AI_FALLBACK_PROVIDER=groq, AI_FALLBACK_MODEL=openai/gpt-oss-120b, AI_FALLBACK_API_KEY=<groq key>
    POSTGRES_PASSWORD=poi            # must match the password in DATABASE_URL
    DATABASE_URL=postgres://poi:poi@postgres:5432/poi
    MERCHANT_ID=merchant-trailhead
