@@ -400,7 +400,23 @@ export function isModelUnavailableError(err: unknown): boolean {
   );
 }
 
-/** Try the fallback model once when the primary is gone. Not sticky: the primary is tried first on every call. */
+/** Failures a backup can fix: a gone model, a rate limit (429), a provider error (408, 5xx), a timeout or no connection. */
+export function isFailoverError(err: unknown): boolean {
+  if (isModelUnavailableError(err)) return true;
+  const status = (err as { statusCode?: number } | null)?.statusCode;
+  if (status === 408 || status === 429 || (status !== undefined && status >= 500)) return true;
+  if (status !== undefined) return false;
+  const name = (err as { name?: string } | null)?.name ?? "";
+  const text = err instanceof Error ? err.message : String(err);
+  return (
+    name === "TimeoutError" ||
+    /timeout|timed out|fetch failed|network|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up/i.test(
+      text,
+    )
+  );
+}
+
+/** Try the backup model once when the primary fails in a way a backup can fix. Not sticky: the primary goes first every call. */
 export function withFallback(primary: LanguageModelV1, fallback?: LanguageModelV1): LanguageModelV1 {
   if (!fallback) return primary;
   return wrapLanguageModel({
@@ -410,7 +426,9 @@ export function withFallback(primary: LanguageModelV1, fallback?: LanguageModelV
         try {
           return await doGenerate();
         } catch (err) {
-          if (!isModelUnavailableError(err)) throw err;
+          if (!isFailoverError(err)) throw err;
+          // The primary's provider options travel in `params`, keyed by its provider name, so a backup on another
+          // provider never sees them.
           return fallback.doGenerate(params);
         }
       },
@@ -418,20 +436,64 @@ export function withFallback(primary: LanguageModelV1, fallback?: LanguageModelV
   });
 }
 
-/** AI_PROVIDER (default nvidia), AI_MODEL, AI_API_KEY, AI_BASE_URL and optional AI_FALLBACK_MODEL: what packages/ai reads. */
+interface Endpoint {
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseURL: string;
+}
+
+const warned = new Set<string>();
+const warnOnce = (message: string) => {
+  if (warned.has(message)) return;
+  warned.add(message);
+  console.warn(message);
+};
+
+/** The backup endpoint (AI_FALLBACK_*), or undefined: the same rules as `fallbackFromEnv` in packages/ai. */
+export function fallbackFromEnv(env: NodeJS.ProcessEnv, primary: Endpoint): Endpoint | undefined {
+  const model = env.AI_FALLBACK_MODEL?.trim();
+  const provider = env.AI_FALLBACK_PROVIDER?.trim() || primary.provider;
+  const sameProvider = provider === primary.provider;
+  const apiKey = env.AI_FALLBACK_API_KEY?.trim() || (sameProvider ? primary.apiKey : undefined);
+  const baseURL = env.AI_FALLBACK_BASE_URL?.trim() || (sameProvider ? primary.baseURL : BASE_URLS[provider]);
+  if (!model) {
+    if (env.AI_FALLBACK_PROVIDER?.trim() || env.AI_FALLBACK_API_KEY?.trim())
+      warnOnce(
+        "AI_FALLBACK_PROVIDER or AI_FALLBACK_API_KEY is set but AI_FALLBACK_MODEL is not: no backup model is configured.",
+      );
+    return undefined;
+  }
+  if (!apiKey) {
+    warnOnce(
+      `AI_FALLBACK_MODEL is set for provider "${provider}" but AI_FALLBACK_API_KEY is not: no backup is configured.`,
+    );
+    return undefined;
+  }
+  if (!baseURL) {
+    warnOnce(
+      `AI_FALLBACK_PROVIDER "${provider}" has no built-in endpoint: set AI_FALLBACK_BASE_URL. No backup is configured.`,
+    );
+    return undefined;
+  }
+  if (sameProvider && model === primary.model && apiKey === primary.apiKey && baseURL === primary.baseURL)
+    return undefined;
+  return { provider, model, apiKey, baseURL };
+}
+
+/** AI_PROVIDER (default nvidia), AI_MODEL, AI_API_KEY, AI_BASE_URL and the optional AI_FALLBACK_* backup: what packages/ai reads. */
 export function liveModelFromEnv(env: NodeJS.ProcessEnv = process.env): LanguageModelV1 {
   const provider = env.AI_PROVIDER?.trim() || "nvidia";
   const model = env.AI_MODEL?.trim();
   const apiKey = env.AI_API_KEY?.trim();
   const baseURL = env.AI_BASE_URL?.trim() || BASE_URLS[provider];
-  const fallbackModel = env.AI_FALLBACK_MODEL?.trim();
   const missing = !model ? "AI_MODEL" : !apiKey ? "AI_API_KEY" : !baseURL ? "AI_BASE_URL" : undefined;
   if (missing) throw new AgentUnavailableError(`AI_MODE=live but ${missing} is not set`);
-  const host = createOpenAICompatible({ name: provider, baseURL: baseURL!, apiKey: apiKey! });
-  return withFallback(
-    host.chatModel(model!),
-    fallbackModel && fallbackModel !== model ? host.chatModel(fallbackModel) : undefined,
-  );
+  const primary: Endpoint = { provider, model: model!, apiKey: apiKey!, baseURL: baseURL! };
+  const model_ = (e: Endpoint) =>
+    createOpenAICompatible({ name: e.provider, baseURL: e.baseURL, apiKey: e.apiKey }).chatModel(e.model);
+  const backup = fallbackFromEnv(env, primary);
+  return withFallback(model_(primary), backup ? model_(backup) : undefined);
 }
 
 /** Emails and phone-like numbers never reach a model (spec 0006). */

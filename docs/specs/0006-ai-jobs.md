@@ -111,6 +111,18 @@ schema validity 100% after retry.
   it is now sent to `nvidia` only (`providerOptionsFor`); before, `packages/ai` sent it to whatever provider was set and the
   buyer agent hardcoded `nvidia`. `gemini`, `groq` and `openrouter` have built-in OpenAI-compatible endpoints, so switching
   provider is an env change. The free lineups churn (Nemotron 3 Super left the free endpoints after Oct 19, 2026), so
-  `AI_FALLBACK_MODEL` is tried once on the same provider when the primary model is gone (HTTP 404/410 or a message naming
-  a missing, retired or renamed model, `isModelUnavailableError`); rate limits, timeouts and bad requests never switch
-  models. The buyer agent keeps its own copy of these rules (it doesn't depend on `packages/ai`); a test keeps them identical.
+  a backup is tried once when the primary fails in a way another model or provider can fix
+  (`isFailoverError`): the model is gone (404/410 or a message naming a missing, retired or renamed model), the free tier is
+  rate limited (429), the provider errors (408, 5xx) or the call times out or never connects. A rejected request (400), a bad
+  key (401/403) and an answer that fails validation are never hidden by it. `AI_FALLBACK_MODEL` alone is another model on the
+  same provider; with `AI_FALLBACK_PROVIDER` (for example `groq`, whose endpoint is built in) and its own
+  `AI_FALLBACK_API_KEY` it is a different provider. A half-configured backup is ignored with a warning, never half-used, and
+  the NVIDIA thinking switch is never sent to it. `pnpm ai:check` tests each endpoint on its own (a structured answer and a
+  tool call), so a working primary can't hide a broken backup. The buyer agent keeps its own copy of these rules (it doesn't depend on `packages/ai`); a test keeps them identical.
+- **Tool use on Nemotron 3.5 Lightning (Nov 7, `pnpm ai:check`).** Structured answers work (about 1 s), and tool calling works
+  **when forced** (`toolChoice: required`). The model does **not** reliably decide to call a tool on its own: asked the color of a
+  product with a lookup tool available, it answered "black" from nowhere, or said "Let me look it up" and stopped. (This is what
+  the Studio chat's retry for "Let me…" answers, and the buyer agent's very explicit prompts, work around.) So anything that
+  states facts to a shopper (a chat about products, prices, limits or a refusal) must **retrieve first**: the server looks
+  the facts up and puts them in the prompt as data, and the model only phrases them; it must not be trusted to fetch them itself.
+  `pnpm ai:check` reports this per endpoint ("calls a tool on its own"), so a backup model can be compared fairly.
