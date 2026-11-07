@@ -49,6 +49,12 @@ export interface MandateRecord {
   canonical: string;
   jws: string;
   kid: string;
+  /**
+   * When this merchant first saw the mandate, by its own clock: set on the first save and never changed. This, not the
+   * `created_at` or `timestamp` the signer wrote, is what a retired key is judged by (spec 0001, #162). Absent on a save
+   * means "now" (the database's clock).
+   */
+  seenAt?: string;
 }
 
 export interface VerdictRecord {
@@ -406,9 +412,10 @@ export function createDb(databaseUrl: string): Db {
 
     async saveMandate(m) {
       await pool.query(
-        `insert into mandates (hash, kind, mandate_id, canonical, jws, kid) values ($1, $2, $3, $4, $5, $6)
+        `insert into mandates (hash, kind, mandate_id, canonical, jws, kid, created_at)
+         values ($1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()))
          on conflict (hash) do nothing`,
-        [m.hash, m.kind, m.mandateId, m.canonical, m.jws, m.kid],
+        [m.hash, m.kind, m.mandateId, m.canonical, m.jws, m.kid, m.seenAt ?? null],
       );
     },
 
@@ -614,6 +621,7 @@ export function createDb(databaseUrl: string): Db {
             canonical: r.canonical,
             jws: r.jws,
             kid: r.kid,
+            seenAt: (r.created_at as Date).toISOString(),
           }
         : null;
     },
