@@ -384,14 +384,26 @@ describe("ai:check", () => {
   const toolResultIn = (b: Body) => b.messages?.at(-1)?.role === "tool";
 
   test("a working endpoint passes every check, and the key never appears in the result", async () => {
+    let forcedRequests = 0;
     const fetchImpl: typeof fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body)) as Body;
       if (!wantsColorTool(body)) return structuredAnswer();
+      if (body.tool_choice === "required") {
+        forcedRequests++;
+        // Groq: "required" on a request that follows the tool's result is a 400, because a sensible model now answers.
+        if (toolResultIn(body))
+          return Response.json(
+            { error: { message: "Tool choice is required, but model did not call a tool" } },
+            { status: 400 },
+          );
+      }
       return toolResultIn(body) ? text("It is grey.") : toolCall();
     };
     const result = await checkEndpoint(groq, fetchImpl);
     expect(result.structured).toMatchObject({ ok: true, detail: "answered fit=match" });
-    expect(result.tools).toMatchObject({ ok: true, detail: "called the tool 1 time" });
+    // The forced check is one step: it never sends a second "required" request after the tool's result.
+    expect(forcedRequests).toBe(1);
+    expect(result.tools).toMatchObject({ ok: true, detail: "called the tool" });
     expect(result.autoTools).toMatchObject({ ok: true });
     expect(JSON.stringify(result)).not.toContain("gsk_x");
   });
