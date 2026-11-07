@@ -101,7 +101,21 @@ streaming). Off unless `BUYER_CHAT=1` (runtime, default off).
 9. Asked to buy, sign or pay, the answer says plainly that it can't. _(unit + live eval)_
 10. A pasted key, token or signed record is refused; context outside the allowed shape is refused; the per-IP limit and the daily cap hold. _(unit)_
 
+## Near-miss suggestions (`apps/buyer/src/near-miss.ts`)
+
+After the merchant **refuses** a cart for the shopper's own limits (`AMOUNT_EXCEEDS_MAX`, `ATTRIBUTE_MISMATCH`), the refusal panel says
+what would have fit: the cart's price against the signed cap, the closest product in the store that already fits the signed limits,
+and one button that fills the limits form (a higher cap, or limits for that item). It is plain code over the catalog and the signed
+intent's constraints: no model, no network, and every figure in the text is the catalog's or the signed limits'.
+
+Rules: it never signs, buys or changes the signed intent; the button replaces the form values, drops the old signed intent and the
+verdict, and the shopper reviews and signs again. A cap is never lowered, and a raise is named in the text. Other refusals (expired
+intent, bad signature, replay, step-up) get no hint. Voice never applies it.
+
+11. A refusal for price or kind shows what would have fit, from catalog data only; other refusals show nothing. _(unit)_
+12. Applying a suggestion only fills the form: nothing is signed or ordered until the shopper signs again, and the patch always builds a valid intent. _(unit)_
+
 ## Out of scope here
 
-Streaming replies, on-device or server-side speech recognition, voice input for the chat, near-miss suggestions (next PR), and a
+Streaming replies, on-device or server-side speech recognition, voice input for the chat, and a
 chat on the merchant dashboard (the Studio chat, spec 0007).
