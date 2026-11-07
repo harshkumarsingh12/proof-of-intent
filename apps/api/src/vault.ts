@@ -10,7 +10,7 @@
  * Without the proof, anyone who knew a shopper key id could point that shopper at a wallet of their choosing.
  */
 import {
-  VaultProof,
+  ShopperProof,
   type ReasonCode,
   type VaultRemoveResponse,
   type VaultSaveResponse,
@@ -33,7 +33,7 @@ export interface VaultDeps {
 export const PROOF_MAX_AGE_MS = 5 * 60 * 1000;
 export const PROOF_MAX_SKEW_MS = 60 * 1000;
 
-type Failure = {
+export type Failure = {
   status: 403 | 404 | 409 | 502 | 503;
   body: { error: string; message: string; reasons?: ReasonCode[]; issue?: string };
 };
@@ -42,14 +42,14 @@ export type VaultSaveResult = { status: 200; body: VaultSaveResponse } | Failure
 export type VaultRemoveResult = { status: 200; body: VaultRemoveResponse } | Failure;
 export type VaultStatusResult = { status: 200; body: { wallet: boolean } } | Failure;
 
-type Shopper = KeyRecord & { shopperId: string };
+export type Shopper = KeyRecord & { shopperId: string };
 
 /** The shopper behind a valid, fresh proof for `purpose`, or the failure to send back. */
-async function checkProof(
+export async function checkProof(
   jws: string,
-  purpose: VaultProof["purpose"],
+  purpose: ShopperProof["purpose"],
   deps: Pick<VaultDeps, "db" | "now">,
-): Promise<{ shopper: Shopper; proof: VaultProof } | Failure> {
+): Promise<{ shopper: Shopper; proof: ShopperProof } | Failure> {
   const now = deps.now();
   const invalid = (reasons: ReasonCode[], message = "The proof was not signed by a registered shopper key") =>
     ({ status: 403, body: { error: "proof_invalid", message, reasons } }) satisfies Failure;
@@ -63,7 +63,7 @@ async function checkProof(
   const shopper = key as KeyRecord | null;
   if (!shopper?.shopperId || !keyValidAt(shopper, now)) return invalid(["UNKNOWN_KEY"]);
 
-  const proof = VaultProof.safeParse(sig.payload);
+  const proof = ShopperProof.safeParse(sig.payload);
   if (!proof.success) return invalid(["SCHEMA_INVALID"]);
   if (proof.data.purpose !== purpose)
     return invalid(["MANDATE_MISMATCH"], "The proof was signed for something else");
@@ -78,7 +78,7 @@ async function checkProof(
   return { shopper: shopper as Shopper, proof: proof.data };
 }
 
-const isFailure = (r: object): r is Failure => "status" in r;
+export const isFailure = (r: object): r is Failure => "status" in r;
 
 /** PayPal said no (4xx) or couldn't be reached; the same answers the dispute and checkout routes give. */
 function paypalFailure(err: unknown): Failure {

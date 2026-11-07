@@ -7,7 +7,13 @@
 //   4. PayPal approval, then the shopper countersigns the exact cart and the merchant captures or voids
 // Optional (#17, #36): save a PayPal wallet with Vault v3, then let the agent pay alone. The merchant runs the same
 // checks; an approved cart is charged to the saved wallet at once, and a step-up charges nothing.
-import type { CheckoutResponse, IntentMandate, ReasonCode } from "@poi/contracts";
+import type {
+  CheckoutResponse,
+  IntentMandate,
+  ReasonCode,
+  StepUpApproveResponse,
+  StepUpView,
+} from "@poi/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CATALOG,
@@ -23,6 +29,7 @@ import { buildIntent, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
 import { REASON_TEXT } from "../../src/reasons";
 import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact } from "../../src/signing";
+import { stepUpApproval, stepUpListProof } from "../../src/stepup";
 import { removeProof, setupProof } from "../../src/wallet";
 
 export interface ShopConfig {
@@ -171,6 +178,11 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string>();
   const [alone, setAlone] = useState(false);
+  // Carts the merchant is holding for this shopper (agent alone, not sure enough), fetched with a signed proof.
+  const [waiting, setWaiting] = useState<StepUpView[]>([]);
+  const [waitingBusy, setWaitingBusy] = useState<string>();
+  const [waitingError, setWaitingError] = useState<string>();
+  const [waitingPaid, setWaitingPaid] = useState<StepUpApproveResponse>();
   const [checkoutError, setCheckoutError] = useState<string>();
   const [approval, setApproval] = useState<Approval>();
   const [approveError, setApproveError] = useState<string>();
@@ -197,6 +209,41 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       cancelled = true;
     };
   }, [shopper]);
+
+  /** The carts waiting for this shopper: asked with a fresh signature from their key, so no link is needed. */
+  const refreshWaiting = useCallback(async () => {
+    if (!shopper) return;
+    try {
+      const proof = await signCompact(stepUpListProof(new Date()), shopper.key.privateKey, shopper.kid);
+      const res = await postJson<{ stepups: StepUpView[] }>("/api/stepups/pending", { proof_jws: proof });
+      if (!isError(res.body)) setWaiting(res.body.stepups);
+    } catch {
+      // The list is a convenience: the shopper's other steps don't depend on it.
+    }
+  }, [shopper]);
+
+  useEffect(() => {
+    void refreshWaiting();
+  }, [refreshWaiting]);
+
+  /** Approve a waiting cart: sign this step-up and this exact cart, and the merchant charges the saved wallet. */
+  const approveWaiting = async (view: StepUpView) => {
+    if (!shopper) return;
+    setWaitingBusy(view.stepup_id);
+    setWaitingError(undefined);
+    setWaitingPaid(undefined);
+    try {
+      const jws = await signCompact(stepUpApproval(view, new Date()), shopper.key.privateKey, shopper.kid);
+      const res = await postJson<StepUpApproveResponse>(`/api/stepups/${view.stepup_id}/approve`, {
+        approval_jws: jws,
+      });
+      if (isError(res.body)) setWaitingError(res.body.message);
+      else setWaitingPaid(res.body);
+      await refreshWaiting();
+    } finally {
+      setWaitingBusy(undefined);
+    }
+  };
 
   /** Vault v3: prove it's us, get PayPal's approval link, and go approve. PayPal sends us back to /shop/wallet. */
   const saveWallet = async () => {
@@ -247,6 +294,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     shopperLoad = undefined;
     setWallet("unknown");
     setAlone(false);
+    setWaiting([]);
     setShopper(undefined);
     setSigned(undefined);
     setCheckout(undefined);
@@ -294,6 +342,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         setCheckoutError(res.body.message);
       } else {
         setCheckout({ sku, res: res.body, alone: payAlone });
+        if (res.body.verdict.outcome === "STEP_UP") void refreshWaiting();
       }
     } finally {
       setBusySku(undefined);
@@ -362,6 +411,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         return;
       }
       setCheckout({ sku: last.sku, res: last.body, alone: payAlone });
+      if (last.body.verdict.outcome === "STEP_UP") void refreshWaiting();
       const refused = res.body.attempts.length - 1;
       setAgentNote(
         `${res.body.source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} proposed ${res.body.attempts.length} cart${res.body.attempts.length === 1 ? "" : "s"}${refused > 0 ? `; the merchant refused ${refused} before this one` : ""}.${res.body.message ? ` ${res.body.message}` : ""}`,
@@ -621,9 +671,8 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             {verdict.outcome === "REJECT" && <p>No PayPal order was created. Nothing was charged.</p>}
             {verdict.outcome === "STEP_UP" && checkout?.alone && (
               <p>
-                Nothing was charged and no PayPal order exists. The merchant holds this cart until you approve
-                it from a link it sends you (in this demo the link is only written to the merchant&apos;s
-                log).
+                Nothing was charged and no PayPal order exists. The merchant is holding this cart for you:
+                approve it below, or from the link it sends you.
               </p>
             )}
             <Reasons reasons={verdict.reasons} />
@@ -636,6 +685,45 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           </div>
         )}
       </section>
+
+      {(waiting.length > 0 || waitingPaid || waitingError) && (
+        <section className="panel">
+          <h2>Waiting for your approval</h2>
+          <p className="sub">
+            Your agent proposed these, but the merchant wasn&apos;t sure they&apos;re what you meant, so
+            nothing is charged until you approve. Approving signs that exact cart with your key; the merchant
+            checks it against your limits once more and charges your saved PayPal wallet.
+          </p>
+          {waiting.map((w) => (
+            <div className="verdict warn" key={w.stepup_id}>
+              <h3>
+                {w.lines.map((l) => l.title).join(", ")}: {money(w.total.value)}
+              </h3>
+              <Reasons reasons={w.reasons} />
+              <p className="meta">
+                Proposed by {w.agent_platform} · expires {new Date(w.expires_at).toLocaleString()}
+              </p>
+              <button
+                className="btn btn-primary btn-small"
+                disabled={waitingBusy !== undefined}
+                onClick={() => approveWaiting(w)}
+              >
+                {waitingBusy === w.stepup_id ? "Approving…" : "Approve and pay from my wallet"}
+              </button>
+            </div>
+          ))}
+          {waitingError && <p className="error">{waitingError}</p>}
+          {waitingPaid && (
+            <div className="verdict ok">
+              <h3>Paid</h3>
+              <p className="meta">
+                Capture <code>{waitingPaid.capture_id ?? "pending"}</code>. You approved this cart, so your
+                approval is on record with the signed intent.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className={`panel${(hasOrder && !approval) || paidAlone ? "" : " muted"}`}>
         <h2>

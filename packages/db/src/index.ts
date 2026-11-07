@@ -215,6 +215,9 @@ export interface Db {
   listVerdicts(page: Page): Promise<StoredVerdict[]>;
   createStepUp(s: StepUpRecord): Promise<void>;
   findStepUp(tokenHash: string): Promise<StoredStepUp | null>;
+  findStepUpById(id: string): Promise<StoredStepUp | null>;
+  /** A shopper key's step-ups still waiting for them (PENDING, unexpired at `now`), newest first. */
+  listPendingStepUps(shopperKid: string, now: string): Promise<StoredStepUp[]>;
   /**
    * PENDING → APPROVING, only while the link is unexpired at `now`. False when another approval holds it, it
    * already finished, or it expired: exactly one request can go on to create the order.
@@ -464,6 +467,20 @@ export function createDb(databaseUrl: string): Db {
     async findStepUp(tokenHash) {
       const r = (await pool.query("select * from stepups where token_hash = $1", [tokenHash])).rows[0];
       return r ? toStepUp(r) : null;
+    },
+
+    async findStepUpById(id) {
+      const r = (await pool.query("select * from stepups where id = $1", [id])).rows[0];
+      return r ? toStepUp(r) : null;
+    },
+
+    async listPendingStepUps(shopperKid, now) {
+      const { rows } = await pool.query(
+        `select * from stepups where shopper_kid = $1 and status = 'PENDING' and expires_at > $2
+          order by created_at desc limit 20`,
+        [shopperKid, now],
+      );
+      return rows.map(toStepUp);
     },
 
     async claimStepUp(id, now) {

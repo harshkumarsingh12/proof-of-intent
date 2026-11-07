@@ -30,6 +30,7 @@ import type { PayPalClient } from "@poi/paypal";
 import { evaluate } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
 import { placeOrder, stepUpTokenHash, type Merchant } from "./checkout";
+import { checkProof, isFailure, type Failure as ProofFailure } from "./vault";
 
 export interface StepUpDeps {
   db: Db;
@@ -69,24 +70,42 @@ export async function viewStepUp(
 ): Promise<StepUpViewResult> {
   const st = await find(deps.db, token);
   if (!st) return notFound;
+  return { status: 200, body: toView(st, deps.now()) };
+}
+
+function toView(st: StoredStepUp, now: string): StepUpView {
   const cart = CartMandate.parse(st.cart);
-  const status = st.status === "PENDING" && isExpired(st, deps.now()) ? "EXPIRED" : st.status;
+  const status = st.status === "PENDING" && isExpired(st, now) ? "EXPIRED" : st.status;
   return {
-    status: 200,
-    body: {
-      stepup_id: st.id,
-      status,
-      lines: cart.contents.lines,
-      total: cart.contents.total,
-      merchant_name: cart.contents.merchant_name,
-      agent_platform: st.agentPlatform,
-      reasons: st.reasons as ReasonCode[],
-      cart_mandate_hash: st.cartMandateHash,
-      shopper_kid: st.shopperKid,
-      expires_at: st.expiresAt,
-      ...(st.orderId ? { order_id: st.orderId } : {}),
-    },
+    stepup_id: st.id,
+    status,
+    lines: cart.contents.lines,
+    total: cart.contents.total,
+    merchant_name: cart.contents.merchant_name,
+    agent_platform: st.agentPlatform,
+    reasons: st.reasons as ReasonCode[],
+    cart_mandate_hash: st.cartMandateHash,
+    shopper_kid: st.shopperKid,
+    expires_at: st.expiresAt,
+    ...(st.orderId ? { order_id: st.orderId } : {}),
   };
+}
+
+export type StepUpListResult = { status: 200; body: { stepups: StepUpView[] } } | ProofFailure;
+
+/**
+ * The carts waiting for this shopper, for the shop to show next to the agent's answer. The shopper proves who they
+ * are with a fresh signature from the key that signed the intent, so no link (and no token) is needed or exposed:
+ * approving still takes their own CartApproval signature, exactly as with the emailed link.
+ */
+export async function listPendingStepUps(
+  proofJws: string,
+  deps: Pick<StepUpDeps, "db" | "now">,
+): Promise<StepUpListResult> {
+  const checked = await checkProof(proofJws, "stepup.list", deps);
+  if (isFailure(checked)) return checked;
+  const rows = await deps.db.listPendingStepUps(checked.shopper.kid, deps.now());
+  return { status: 200, body: { stepups: rows.map((st) => toView(st, deps.now())) } };
 }
 
 export async function approveStepUp(
@@ -94,9 +113,26 @@ export async function approveStepUp(
   approvalJws: string,
   deps: StepUpDeps,
 ): Promise<StepUpApproveResult> {
-  const now = deps.now();
   const st = await find(deps.db, token);
-  if (!st) return notFound;
+  return st ? approveFound(st, approvalJws, deps) : notFound;
+}
+
+/** The same approval by step-up id, for the shop's own list (listPendingStepUps). The signature is what authorizes. */
+export async function approveStepUpById(
+  id: string,
+  approvalJws: string,
+  deps: StepUpDeps,
+): Promise<StepUpApproveResult> {
+  const st = /^stp_[0-9a-f-]{36}$/.test(id) ? await deps.db.findStepUpById(id) : null;
+  return st ? approveFound(st, approvalJws, deps) : notFound;
+}
+
+async function approveFound(
+  st: StoredStepUp,
+  approvalJws: string,
+  deps: StepUpDeps,
+): Promise<StepUpApproveResult> {
+  const now = deps.now();
 
   // A retry after success answers the same; nothing is charged twice.
   if (st.status === "APPROVED" && st.orderId)
