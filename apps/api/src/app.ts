@@ -42,14 +42,28 @@ export interface AppDeps {
  */
 export async function depsFromEnv(env = process.env): Promise<AppDeps> {
   const paypalMode = parseMode(env.PAYPAL_MODE);
+  const buyer = buyerBaseFromEnv(env);
+  if (paypalMode === "sandbox" && buyer.defaulted) {
+    // PayPal sends a shopper back here after they approve a wallet, and step-up links open here too.
+    console.warn(
+      `BUYER_PUBLIC_URL is not set, so wallet approvals and step-up links point at ${buyer.url}. ` +
+        "Set it to the shop's public address (docs/SETUP.md §4) or hosted shoppers are sent to localhost.",
+    );
+  }
   return {
     paypal: createPayPalClient(paypalMode),
     db: env.DATABASE_URL ? createDb(env.DATABASE_URL) : undefined,
     merchant: await merchantFromEnv(env, paypalMode === "sandbox"),
     aiMode: parseAiMode(env.AI_MODE),
     operatorToken: env.OPERATOR_TOKEN || undefined,
-    stepUp: { linkBase: env.BUYER_PUBLIC_URL || "http://localhost:3001" },
+    stepUp: { linkBase: buyer.url },
   };
+}
+
+/** The buyer app's public origin (PayPal's return URL for wallets, step-up links) and whether it was left at the local default. */
+export function buyerBaseFromEnv(env: NodeJS.ProcessEnv): { url: string; defaulted: boolean } {
+  const set = env.BUYER_PUBLIC_URL?.trim();
+  return set ? { url: set, defaulted: false } : { url: "http://localhost:3001", defaulted: true };
 }
 
 async function merchantFromEnv(env: NodeJS.ProcessEnv, required: boolean): Promise<Merchant> {
