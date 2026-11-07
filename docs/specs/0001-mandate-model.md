@@ -25,6 +25,10 @@ Intent, compact JWS signatures (ES256).
 | Cart    | merchant    | `MERCHANT_SIGNING_KEY` from `pnpm keys:gen`; issued only after hard rules pass           |
 | Payment | buyer agent | registered agent key (KYA-lite: key, platform, owner)                                    |
 
+- **What the shopper signs about who pays (#157):** `constraints.unattended_payment` (optional) is the shopper's
+  permission for the agent to pay with their saved wallet while they are not present, optionally limited to
+  `allowed_agent_platforms`. The Payment Mandate's `human_present` is only the agent's declaration and is never enough on
+  its own (spec 0003 §Unattended payment).
 - **Canonicalization:** RFC 8785 (JCS). `mandate_hash = SHA-256(JCS(payload))`, lowercase hex.
 - **Signature:** the JWS payload is the canonical bytes; header `{ alg: "ES256", kid }`.
 - **Verification output** includes the exact canonical string, which is what the audit log stores.

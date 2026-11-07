@@ -24,7 +24,7 @@ deliberate act by the shopper.
    edit any limit, or speak or type again to replace them all, and signs by clicking **Sign my intent**. Nothing is signed,
    proposed or bought from a sentence. _(Changed Nov 8 at the owner's request: this used to be a read-back card plus a separate
    "confirm". The signature is still a deliberate act, and the form the shopper sees is exactly what the browser signs.)_
-3. **Voice never changes how the order is paid.** "Agent pays alone" stays a deliberate checkbox. With it on and a wallet
+3. **Voice never changes how the order is paid.** "Agent pays alone" stays a deliberate checkbox, and it is part of what the shopper signs (#157). With it on and a wallet
    saved, an approved cart is paid with no PayPal step; otherwise the PayPal button still appears.
 4. **The chat is read-only.** It has no tool that signs, buys, proposes a checkout, saves or removes a wallet. It never
    receives `intent_jws`, order ids, PayPal ids, wallet state, emails or addresses.

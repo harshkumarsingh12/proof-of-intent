@@ -14,6 +14,11 @@ export interface IntentForm {
   validDays: number;
   /** "Ask me before every purchase": the merchant always steps up (spec 0003). */
   confirmEachCart: boolean;
+  /**
+   * "Let the agent pay alone from my saved wallet": signed into the intent as `unattended_payment` (#157), so the
+   * merchant takes the shopper's word for it, not the agent's. Off unless set.
+   */
+  payAlone?: boolean;
 }
 
 export interface IntentContext {
@@ -22,6 +27,8 @@ export interface IntentContext {
   now: Date;
   mandateId: string;
   nonce: string;
+  /** The buyer agent's platform name: an unattended permission is limited to it. */
+  agentPlatform?: string;
 }
 
 /** Signed intents start a few minutes in the past so a browser clock slightly ahead of the server still works. */
@@ -60,6 +67,11 @@ export function buildIntent(form: IntentForm, ctx: IntentContext): IntentMandate
       merchant_allowlist: [ctx.merchantId],
       ...(Object.keys(attributes).length ? { attributes } : {}),
       quantity_max: { per_line: 1, per_order: 1 },
+      ...(form.payAlone
+        ? {
+            unattended_payment: ctx.agentPlatform ? { allowed_agent_platforms: [ctx.agentPlatform] } : {},
+          }
+        : {}),
       valid_from: start,
     },
   });

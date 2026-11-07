@@ -85,6 +85,23 @@ time**, not only for captured ones. Spending authority is reserved when the orde
   reserves through the same `placeOrder`.
 - Dispute replays still use `mandateLedger(intent, asOfOrderId)`: captures that existed when the order was created.
 
+### Unattended payment (#157)
+
+`human_present` lives in the **agent-signed** Payment Mandate, so it is the agent's declaration. A payment with nobody
+present moves money without the shopper's click, so it needs the **shopper's** signed permission: the optional
+`constraints.unattended_payment` in the Intent Mandate (`packages/contracts`). It is absent unless the shopper ticked
+"Let the agent pay alone" before signing.
+
+- `unattended_payment: {}` allows any registered agent platform. `{ allowed_agent_platforms: [...] }` allows only those
+  (the shop signs the buyer agent's platform), compared with the `agent_platform` in the Payment Mandate, which is
+  already checked against the agent's registered platform (step 3).
+- `human_present: false` without it, or from a platform it does not list, is a `REJECT` with
+  `UNATTENDED_NOT_PERMITTED`, reported together with any other reasons. No order is created and the wallet is not
+  charged. A shopper who is present needs nothing.
+- A step-up link exists only for an intent that passed this check, so approving it needs nothing more.
+- Not signed in: _which wallet_. The wallet is the one saved for the shopper's key (never shown to the browser), so
+  the permission covers whatever wallet that key holds when the agent pays. Removing the wallet still stops it.
+
 ### Stage 2, before capture (human present only)
 
 `POST /checkout/:id/approve { approval_jws }`, called by the buyer app from PayPal's `onApprove`. Built in
@@ -158,9 +175,12 @@ shopper reviews and signs in the browser (spec 0001), and `request_checkout` goe
 and reason codes only. Limits per run: three carts, six model calls, the daily AI budget. With `AI_MODE=replay` a
 scripted chooser (catalog filtered by the signed limits, best word match first) stands in for the model.
 
-**Paying alone (#36).** The shop's "Let the agent pay alone from my saved wallet" switch (enabled once the shopper has a
-Vault v3 wallet, spec 0004 §Vault) sends `human_present: false` to `/api/agent/checkout` and `/api/agent/choose`, which
-puts it in the Payment Mandate the agent signs. The merchant's checks are the same. An `APPROVE` charges the wallet at
+**Paying alone (#36, #157).** The shop's "Let the agent pay alone from my saved wallet" checkbox (enabled once the shopper
+has a Vault v3 wallet, spec 0004 §Vault) is in the intent form: ticked, the shopper signs `constraints.unattended_payment`
+(limited to the buyer agent's platform) into the Intent Mandate. When the intent carries it, the shop sends
+`human_present: false` to `/api/agent/checkout` and `/api/agent/choose`, which puts it in the Payment Mandate the agent
+signs. `human_present` is the agent's own claim, so the merchant never acts on it alone (see "Unattended payment"
+below). The merchant's checks are otherwise the same. An `APPROVE` charges the wallet at
 once and the response carries the `capture_id`; a `STEP_UP` charges nothing, creates no order and sends the step-up
 link; a `REJECT` is as always. With nobody present an approved cart has already been charged, so `request_checkout`
 refuses a second cart once the merchant has accepted one (`already_proposed`) in code, not only in the prompt.

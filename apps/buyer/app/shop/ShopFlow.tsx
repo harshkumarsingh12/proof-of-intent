@@ -44,6 +44,8 @@ export interface ShopConfig {
   voiceEnabled?: boolean;
   /** The shop assistant (spec 0010), off unless BUYER_CHAT=1. */
   chatEnabled?: boolean;
+  /** The buyer agent's platform name; an unattended-payment permission is signed for it only (#157). */
+  agentPlatform?: string;
 }
 
 /** The form for a category's demo words (catalog PRESETS), which replay mode has recorded J1 answers for. */
@@ -188,7 +190,11 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [wallet, setWallet] = useState<"unknown" | "none" | "saved">("unknown");
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string>();
-  const [alone, setAlone] = useState(false);
+  // The shopper's choice in step 2. It only counts once it is signed into the intent (#157): whether the agent pays
+  // alone is what the merchant reads in the signed intent, never a switch on this page.
+  const [allowAlone, setAllowAlone] = useState(false);
+  const paysAlone = (s?: Signed) => Boolean(s?.intent.constraints.unattended_payment) && wallet === "saved";
+  const alone = paysAlone(signed);
   // Carts the merchant is holding for this shopper (agent alone, not sure enough), fetched with a signed proof.
   const [waiting, setWaiting] = useState<StepUpView[]>([]);
   const [waitingBusy, setWaitingBusy] = useState<string>();
@@ -288,7 +294,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         setWalletError(res.body.message);
       } else {
         setWallet("none");
-        setAlone(false);
+        setAllowAlone(false);
         setCheckout(undefined);
       }
     } catch (err) {
@@ -304,7 +310,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     await forgetShopper();
     shopperLoad = undefined;
     setWallet("unknown");
-    setAlone(false);
+    setAllowAlone(false);
     setWaiting([]);
     setShopper(undefined);
     setSigned(undefined);
@@ -320,13 +326,17 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     if (!shopper) return undefined;
     setFormError(undefined);
     try {
-      const intent = buildIntent(f, {
-        kid: shopper.kid,
-        merchantId: config.merchantId,
-        now: new Date(),
-        mandateId: crypto.randomUUID(),
-        nonce: crypto.randomUUID().replace(/-/g, ""),
-      });
+      const intent = buildIntent(
+        { ...f, payAlone: allowAlone && wallet === "saved" },
+        {
+          agentPlatform: config.agentPlatform,
+          kid: shopper.kid,
+          merchantId: config.merchantId,
+          now: new Date(),
+          mandateId: crypto.randomUUID(),
+          nonce: crypto.randomUUID().replace(/-/g, ""),
+        },
+      );
       const jws = await signCompact(intent, shopper.key.privateKey, shopper.kid);
       const next = { intent, jws, hash: await sha256Hex(jwsPayloadText(jws)) };
       setSigned(next);
@@ -372,10 +382,10 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     setDraftNote(undefined);
     setFormError(undefined);
     try {
-      const res = await postJson<{ source: "live" | "scripted"; draft: { form: IntentForm; priceDefaulted?: boolean } }>(
-        "/api/agent/draft-intent",
-        { text },
-      );
+      const res = await postJson<{
+        source: "live" | "scripted";
+        draft: { form: IntentForm; priceDefaulted?: boolean };
+      }>("/api/agent/draft-intent", { text });
       if (isError(res.body)) {
         setFormError(res.body.message);
         return { error: res.body.message };
@@ -407,7 +417,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     setAgentTrace([]);
     setApproval(undefined);
     setApproveError(undefined);
-    const payAlone = alone;
+    const payAlone = paysAlone(s); // from the intent being sent, which may have just been signed
     try {
       const res = await postJson<{
         source: "live" | "scripted";
@@ -644,7 +654,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
               }
             }}
           />
-          <span className="meta">Press Enter and the agent fills in the limits below. You can edit them.</span>
+          <span className="meta">
+            Press Enter and the agent fills in the limits below. You can edit them.
+          </span>
         </label>
         {config.voiceEnabled && (
           <div className="voice">
@@ -727,6 +739,17 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           />
           Ask me to confirm every cart, even ones that fit
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={allowAlone}
+            disabled={wallet !== "saved"}
+            onChange={(e) => setAllowAlone(e.target.checked)}
+          />
+          Let the agent pay alone from my saved wallet, with no PayPal approval from me (signed into this
+          intent)
+          {wallet !== "saved" && " — save a PayPal wallet above first"}
+        </label>
         <button className="btn btn-ghost" disabled={!shopper || drafting} onClick={draftWithAgent}>
           {drafting ? "Agent is reading…" : "Fill in the limits from my words"}
         </button>{" "}
@@ -770,21 +793,13 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           Pick what the agent sends to the merchant. Try one that breaks your limits: it&apos;s refused before
           any PayPal order exists.
         </p>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={alone}
-            disabled={wallet !== "saved"}
-            onChange={(e) => {
-              setAlone(e.target.checked);
-              setCheckout(undefined);
-              setCheckoutError(undefined);
-              setApproval(undefined);
-            }}
-          />
-          Let the agent pay alone from my saved wallet (no PayPal approval from me)
-          {wallet !== "saved" && " — save a PayPal wallet above first"}
-        </label>
+        <p className="meta">
+          {signed?.intent.constraints.unattended_payment
+            ? wallet === "saved"
+              ? "Your signed intent lets the agent pay alone from your saved wallet. The merchant still checks every limit."
+              : "Your signed intent lets the agent pay alone, but there is no saved wallet now: save one first."
+            : "Your signed intent does not let the agent pay alone, so you approve each order at PayPal. To change that, tick the box in step 2 and sign again."}
+        </p>
         <button
           className="btn btn-primary"
           disabled={!signed || choosing || busySku !== undefined}
@@ -839,7 +854,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
                         setCheckout(undefined);
                         setCheckoutError(undefined);
                         setDraftNote("Limits filled in from the suggestion. Check them, then sign.");
-                        document.getElementById("limits")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        document
+                          .getElementById("limits")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
                       }}
                     >
                       {hint.apply.label}

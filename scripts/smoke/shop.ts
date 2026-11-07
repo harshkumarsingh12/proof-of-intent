@@ -133,9 +133,10 @@ if (!hosted) {
   });
 
   await step("the agent pays alone: no PayPal step, the capture is shown", async () => {
+    // The permission is part of what the shopper signs (#157), so it is ticked before signing, not after.
+    await page.getByLabel(/Let the agent pay alone/).check();
     await page.getByRole("button", { name: "Sign my intent" }).click();
     await page.getByText("Signed in your browser").waitFor({ timeout: 20_000 });
-    await page.getByLabel(/Let the agent pay alone/).check();
     await cart("$74.00", "grey").getByRole("button", { name: "Propose this cart" }).click();
     await verdictBox(/your agent paid/).waitFor({ timeout: 60_000 });
     await page.getByRole("heading", { name: "Paid by your agent" }).waitFor({ timeout: 10_000 });

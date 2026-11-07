@@ -41,6 +41,8 @@ export const ReasonCode = z.enum([
   "RECURRENCE_EXCEEDED",
   // the merchant's own facts: a cart line that its catalog doesn't back (docs/specs/0003, #158)
   "CATALOG_MISMATCH",
+  // the agent pays without the shopper present, and the shopper's signed intent didn't allow it (docs/specs/0003, #157)
+  "UNATTENDED_NOT_PERMITTED",
   // semantic (LLM, downgrade only)
   "SEMANTIC_UNCERTAIN",
   "SEMANTIC_MISMATCH",
@@ -65,6 +67,16 @@ export const Constraints = z.object({
     .object({
       max_orders: z.number().int().positive(),
       window_days: z.number().int().positive(),
+    })
+    .optional(),
+  /**
+   * Permission to pay with the shopper's saved wallet while they are not present (#157). Absent means the shopper
+   * must be present: the agent's own `human_present: false` is a claim, and this is what the shopper signed.
+   * `allowed_agent_platforms` narrows it to those agent platforms; absent means any registered platform.
+   */
+  unattended_payment: z
+    .object({
+      allowed_agent_platforms: z.array(z.string().min(1)).min(1).optional(),
     })
     .optional(),
   valid_from: isoDateTime,

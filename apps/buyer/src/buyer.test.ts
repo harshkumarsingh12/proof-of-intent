@@ -168,6 +168,29 @@ describe("intent form → Intent Mandate", () => {
   });
 });
 
+describe("agent pays alone: signed into the intent (#157)", () => {
+  test("by default the intent carries no permission to pay without the shopper", () => {
+    expect(intentFor("shp_x").constraints.unattended_payment).toBeUndefined();
+    expect(intentFor("shp_x", { payAlone: false }).constraints.unattended_payment).toBeUndefined();
+  });
+
+  test("the switch signs the permission, limited to the agent's platform when the shop knows it", () => {
+    expect(intentFor("shp_x", { payAlone: true }).constraints.unattended_payment).toEqual({});
+    const named = buildIntent(
+      { ...form, payAlone: true },
+      {
+        kid: "shp_x",
+        merchantId: MERCHANT_ID,
+        now: new Date(NOW),
+        mandateId: crypto.randomUUID(),
+        nonce: "n-0123456789abcdef",
+        agentPlatform: "Northstar",
+      },
+    );
+    expect(named.constraints.unattended_payment).toEqual({ allowed_agent_platforms: ["Northstar"] });
+  });
+});
+
 describe("buyer agent: cart and Payment Mandate", () => {
   const merchant = { id: MERCHANT_ID, name: "Trailhead Outfitters" };
   const now = new Date(NOW);
