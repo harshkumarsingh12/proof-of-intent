@@ -25,7 +25,7 @@ was made for, claimed once (`createVaultSetup`, `claimVaultSetup`, `releaseVault
 
 Beyond checkout's methods, `Db` has the worker's inbox (`pendingDisputeEvents`, `markEventProcessed`), disputes
 (`saveDispute` refuses an older PayPal version, `getDispute`, `listDisputes` deadline first), the dashboard grids
-(`listOrders`, `listVerdicts`, `orderVerdict`), `mandateLedger(intent, asOfOrderId)` for what an order's checkout
+(`listOrders`, `listVerdicts`, `orderVerdict`), `activeLedger(intent, now)` and `reserveOrder` (spending reserved atomically per intent, #155), `mandateLedger(intent, asOfOrderId)` for what an order's checkout
 saw, and keys (`registerShopperKey`, `registerAgentKey`, `retireKey`).
 
 - Replay protection and idempotency are unique indexes (`nonces`, `webhook_events.event_id`, `mandates.hash`,

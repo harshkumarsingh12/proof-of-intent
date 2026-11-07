@@ -183,7 +183,7 @@ async function approveFound(
   }
 
   // 4. The hard rules again: the link may be hours old and the budget spent in the meantime.
-  const rules = evaluate({ intent, cart, now, ledger: await deps.db.mandateLedger(intent.mandate_id) });
+  const rules = evaluate({ intent, cart, now, ledger: await deps.db.activeLedger(intent.mandate_id, now) });
   if (!rules.pass) {
     await deps.db.recordVerdict({
       intentMandateId: st.intentMandateId,

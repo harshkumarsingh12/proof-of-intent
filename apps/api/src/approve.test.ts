@@ -166,6 +166,39 @@ describe("POST /checkout/:id/approve", () => {
     expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("VOIDED");
   });
 
+  test("approval re-checks the reservation: if the intent's other holds no longer leave room, it is voided (#155)", async () => {
+    const capped = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, budget_cap: { value: 10000, currency: "USD" } },
+    };
+    const s = await orderedApp({ signed: { intent: capped } });
+    expect(s.created.verdict.outcome).toBe("APPROVE");
+    const paypal = watch(s.paypal);
+    // Something else under the same intent took 5000 of the cap after this order reserved its 7400.
+    const order = (await s.mem.db.getOrder(s.created.order_id))!;
+    s.mem.orders.set("ord_other", {
+      ...order,
+      id: "ord_other",
+      status: "CAPTURED",
+      totalValue: 5000,
+      capturedAt: NOW,
+    });
+    const res = await s.approve(await s.approval());
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["BUDGET_EXCEEDED"] });
+    expectUntouched(paypal);
+    expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("VOIDED");
+  });
+
+  test("approval of an order that still fits is captured, its own reservation not counted against it (#155)", async () => {
+    const capped = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, budget_cap: { value: 7400, currency: "USD" } },
+    };
+    const s = await orderedApp({ signed: { intent: capped } });
+    expect((await s.approve(await s.approval())).json().status).toBe("CAPTURED");
+  });
+
   test("an approval that arrives too late voids a hold we already took (a capture had failed)", async () => {
     const mock = createMockClient();
     let fail = true;
@@ -234,7 +267,10 @@ describe("POST /checkout/:id/approve", () => {
     fail = false;
     const voided = vi.spyOn(paypal, "voidAuthorization");
     s.setClock("2026-11-02T11:00:00Z");
-    expect((await s.approve(await s.approval())).json()).toEqual({ status: "VOIDED", reasons: ["MANDATE_EXPIRED"] });
+    expect((await s.approve(await s.approval())).json()).toEqual({
+      status: "VOIDED",
+      reasons: ["MANDATE_EXPIRED"],
+    });
     expect(voided).toHaveBeenCalledTimes(1);
   });
 

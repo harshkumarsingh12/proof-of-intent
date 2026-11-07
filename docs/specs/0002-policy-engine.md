@@ -55,6 +55,11 @@ over the cap, and its currency joins `amount_max` in the currency check. `recurr
 `(now - window_days, now]` plus this order; captures after `now` are ignored, so a replay at capture time sees
 what checkout saw.
 
+What the ledger holds depends on the caller. A **dispute replay** passes captures that existed when the order was
+created (`mandateLedger(intent, asOfOrderId)`). **Checkout, step-up approval and stage-two approval** pass what the
+intent has spent _or set aside_ (`activeLedger`, spec 0003 §Reservation): captured orders, orders with an unknown
+PayPal result, and pending orders whose cart has not expired. The engine does not know the difference.
+
 ## Interfaces
 
 ```ts

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import { semanticFit as realJ1, type Generate, type SemanticFit } from "@poi/ai";
-import { NotImplementedError } from "@poi/contracts";
+import { NotImplementedError, type IntentMandate } from "@poi/contracts";
 import {
   compliantCart,
   greyJacketIntent,
@@ -738,36 +738,145 @@ describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", 
   });
 });
 
-// The same flow against real Postgres, to prove the SQL behind the in-memory Db.
-describe.runIf(process.env.DATABASE_URL)("POST /checkout with Postgres", () => {
-  test("approve, persist mandates/order/verdict, then reject the replay", async () => {
-    const name = `poi_test_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-    const url = new URL(process.env.DATABASE_URL!);
-    const admin = new pg.Client({ connectionString: url.toString() });
-    await admin.connect();
-    await admin.query(`create database ${name}`);
-    url.pathname = `/${name}`;
-    const db = createDb(url.toString());
-    const raw = new pg.Pool({ connectionString: url.toString() });
-    try {
-      await db.migrate();
-      await raw.query("insert into shoppers (id) values ('shopper-1')");
-      await raw.query("insert into shopper_keys (kid, shopper_id, public_jwk) values ($1, 'shopper-1', $2)", [
-        shopper.kid,
-        shopper.publicJwk,
-      ]);
-      await raw.query(
-        "insert into agent_keys (kid, platform, owner, public_jwk) values ($1, 'Northstar', 'test', $2)",
-        [agent.kid, agent.publicJwk],
-      );
+describe("POST /checkout: spending authority is reserved while orders are pending (#155)", () => {
+  const capped = {
+    ...greyJacketIntent,
+    constraints: { ...greyJacketIntent.constraints, budget_cap: { value: 10000, currency: "USD" } },
+  };
+  /** A different cart under the same intent, each 7400, so two of them are 14800 against a 10000 cap. */
+  const nth = (n: number) => ({
+    ...compliantCart,
+    contents: { ...compliantCart.contents, cart_id: `cart-${n}` },
+  });
+  const humanPresent = (n: number, intent: IntentMandate = capped) =>
+    signedCheckout({ shopper, agent, intent, cart: nth(n) });
 
-      const app = buildApp({
-        paypal: createMockClient(),
-        db,
-        merchant: { id: MERCHANT_ID, kid: "merchant-1", privateKey: merchantKey.privateKey },
-        semanticFit: j1("match", 0.95),
-        now: () => NOW,
-      });
+  test("a second order created before the first is captured is refused, so the cap cannot be exceeded", async () => {
+    const s = setup();
+    const first = await s.checkout((await humanPresent(1)).body);
+    expect(first.json().verdict.outcome).toBe("APPROVE");
+    expect([...s.mem.orders.values()].map((o) => o.status)).toEqual(["CREATED"]); // nothing captured yet
+
+    const second = await s.checkout((await humanPresent(2)).body);
+    expect(second.json().verdict).toEqual({ outcome: "REJECT", reasons: ["BUDGET_EXCEEDED"] });
+    expect(second.json().order_id).toBeUndefined();
+    expect(s.mem.orders.size).toBe(1);
+    expect(s.createOrder).toHaveBeenCalledTimes(1); // PayPal was never contacted for the second
+  });
+
+  test("two checkouts racing past the first check cannot both reserve: the reservation itself refuses one", async () => {
+    const s = setup();
+    const [a, b] = await Promise.all([
+      humanPresent(1).then((r) => s.checkout(r.body)),
+      humanPresent(2).then((r) => s.checkout(r.body)),
+    ]);
+    const outcomes = [a, b].map((r) => r.json().verdict.outcome).sort();
+    expect(outcomes).toEqual(["APPROVE", "REJECT"]);
+    expect(s.mem.orders.size).toBe(1);
+    expect(s.createOrder).toHaveBeenCalledTimes(1);
+    const refused = [a, b].find((r) => r.json().verdict.outcome === "REJECT")!;
+    expect(refused.json().verdict.reasons).toEqual(["BUDGET_EXCEEDED"]);
+  });
+
+  test("recurrence counts pending orders too", async () => {
+    const s = setup();
+    const once = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, recurrence: { max_orders: 1, window_days: 30 } },
+    };
+    expect((await s.checkout((await humanPresent(1, once)).body)).json().verdict.outcome).toBe("APPROVE");
+    const second = await s.checkout((await humanPresent(2, once)).body);
+    expect(second.json().verdict).toEqual({ outcome: "REJECT", reasons: ["RECURRENCE_EXCEEDED"] });
+  });
+
+  test("a voided, failed or expired reservation is released", async () => {
+    const s = setup();
+    await s.checkout((await humanPresent(1)).body);
+    const [id] = [...s.mem.orders.keys()];
+    const held = () => s.mem.db.activeLedger(capped.mandate_id, NOW);
+    expect((await held()).capturedTotal).toBe(7400);
+    await s.mem.db.updateOrder(id!, { status: "VOIDED" });
+    expect((await held()).capturedTotal).toBe(0);
+    await s.mem.db.updateOrder(id!, { status: "PAYPAL_FAILED" });
+    expect((await held()).capturedTotal).toBe(0);
+    // Expired: a pending order stops counting once its cart has expired.
+    await s.mem.db.updateOrder(id!, { status: "CREATED" });
+    expect((await held()).capturedTotal).toBe(7400);
+    expect(
+      (await s.mem.db.activeLedger(capped.mandate_id, compliantCart.contents.cart_expiry)).capturedTotal,
+    ).toBe(0);
+    // And with room again, the next cart is accepted.
+    await s.mem.db.updateOrder(id!, { status: "VOIDED" });
+    const next = await s.checkout((await humanPresent(3)).body);
+    expect(next.json().verdict.outcome).toBe("APPROVE");
+  });
+
+  test("an unattended order that completed at creation counts as committed", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const first = await s.checkout(
+      (await signedCheckout({ shopper, agent, intent: capped, cart: nth(1), humanPresent: false })).body,
+    );
+    expect(first.json().verdict.outcome).toBe("APPROVE");
+    const second = await s.checkout(
+      (await signedCheckout({ shopper, agent, intent: capped, cart: nth(2), humanPresent: false })).body,
+    );
+    expect(second.json().verdict.reasons).toEqual(["BUDGET_EXCEEDED"]);
+  });
+});
+
+// The same flow against real Postgres, to prove the SQL behind the in-memory Db.
+/** A throwaway database with the schema, both keys registered, and a pool for looking at the rows. */
+async function withPostgres(run: (ctx: { db: ReturnType<typeof createDb>; raw: pg.Pool }) => Promise<void>) {
+  const name = `poi_test_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  const url = new URL(process.env.DATABASE_URL!);
+  const admin = new pg.Client({ connectionString: url.toString() });
+  await admin.connect();
+  await admin.query(`create database ${name}`);
+  url.pathname = `/${name}`;
+  const db = createDb(url.toString());
+  const raw = new pg.Pool({ connectionString: url.toString() });
+  try {
+    await db.migrate();
+    await raw.query("insert into shoppers (id) values ('shopper-1')");
+    await raw.query("insert into shopper_keys (kid, shopper_id, public_jwk) values ($1, 'shopper-1', $2)", [
+      shopper.kid,
+      shopper.publicJwk,
+    ]);
+    await raw.query(
+      "insert into agent_keys (kid, platform, owner, public_jwk) values ($1, 'Northstar', 'test', $2)",
+      [agent.kid, agent.publicJwk],
+    );
+    await run({ db, raw });
+  } finally {
+    await raw.end();
+    await db.close().catch(() => {});
+    // pool.end() resolves before its sockets close; force-dropping under them makes Postgres kill those
+    // connections, which pg reports as an unhandled error. Let them go first.
+    for (let i = 0; i < 50; i++) {
+      const left = await admin.query("select count(*)::int as n from pg_stat_activity where datname = $1", [
+        name,
+      ]);
+      if (left.rows[0].n === 0) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    await admin.query(`drop database if exists ${name} with (force)`);
+    await admin.end();
+  }
+}
+
+describe.runIf(process.env.DATABASE_URL)("POST /checkout with Postgres", () => {
+  const appFor = (db: ReturnType<typeof createDb>) =>
+    buildApp({
+      paypal: createMockClient(),
+      db,
+      merchant: { id: MERCHANT_ID, kid: "merchant-1", privateKey: merchantKey.privateKey },
+      semanticFit: j1("match", 0.95),
+      now: () => NOW,
+    });
+
+  test("approve, persist mandates/order/verdict, then reject the replay", async () => {
+    await withPostgres(async ({ db, raw }) => {
+      const app = appFor(db);
       const { body, intent } = await signedCheckout({ shopper, agent });
       const res = await app.inject({ method: "POST", url: "/checkout", payload: body });
       expect(res.json().verdict.outcome).toBe("APPROVE");
@@ -793,20 +902,42 @@ describe.runIf(process.env.DATABASE_URL)("POST /checkout with Postgres", () => {
       expect(replay.json().verdict.reasons).toEqual(["NONCE_REPLAYED"]);
       expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(1);
       await app.close();
-    } finally {
-      await raw.end();
-      await db.close().catch(() => {});
-      // pool.end() resolves before its sockets close; force-dropping under them makes Postgres kill those
-      // connections, which pg reports as an unhandled error. Let them go first.
-      for (let i = 0; i < 50; i++) {
-        const left = await admin.query("select count(*)::int as n from pg_stat_activity where datname = $1", [
-          name,
-        ]);
-        if (left.rows[0].n === 0) break;
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      await admin.query(`drop database if exists ${name} with (force)`);
-      await admin.end();
-    }
+    });
+  });
+
+  // #155: two orders pending at the same time under one signed cap. Before the reservation both were created.
+  test("two pending orders under one budget_cap: the second is refused, even when they arrive together", async () => {
+    await withPostgres(async ({ db, raw }) => {
+      const app = appFor(db);
+      const capped = {
+        ...greyJacketIntent,
+        constraints: { ...greyJacketIntent.constraints, budget_cap: { value: 10000, currency: "USD" } },
+      };
+      const cartN = (n: number) => ({
+        ...compliantCart,
+        contents: { ...compliantCart.contents, cart_id: `cart-${n}` },
+      });
+      const send = async (n: number) =>
+        app.inject({
+          method: "POST",
+          url: "/checkout",
+          payload: (await signedCheckout({ shopper, agent, intent: capped, cart: cartN(n) })).body,
+        });
+
+      // Together: exactly one gets an order.
+      const together = await Promise.all([send(1), send(2)]);
+      expect(together.map((r) => r.json().verdict.outcome).sort()).toEqual(["APPROVE", "REJECT"]);
+      expect((await raw.query("select status from orders")).rows).toEqual([{ status: "CREATED" }]);
+
+      // One after the other, with the first still pending (nothing captured): refused.
+      const later = await send(3);
+      expect(later.json().verdict).toEqual({ outcome: "REJECT", reasons: ["BUDGET_EXCEEDED"] });
+      expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(1);
+
+      // Released: once the first is voided, room is back.
+      await raw.query("update orders set status = 'VOIDED'");
+      expect((await send(4)).json().verdict.outcome).toBe("APPROVE");
+      await app.close();
+    });
   });
 });
