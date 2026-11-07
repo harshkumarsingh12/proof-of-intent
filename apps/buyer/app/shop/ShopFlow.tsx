@@ -372,7 +372,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     setDraftNote(undefined);
     setFormError(undefined);
     try {
-      const res = await postJson<{ source: "live" | "scripted"; draft: { form: IntentForm } }>(
+      const res = await postJson<{ source: "live" | "scripted"; draft: { form: IntentForm; priceDefaulted?: boolean } }>(
         "/api/agent/draft-intent",
         { text },
       );
@@ -384,8 +384,12 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       // Only the shopper's own switch survives a draft: the agent can't turn "ask me before every purchase" on or off.
       const next = { ...draft.form, confirmEachCart: formRef.current.confirmEachCart };
       setForm(next);
+      // A price cap is always signed, so when the words gave none the cap is the shop's proposal, and it says so.
+      const priceNote = draft.priceDefaulted
+        ? ` You didn't mention a price, so I proposed a cap of $${next.maxPrice}: change it if you like.`
+        : "";
       setDraftNote(
-        `${source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} filled in the limits below. Check them, then sign.`,
+        `${source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} filled in the limits below.${priceNote} Check them, then sign.`,
       );
       return { form: next };
     } finally {

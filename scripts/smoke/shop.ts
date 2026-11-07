@@ -235,6 +235,26 @@ await step("'Let the agent choose' proposes a cart and shows what it did", async
   await verdictBox(/Fits what you signed|please confirm/).waitFor({ timeout: 10_000 });
 });
 
+await step("what the words don't say stays open, and a missing price gets a proposed cap", async () => {
+  await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
+  await page.getByText("Key id").waitFor({ timeout: 30_000 });
+  const price = () => page.locator('input[inputmode="decimal"]').inputValue();
+  await page.locator("textarea").fill("something grey under $70");
+  await page.getByRole("button", { name: /Fill in the limits/ }).click();
+  await page.getByText(/filled in the limits below/).waitFor({ timeout: 30_000 });
+  if ((await price()) !== "70") throw new Error(`expected 70, got ${await price()}`);
+  if ((await page.getByLabel("Color").inputValue()) !== "grey") throw new Error("the color was not filled in");
+  if ((await page.getByLabel("Category").inputValue()) !== "") throw new Error("an item nobody named was guessed");
+  if (await page.getByText(/proposed a cap/).count()) throw new Error("a stated price was called a proposal");
+
+  await page.locator("textarea").fill("a running jacket");
+  await page.getByRole("button", { name: /Fill in the limits/ }).click();
+  await page.getByText(/proposed a cap of \$80/).waitFor({ timeout: 30_000 });
+  if ((await price()) !== "80") throw new Error(`expected the jacket's usual cap 80, got ${await price()}`);
+  if ((await page.getByLabel("Color").inputValue()) !== "") throw new Error("a color nobody named was guessed");
+  if (await page.getByText("Signed in your browser").count()) throw new Error("the agent signed for the shopper");
+});
+
 // Voice ordering (spec 0010). Headless Chrome can't recognize speech, so a fake SpeechRecognition is installed before the
 // page loads and says whatever the test queues. Needs the shop started with BUYER_VOICE=1; run with VOICE=1.
 if (process.env.VOICE === "1") {

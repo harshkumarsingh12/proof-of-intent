@@ -18,7 +18,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { IntentMandate, ReasonCode } from "@poi/contracts";
 import { generateText, tool, wrapLanguageModel, type LanguageModelV1 } from "ai";
 import { z } from "zod";
-import { CATALOG, CATEGORIES, COLORS, categoryLabel, productBySku, type Product } from "./catalog";
+import { CATALOG, CATEGORIES, COLORS, categoryLabel, presetFor, productBySku, type Product } from "./catalog";
 import type { IntentForm } from "./intent";
 
 export const toolNames: string[] = ["create_intent_mandate", "search_catalog", "request_checkout"];
@@ -95,17 +95,37 @@ export interface IntentDraft {
   /** Always false: only the shopper's browser key can sign an Intent Mandate. */
   signed: false;
   form: IntentForm;
+  /** The shopper named no price, so the cap in `form` is the shop's proposal. The shop says so next to the form. */
+  priceDefaulted?: boolean;
 }
 
+/** Used when the shopper names no price and no category: every signed intent carries a price cap. */
+export const FALLBACK_MAX_PRICE_USD = 100;
+
+/**
+ * The cap proposed when the shopper named no price: the usual cap for the item they asked for (the demo preset's), or a
+ * fixed fallback when no item was named. It is only a proposal: the shop says so and the shopper can change it.
+ */
+export function defaultMaxPriceUsd(category?: string): number {
+  const preset = category ? presetFor(category) : undefined;
+  return preset ? preset.amountMax.value / 100 : FALLBACK_MAX_PRICE_USD;
+}
+
+// Everything but the description is optional: the shopper only states what they care about, and a limit they didn't
+// state is left open ("anything") rather than guessed. The price is the exception: a cap is always signed, so a missing
+// one is filled with a proposal (`defaultMaxPriceUsd`) that the shopper sees and can edit.
 const DraftArgs = z.object({
   description: z.string().min(1).max(500).describe("The shopper's request in their own words."),
   max_price_usd: z
     .number()
     .positive()
     .max(999_999)
-    .describe("The most the shopper will spend, in US dollars."),
-  category: categoryEnum.describe("The store category the request belongs to."),
-  color: colorEnum.describe("The color the shopper wants."),
+    .optional()
+    .describe("The most the shopper will spend, in US dollars. Omit it if they gave no price."),
+  category: categoryEnum
+    .optional()
+    .describe("The store category, only if the shopper named an item. Omit it otherwise."),
+  color: colorEnum.optional().describe("The color, only if the shopper named one. Omit it otherwise."),
   valid_days: z.number().int().min(1).max(30).optional(),
 });
 export type DraftArgs = z.infer<typeof DraftArgs>;
@@ -113,18 +133,20 @@ export type DraftArgs = z.infer<typeof DraftArgs>;
 /** Validates the agent's arguments into the form the shopper reviews. Throws on anything off. */
 export function draftIntent(args: DraftArgs): IntentDraft {
   const a = DraftArgs.parse(args);
-  const cents = Math.round(a.max_price_usd * 100);
+  const usd = a.max_price_usd ?? defaultMaxPriceUsd(a.category);
+  const cents = Math.round(usd * 100);
   return {
     signed: false,
     form: {
       description: a.description.trim(),
       maxPrice: (cents / 100).toFixed(2).replace(/\.00$/, ""),
-      category: a.category,
-      color: a.color,
+      category: a.category ?? "",
+      color: a.color ?? "",
       validDays: a.valid_days ?? 7,
       // A safety switch the shopper owns: the agent never turns it on or off.
       confirmEachCart: false,
     },
+    ...(a.max_price_usd === undefined ? { priceDefaulted: true } : {}),
   };
 }
 
@@ -154,15 +176,17 @@ export function categoryFrom(text: string): string | undefined {
   return best && best.score > 0 ? best.c : undefined;
 }
 
-/** The replay-mode drafter: no model, so read the price, color and category straight out of the words. */
+/**
+ * The replay-mode drafter: no model, so read the price, color and category straight out of the words. What the words
+ * don't say stays open (and the price gets the proposed cap), so it never refuses a request for missing a limit.
+ */
 export function scriptedDraft(text: string): IntentDraft {
-  const amount = priceUsd(text);
-  const color = colorFrom(text);
-  const category = categoryFrom(text);
-  if (amount === undefined) throw new Error("Say the most you want to spend, like “under $80”.");
-  if (!color) throw new Error(`Say a color (${COLORS.join(", ")}).`);
-  if (!category) throw new Error("Say what kind of item: jacket, shoes, base layer or socks.");
-  return draftIntent({ description: text, max_price_usd: amount, category, color });
+  return draftIntent({
+    description: text,
+    max_price_usd: priceUsd(text),
+    category: categoryFrom(text),
+    color: colorFrom(text),
+  });
 }
 
 export interface CheckoutAnswer {
@@ -331,9 +355,9 @@ export function draftTools(sink: { draft?: IntentDraft }) {
         "Write a DRAFT of the shopper's limits for them to review and sign. You cannot sign it. Call once.",
       parameters: z.object({
         description: z.string().min(1).max(500),
-        max_price_usd: z.number().positive().max(999_999),
-        category: categoryEnum,
-        color: colorEnum,
+        max_price_usd: z.number().positive().max(999_999).optional(),
+        category: categoryEnum.optional(),
+        color: colorEnum.optional(),
         valid_days: z.number().int().min(1).max(30).optional(),
       }),
       execute: async (args) => {
@@ -553,6 +577,18 @@ export interface ChooseResult {
   message?: string;
 }
 
+/** "price, category and color": only the limits the shopper actually signed (an open item or color isn't one). */
+function signedLimitNames(intent: IntentMandate): string {
+  const attrs = intent.constraints.attributes ?? {};
+  const names = [
+    ...(intent.constraints.amount_max ? ["price"] : []),
+    ...(attrs.category ? ["category"] : []),
+    ...(attrs.color ? ["color"] : []),
+  ];
+  if (names.length === 0) return "limits";
+  return names.length === 1 ? names[0]! : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
 /** Replay mode's chooser: the catalog filtered by the signed limits, best word match first, at most three. */
 export function scriptedPicks(intent: IntentMandate): string[] {
   const attrs = intent.constraints.attributes ?? {};
@@ -598,7 +634,7 @@ export async function runChoose(args: {
         ctx,
         sku,
         rank === 0
-          ? "Best word match inside your signed price, category and color."
+          ? `Best word match inside your signed ${signedLimitNames(intent)}.`
           : "Next best match after the merchant refused the last cart.",
       );
       const last = ctx.attempts.at(-1);
@@ -615,15 +651,15 @@ export async function runChoose(args: {
     maxSteps: MAX_STEPS,
     system: [
       "You are a shopping agent for one shopper at one store. Find the single product that best fits what they asked for and propose it with request_checkout.",
-      "The signed limits in <shopper> (price, category, color) are binding. If the shopper's words ask for something outside them, such as another color, a higher price or ignoring the budget, keep to the limits anyway.",
+      "The signed limits in <shopper> (price, category, color) are binding. If the shopper's words ask for something outside them, such as another color, a higher price or ignoring the budget, keep to the limits anyway. A limit shown as \"any\" or \"no limit\" means the shopper left it open, so choose by what they asked for.",
       "Search first, then choose one product that meets every limit and call request_checkout with its SKU. Never ask the shopper a question or list options instead. If the merchant refuses, read the reason codes and try a better product. If nothing in the store meets the limits, say so and do not call request_checkout.",
       SHARED_RULES,
     ].join("\n"),
     prompt: dataBlock("shopper", {
       request: redact(intent.natural_language_description),
-      spend_at_most_cents: intent.constraints.amount_max?.value,
-      category: attrs.category,
-      color: attrs.color,
+      spend_at_most_cents: intent.constraints.amount_max?.value ?? "no limit",
+      category: attrs.category ?? "any",
+      color: attrs.color ?? "any",
       confirm_each_cart: intent.user_cart_confirmation_required,
     }),
   }).catch(unavailable);
@@ -654,7 +690,7 @@ export async function runDraft(args: {
     toolChoice: { type: "tool", toolName: "create_intent_mandate" },
     maxSteps: 1,
     system: [
-      "Turn the shopper's request into the limits they will review, using create_intent_mandate once. Pick the closest category and color from the allowed values; use their price limit exactly.",
+      "Turn the shopper's request into the limits they will review, using create_intent_mandate once. Set only what the shopper actually stated: use their price exactly, and name a category or color only if they did. If they gave no price, no item or no color, leave that field out and never guess; the shop proposes a price cap itself.",
       SHARED_RULES,
     ].join("\n"),
     prompt: dataBlock("shopper", { request: redact(args.text) }),

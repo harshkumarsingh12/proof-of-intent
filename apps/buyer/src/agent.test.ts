@@ -5,8 +5,10 @@ import { MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
 import { evaluate } from "@poi/policy-engine";
 import {
   AgentUnavailableError,
+  FALLBACK_MAX_PRICE_USD,
   MAX_CHECKOUTS,
   chooseTools,
+  defaultMaxPriceUsd,
   draftIntent,
   limitBreaks,
   limitsOf,
@@ -363,9 +365,39 @@ describe("scripted agent (AI_MODE=replay)", () => {
       category: "socks",
       color: "white",
     });
-    expect(() => scriptedDraft("a grey running jacket")).toThrow(/spend/);
-    expect(() => scriptedDraft("a running jacket under $80")).toThrow(/color/);
-    expect(() => scriptedDraft("something grey under $80")).toThrow(/kind of item/);
+  });
+
+  test("what the words don't say stays open, and a missing price gets a proposed cap", () => {
+    // No price: the usual cap for that item (the demo preset's), and the draft says it was proposed.
+    const noPrice = scriptedDraft("a grey running jacket");
+    expect(noPrice.form).toMatchObject({ maxPrice: "80", category: "running-jacket", color: "grey" });
+    expect(noPrice.priceDefaulted).toBe(true);
+    // A stated price is never replaced.
+    expect(scriptedDraft("a grey running jacket under $55").priceDefaulted).toBeUndefined();
+    // No color or no item: left open, not guessed.
+    expect(scriptedDraft("a running jacket under $80").form).toMatchObject({ category: "running-jacket", color: "" });
+    expect(scriptedDraft("something grey under $80").form).toMatchObject({ category: "", color: "grey", maxPrice: "80" });
+    // Nothing stated at all: it still fills a form (the fallback cap, anything, any color) instead of refusing.
+    const nothing = scriptedDraft("surprise me");
+    expect(nothing.form).toMatchObject({ maxPrice: String(FALLBACK_MAX_PRICE_USD), category: "", color: "" });
+    expect(nothing.priceDefaulted).toBe(true);
+    expect(() => intentFor(nothing.form)).not.toThrow();
+  });
+
+  test("the proposed cap is the item's usual cap, or the fallback with no item", () => {
+    expect(defaultMaxPriceUsd("socks")).toBe(20);
+    expect(defaultMaxPriceUsd("running-shoe")).toBe(130);
+    expect(defaultMaxPriceUsd(undefined)).toBe(FALLBACK_MAX_PRICE_USD);
+    expect(defaultMaxPriceUsd("not-a-category")).toBe(FALLBACK_MAX_PRICE_USD);
+  });
+
+  test("a model draft that names only an item still gets a cap, and an unknown item is still refused", () => {
+    expect(draftIntent({ description: "socks", category: "socks" }).form).toMatchObject({
+      maxPrice: "20",
+      category: "socks",
+      color: "",
+    });
+    expect(() => draftIntent({ description: "x", category: "tent" as never })).toThrow();
   });
 });
 
@@ -412,6 +444,28 @@ describe("live agent (scripted model, no network)", () => {
       model: scriptedModel(many),
     });
     expect(calls).toBeLessThanOrEqual(MAX_CHECKOUTS);
+  });
+
+  test("the scripted trace names only the limits that were signed", async () => {
+    const reasonFor = async (form: Partial<IntentForm>) => {
+      const run = await runChoose({
+        intent: intentFor({
+          description: "a running jacket",
+          maxPrice: "100",
+          category: "running-jacket",
+          color: "grey",
+          validDays: 7,
+          confirmEachCart: false,
+          ...form,
+        }),
+        mode: "replay",
+        checkout: async () => approve,
+      });
+      return (run.trace.find((t) => t.kind === "propose") as { reason: string }).reason;
+    };
+    expect(await reasonFor({})).toBe("Best word match inside your signed price, category and color.");
+    expect(await reasonFor({ color: "" })).toBe("Best word match inside your signed price and category.");
+    expect(await reasonFor({ category: "", color: "" })).toBe("Best word match inside your signed price.");
   });
 
   test("the draft tool fills the form and never signs", async () => {
@@ -520,6 +574,36 @@ describe("provider rules (copy of packages/ai)", () => {
         };
       },
     });
+
+  test("the live chooser is told an open limit means anything, instead of seeing a missing field", async () => {
+    const seen: unknown[] = [];
+    await runChoose({
+      intent: intentFor({
+        description: "a running jacket",
+        maxPrice: "100",
+        category: "running-jacket",
+        color: "",
+        validDays: 7,
+        confirmEachCart: false,
+      }),
+      mode: "live",
+      checkout: async () => approve,
+      model: okModel((params) => seen.push(params)),
+    }).catch(() => undefined);
+    const text = JSON.stringify(seen[0]);
+    expect(text).toMatch(/color\\+":\s*\\+"any/);
+    expect(text).toMatch(/means the shopper left it open/);
+  });
+
+  test("the drafting prompt asks only for what the shopper stated", async () => {
+    const seen: unknown[] = [];
+    await runDraft({ text: "a jacket", mode: "live", model: okModel((params) => seen.push(params)) }).catch(
+      () => undefined,
+    );
+    const text = JSON.stringify(seen[0]);
+    expect(text).toMatch(/Set only what the shopper actually stated/);
+    expect(text).not.toMatch(/Pick the closest/);
+  });
 
   test("the thinking switch and the gone-model rule match packages/ai exactly", () => {
     for (const provider of ["nvidia", "gemini", "groq", "openrouter", "other"])
