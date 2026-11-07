@@ -56,7 +56,13 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 9. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
    mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**
    and try the starter prompts. The hosted data has no agent overreach, so the overreach rate reads 0% there.
-10. The pre-prepared disputes expire before judging ends. Use your fresh cases for actions. The designated
+10. **The limits form (optional).** In the shop, the **Quick start** buttons load a whole example (price, item, color and
+    words). **Category** and **Color** can be left on **Anything** / **Any color**, but the price cap is always set. Type a
+    request such as "a grey running jacket" and press **Enter** (or click **Fill in the limits from my words**): the agent
+    fills in the limits, proposing a price cap and saying so if you named none, and you can edit anything before you
+    sign. Where the browser supports speech (Chrome, Edge, Safari), **Speak your request** does the same from your voice.
+    Nothing is signed or bought until you click **Sign my intent**.
+11. The pre-prepared disputes expire before judging ends. Use your fresh cases for actions. The designated
     December backup IDs and access will be in Devpost's testing field. The
     [team verification record](JUDGE_TESTING.md#team-verification-record) tracks the account checks and backup handoff.
 
@@ -79,7 +85,7 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 - Copy the [judge testing steps](JUDGE_TESTING.md) into Devpost and add verified access and fresh dispute IDs
   in its testing field. Confirm both judge shopper accounts can sign in, buy and report a problem.
 - The dated full eval report and its measured numbers are in the README ([report](evals/2026-11-07.md), #43).
-- Use the analytics view at 2:02. Studio is built and checked locally with the real key (the hosted check is #123);
+- Use the analytics view at 2:02. Studio is built, checked locally with the real key and live on the hosted dashboard (#123, closed);
   time the Studio shot (a grid row click, a donut click, one Ask the AI prompt: a live answer takes about 15 to 25
   seconds) against the same slot, or record it separately. Common questions (a named dispute, counts, what needs
   attention, a buyer reply) are answered by a local planner, so those takes are repeatable and about a second each; only

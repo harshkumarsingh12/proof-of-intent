@@ -109,7 +109,7 @@ voice ordering (`BUYER_VOICE=1`: speak and the agent fills in the limits; #140; 
 read-only and fast with no recordings in replay mode (`pnpm smoke:studio`; #144, so #124 is resolved for them), and near-miss
 suggestions after a refusal (what would have fit, one button that refills the limits and still needs a new signature; #145). The
 switches and the Groq lines are now set in Dokploy, and the NVIDIA and AG Studio keys are confirmed safe, so #126 needs no
-rotation. Still to do on your side: run the hosted checks (#36, #123, voice and chat in Chrome and Safari over HTTPS). Not started: a clarifying question in intent
+rotation. Still to do on your side: run the hosted checks (#36, and voice and chat in Chrome and Safari over HTTPS; #123 is done). Not started: a clarifying question in intent
 drafting and a `platform_summary` Studio tool.
 
 ## M4 Submission (Nov 11)
