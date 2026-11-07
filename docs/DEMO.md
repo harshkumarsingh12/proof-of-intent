@@ -81,8 +81,10 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 - Add the dated full eval report and its measured numbers to the README when #43 is complete.
 - Use the analytics view at 2:02. Studio is built and checked locally with the real key (the hosted check is #123);
   time the Studio shot (a grid row click, a donut click, one Ask the AI prompt: a live answer takes about 15 to 25
-  seconds) against the same slot, or record it separately. The chat is not deterministic, so record more than one
-  take (#124).
+  seconds) against the same slot, or record it separately. Common questions (a named dispute, counts, what needs
+  attention, a buyer reply) are answered by a local planner, so those takes are repeatable and about a second each; only
+  open-ended questions use the live model, so record more than one take of those (#124). `pnpm smoke:studio` checks the
+  chat before you record.
 - The buyer agent ("Let the agent choose") is not in the 2:30 script yet. Add a short shot after the signed intent if
   there is room, or keep it in the click path only.
 - Judge disputes expire before Dec 15 (#122): the Devpost testing instructions must say judges file their own.

@@ -32,7 +32,7 @@ areas both touch. Skip: bug fixes, refactors inside one package, docs, tests, de
 | [0007](0007-dashboard.md)                 | Dashboard and AG Studio                | @hoursgotviral-dev | @sumedhag28, @harshkumarsingh12        | M0        | In Progress |
 | [0008](0008-hosting-and-deploy.md)        | Hosting and deploy                     | @harshkumarsingh12 | @srshriv                               | M0        | In Progress |
 | [0009](0009-demo-and-submission.md)       | Demo and submission                    | @sumedhag28        | everyone                               | M0        | Accepted    |
-| [0010](0010-voice-and-chat.md)            | Voice ordering and the buyer assistant | @srshriv           | @harshkumarsingh12, @sumedhag28        | M3        | Proposed    |
+| [0010](0010-voice-and-chat.md)            | Voice ordering and the buyer assistant | @srshriv           | @harshkumarsingh12, @sumedhag28        | M3        | In Progress |
 
 All nine were reviewed at the Oct 31 contracts gate and have been built against since; statuses and "as built"
 notes updated Nov 6 after M2 (#59, #81–#88). New specs take the next free number from

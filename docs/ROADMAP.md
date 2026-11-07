@@ -102,6 +102,16 @@ cause and a permanent fix are tracked in #120 and #121. Still open before submis
 the AI variables (#123), judge disputes that expire before Dec 15 (#122), the chat in replay mode (#124), Studio follow-ups
 (#125), credential rotation (#126), dark mode as a stretch (#127), and the older M4 items below.
 
+**Status (Nov 7, night):** the AI upgrades are merged behind switches, all default off or degrading to plain answers:
+voice ordering (`BUYER_VOICE=1`: speak, read back, a separate "confirm" signs; #140), the shop assistant
+(`BUYER_CHAT=1`, answers from the store's data, can't sign or buy; #143), provider hardening with a Groq backup
+(`AI_FALLBACK_*`, `pnpm ai:check`; #141, #142), a deterministic planner for the Studio chat so common questions are right,
+read-only and fast with no recordings in replay mode (`pnpm smoke:studio`; #144, so #124 is resolved for them), and near-miss
+suggestions after a refusal (what would have fit, one button that refills the limits and still needs a new signature; #145). Still
+to do on your side: set the switches and Groq lines in Dokploy, rotate the exposed NVIDIA and AG Studio keys (#126), and
+run the hosted checks (#36, #123, voice and chat in Chrome and Safari over HTTPS). Not started: a clarifying question in intent
+drafting and a `platform_summary` Studio tool.
+
 ## M4 Submission (Nov 11)
 
 | Deliverable                                  | Owner    | Status  |
