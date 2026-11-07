@@ -89,8 +89,12 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           const due = (d: { respondBy?: string }) => Date.parse(d.respondBy ?? "") || Infinity;
           const waiting = items.filter((d) => d.needsResponse).sort((a, b) => due(a) - due(b));
           const others = items.filter((d) => !d.needsResponse);
+          // Counts by class over every dispute, not just the rows returned: without them the model guessed
+          // ("7 are agent overreach" when 7 was the number NOT waiting for a response and 5 were overreach).
+          const byClass: Record<string, number> = {};
+          for (const d of items) if ("class" in d && d.class) byClass[d.class] = (byClass[d.class] ?? 0) + 1;
           return {
-            counts: { total: items.length, needResponse: waiting.length, other: others.length },
+            counts: { total: items.length, needResponse: waiting.length, other: others.length, byClass },
             disputes: [...waiting, ...others].slice(0, STUDIO_LIST_LIMIT),
             ...(items.length > STUDIO_LIST_LIMIT
               ? { note: `Showing the first ${STUDIO_LIST_LIMIT} of ${items.length}.` }
@@ -131,6 +135,12 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           reasons: rec.reasons,
           failedChecks: rec.constraintChecks.filter((check) => !check.passed).map((check) => check.name),
           ...(rec.mandateHash ? { mandateHash: rec.mandateHash } : {}),
+          // So "when is it due?" and "how much?" are answered from the dispute itself.
+          ...(dispute.status ? { status: dispute.status } : {}),
+          ...(dispute.amountValue !== undefined
+            ? { amount: `${dispute.currency ?? "USD"} ${(dispute.amountValue / 100).toFixed(2)}` }
+            : {}),
+          ...(dispute.sellerResponseDueDate ? { respondBy: dispute.sellerResponseDueDate } : {}),
         };
       } catch (error) {
         if (isAiUnavailable(error)) {
@@ -141,7 +151,7 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
             message:
               deps.aiMode === "live"
                 ? "Studio AI is unavailable. The Analytics and Disputes views are still available."
-                : "Replay has no valid recorded answer for this question and dispute data. Use Analytics or Disputes, or ask the team to record the starter prompts.",
+                : "This question needs live AI, and this deployment is running without it. Without live AI the chat still answers questions about a dispute, counts, what needs attention, a buyer reply draft and what a term means. Analytics and Disputes are available either way.",
           });
         }
         if (error instanceof PayPalError && error.status === 404) {

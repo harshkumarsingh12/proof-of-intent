@@ -228,8 +228,8 @@ export function StudioView({
         <span style={{ color: v("textMuted"), fontSize: 13 }}>
           {mode === "edit"
             ? aiLive
-              ? "Ask about a dispute or ask for a buyer reply draft. The AI reads disputes; it can't take any action."
-              : "Replay answers recorded questions only when their dispute data and tools still match. A missing recording gives an unavailable response. Use Dashboard to explore the data, or configure live AI for new questions."
+              ? "Ask about a dispute, the counts, what needs attention, or a buyer reply draft. The AI reads disputes; it can't take any action."
+              : "Without live AI the chat still answers the common questions from your own data: explain a dispute, draft a buyer reply, counts, what needs attention, what a term means. Open-ended questions need live AI. It only reads; it can't take any action."
             : "Pick a dispute in either widget and both follow. Switch to Ask the AI to chat about a dispute."}
         </span>
       </div>

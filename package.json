@@ -32,6 +32,7 @@
     "ai:check": "tsx --env-file=.env scripts/ai/check-providers.ts",
     "studio:record": "tsx scripts/ai/record-studio.ts",
     "eval": "tsx scripts/ai/eval.ts",
+    "smoke:studio": "tsx scripts/smoke/studio.ts",
     "smoke:shop": "tsx scripts/smoke/shop.ts",
     "agent:eval": "tsx --env-file=.env scripts/ai/agent-eval.ts"
   },

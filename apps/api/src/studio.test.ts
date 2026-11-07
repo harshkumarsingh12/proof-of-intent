@@ -30,7 +30,8 @@ test("Studio authenticates the operator and projects only read-only PayPal field
     expect(turn.headers["x-poi-ai-mode"]).toBe("replay");
     expect(turn.headers["x-poi-ai-prompt-version"]).toBe("j4-v1");
     expect(turn.json().error).toBe("studio_ai_unavailable");
-    expect(turn.json().message).toContain("Replay has no valid recorded answer");
+    expect(turn.json().message).toContain("needs live AI");
+    expect(turn.json().message).toContain("what needs attention");
     expect(paypal.disputeActions).toEqual([]);
   } finally {
     await app.close();
@@ -74,7 +75,13 @@ test("with a database the chat's list_disputes reads our table: class, action, a
     });
     const body = res.json() as { counts: Record<string, number>; disputes: Record<string, unknown>[] };
     const { disputes } = body;
-    expect(body.counts).toEqual({ total: 3, needResponse: 1, other: 2 });
+    // byClass counts every analysed dispute, so "how many are overreach?" never has to be worked out from the rows.
+    expect(body.counts).toEqual({
+      total: 3,
+      needResponse: 1,
+      other: 2,
+      byClass: { AGENT_OVERREACH: 1, MANDATE_COMPLIANT: 1 },
+    });
     expect(disputes[0]?.id).toBe("PP-D-SOON"); // waiting for the merchant comes first
     const by = Object.fromEntries(disputes.map((d) => [d.id as string, d]));
     expect(by["PP-D-SOON"]).toEqual({
@@ -151,6 +158,63 @@ test("the chat list is capped and still counts every dispute, soonest deadline f
     expect(body.disputes).toHaveLength(12);
     expect(body.disputes[0]?.id).toBe("PP-D-30");
     expect(body.note).toMatch(/12 of 30/);
+  } finally {
+    await app.close();
+  }
+});
+
+test("explaining a dispute also says its status, amount and when a response is due", async () => {
+  const mem = memoryDb();
+  await mem.db.saveDispute({
+    id: "PP-D-9",
+    status: "WAITING_FOR_SELLER_RESPONSE",
+    amountValue: 9500,
+    currency: "USD",
+    sellerResponseDueDate: "2026-11-09T00:00:00.000Z",
+    paypal: {},
+    recommendation: {
+      class: "AGENT_OVERREACH",
+      action: "ACCEPT_CLAIM",
+      reasons: ["ATTRIBUTE_MISMATCH"],
+      constraintChecks: [
+        { name: "amount_max", passed: true },
+        { name: "attributes.color", passed: false },
+      ],
+    },
+  });
+  await mem.db.saveDispute({
+    id: "PP-D-BARE",
+    paypal: {},
+    recommendation: { class: "NO_MANDATE", action: "STANDARD_EVIDENCE", reasons: [], constraintChecks: [] },
+  });
+  const app = buildApp({ paypal: createMockClient(), db: mem.db, operatorToken: "t", aiMode: "replay" });
+  const explain = (disputeId: string) =>
+    app.inject({
+      method: "POST",
+      url: "/ai/studio",
+      headers: { authorization: "Bearer t" },
+      payload: { kind: "tool", tool: "explain_dispute", disputeId },
+    });
+  try {
+    expect((await explain("PP-D-9")).json()).toEqual({
+      id: "PP-D-9",
+      class: "AGENT_OVERREACH",
+      action: "ACCEPT_CLAIM",
+      reasons: ["ATTRIBUTE_MISMATCH"],
+      failedChecks: ["attributes.color"],
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      amount: "USD 95.00",
+      respondBy: "2026-11-09T00:00:00.000Z",
+    });
+    // Fields a dispute doesn't have yet are left out, not invented.
+    expect((await explain("PP-D-BARE")).json()).toEqual({
+      id: "PP-D-BARE",
+      class: "NO_MANDATE",
+      action: "STANDARD_EVIDENCE",
+      reasons: [],
+      failedChecks: [],
+    });
+    expect((await explain("PP-D-NONE")).statusCode).toBe(404);
   } finally {
     await app.close();
   }

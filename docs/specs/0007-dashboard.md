@@ -52,7 +52,7 @@ cross-filtering between widgets, and the dispute selector driving the other two.
 (shown only where Studio is enabled; the longest-matching nav item is the active one, `src/nav.ts`), and the Analytics page
 opens with a banner for it. *The two widgets follow each other:* the mandate diff and the evidence preview share one selected
 dispute (`src/studio-selection.ts`); each used to keep its own dropdown, so changing one left the other (and its PDF) behind.
-*The AI chat:* ag-studio has the chat panel only in edit mode, so a "Dashboard | Ask the AI" switch above Studio turns edit
+*Reliability:* common questions are answered by a local planner (spec 0006, J4 planner), so counts and statuses come from the tools and the chat refuses to act; `pnpm smoke:studio` checks it in a browser. *The AI chat:* ag-studio has the chat panel only in edit mode, so a "Dashboard | Ask the AI" switch above Studio turns edit
 mode on with only the chat and filters panels. The chat opens on DisputeExplainer, not the built-in orchestrator: that prompt
 builds dashboards, starts by inspecting the page, and with the live model looped on `view_schema`/`view_report`/`view_page`
 and sent `delegate_to` arguments that failed its nested schema. DisputeExplainer has flat `{ disputeId }` tools, a short

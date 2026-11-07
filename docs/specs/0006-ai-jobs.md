@@ -33,6 +33,13 @@ record here by Oct 31.
 **Replay mode (`AI_MODE=replay`, the default):** responses recorded during eval runs, keyed by SHA-256 of the
 canonical input, stored in `packages/ai/replay/*.json`. Unknown input in replay mode → unavailable → human.
 
+**J4 planner.** Before replay lookup or any model call, `planStudio` (`packages/ai/src/studio-plan.ts`) reads the
+conversation and, for common questions, either requests the read-only lookup or writes the answer from its result:
+named dispute (and a buyer reply draft on request), two disputes, counts by class, what needs attention, which first,
+glossary terms, and a fixed refusal for requests to act (the chat is read-only). Unknown ids say so. Open-ended
+questions fall through to replay or the model, and model text that claims an action is prefixed with the refusal.
+`list_disputes` counts are `{total, needResponse, other, byClass}`; `explain_dispute` adds `status`, `amount`, `respondBy`.
+
 **J4 replay and starter capture (#124).** `j4-v1` keys include the exact redacted instructions, history,
 offered tools, tool choice and output format. Recorded tool calls use the same validation as live calls and
 execute the existing read-only lookups again. Changed dispute results miss the recording instead of showing
