@@ -31,7 +31,7 @@ import { nearMiss } from "../../src/near-miss";
 import { REASON_TEXT } from "../../src/reasons";
 import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact } from "../../src/signing";
 import { stepUpApproval, stepUpListProof } from "../../src/stepup";
-import { initialVoice, MIN_READBACK_MS, READBACK_TIMEOUT_MS, readBack, voiceReducer } from "../../src/voice";
+import { initialVoice, voiceReducer } from "../../src/voice";
 import { removeProof, setupProof } from "../../src/wallet";
 import ChatPanel from "./ChatPanel";
 import { useSpeech } from "./useVoice";
@@ -177,7 +177,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [shopper, setShopper] = useState<StoredShopper>();
   const [keyError, setKeyError] = useState<string>();
   const [form, setForm] = useState<IntentForm>(() => presetForm(CATEGORIES[0] ?? ""));
-  // The latest form, for async steps that must not read a stale render (voice drafts, then signs, in one go).
+  // The latest form, for async steps that must not read a stale render (a spoken request drafts the limits asynchronously).
   const formRef = useRef(form);
   formRef.current = form;
   const [resetting, setResetting] = useState(false);
@@ -444,40 +444,16 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
   const chooseWithAgent = () => (signed ? chooseWith(signed) : undefined);
 
-  // ---- voice ordering (spec 0010) ----
-  // Speech only ever fills the box. The agent drafts the limits, the card below reads them back, and signing needs a
-  // separate confirmation: a tap, or a new utterance after the card is up (never part of the request itself).
-  const { ready, supported, canSpeak, listen, stop, speak } = useSpeech();
+  // ---- voice input (spec 0010) ----
+  // Speech only ever fills the request box. The agent then fills in the limits, the shopper can edit them or speak
+  // again, and signing is still their own click on "Sign my intent": nothing is signed or bought from what was said.
+  const { ready, supported, listen, stop } = useSpeech();
   const [voice, dispatchVoice] = useReducer(voiceReducer, initialVoice);
-  const [speakBack, setSpeakBack] = useState(false);
-  const [armed, setArmed] = useState(false);
-  const voiceRef = useRef(voice);
-  voiceRef.current = voice;
-  const voiceRun = useRef(false);
-  const readbackCard = voice.snapshot ? readBack(voice.snapshot) : undefined;
-  const voiceIdle = voice.phase === "idle" || voice.phase === "done" || voice.phase === "failed";
-
-  const listenForConfirmation = useCallback(() => {
-    listen({
-      onResult: (text, final) => {
-        if (final) dispatchVoice({ type: "CONFIRM_HEARD", text, at: Date.now() });
-      },
-      onEnd: () => {},
-    });
-  }, [listen]);
+  const voiceIdle = voice.phase === "idle" || voice.phase === "failed";
 
   const draftFromVoice = async (text: string) => {
     const drafted = await draftFrom(text);
-    if ("error" in drafted) {
-      dispatchVoice({ type: "FAILED", message: drafted.error });
-      return;
-    }
-    const rb = readBack(drafted.form);
-    if (!rb.ok) {
-      dispatchVoice({ type: "FAILED", message: rb.problem });
-      return;
-    }
-    dispatchVoice({ type: "DRAFTED", form: drafted.form, at: Date.now() });
+    dispatchVoice("error" in drafted ? { type: "FAILED", message: drafted.error } : { type: "DRAFTED" });
   };
 
   const startVoice = () => {
@@ -493,79 +469,10 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     });
   };
 
-  const cancelVoice = () => {
-    stop();
-    dispatchVoice({ type: "CANCEL" });
-  };
-
-  // The microphone is only on while listening for the request or for the confirmation.
+  // The microphone is only on while listening for the request.
   useEffect(() => {
-    if (voice.phase !== "listening" && voice.phase !== "readback") stop();
+    if (voice.phase !== "listening") stop();
   }, [voice.phase, stop]);
-
-  // The confirm button arms itself a beat after the card appears (the reducer ignores anything sooner anyway).
-  useEffect(() => {
-    setArmed(false);
-    if (voice.phase !== "readback") return;
-    const timer = setTimeout(() => setArmed(true), MIN_READBACK_MS);
-    return () => clearTimeout(timer);
-  }, [voice.phase, voice.shownAt]);
-
-  // A read-back that nobody answers expires, and editing the limits while it is up discards it.
-  useEffect(() => {
-    if (voice.phase !== "readback") return;
-    const timer = setTimeout(
-      () => dispatchVoice({ type: "TIMEOUT", at: Date.now() }),
-      READBACK_TIMEOUT_MS + 50,
-    );
-    return () => clearTimeout(timer);
-  }, [voice.phase, voice.shownAt]);
-  useEffect(() => {
-    if (
-      voice.phase === "readback" &&
-      voice.snapshot &&
-      JSON.stringify(form) !== JSON.stringify(voice.snapshot)
-    )
-      dispatchVoice({ type: "EDITED" });
-  }, [form, voice.phase, voice.snapshot]);
-
-  // The card is up: read it aloud if asked (microphone off meanwhile), then listen once for "confirm".
-  useEffect(() => {
-    if (voice.phase !== "readback") return;
-    const rb = voice.snapshot ? readBack(voice.snapshot) : undefined;
-    if (!rb?.ok) return;
-    if (speakBack && canSpeak) speak(rb.speech, listenForConfirmation);
-    else listenForConfirmation();
-    // Only when the card first appears: `shownAt` identifies it.
-  }, [voice.shownAt]);
-
-  // Confirmed: sign exactly the limits that were read back, then let the agent shop, using the returned values.
-  useEffect(() => {
-    if (voice.phase !== "confirmed" || !voice.snapshot || voiceRun.current) return;
-    voiceRun.current = true;
-    const snapshot = voice.snapshot;
-    void (async () => {
-      try {
-        dispatchVoice({ type: "SIGNING" });
-        const s = await signIntent(snapshot);
-        if (!s) {
-          dispatchVoice({
-            type: "FAILED",
-            message: "Signing didn't work. Check the message in the limits section.",
-          });
-          return;
-        }
-        // Cancelled while signing: the intent is signed, but nothing is proposed or bought.
-        if (voiceRef.current.phase !== "signing") return;
-        dispatchVoice({ type: "CHOOSING" });
-        await chooseWith(s);
-        dispatchVoice({ type: "DONE" });
-      } finally {
-        voiceRun.current = false;
-      }
-    })();
-    // signIntent and chooseWith are recreated every render; the ref and the phase guard make this run once.
-  }, [voice.phase, voice.snapshot]);
 
   /** onApprove: countersign the exact Cart Mandate the merchant signed, then let the merchant capture. */
   const approve = useCallback(async () => {
@@ -706,7 +613,18 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         </p>
         <label className="field">
           What should the agent buy?
-          <textarea value={form.description} onChange={(e) => set("description", e.target.value)} />
+          <textarea
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+            onKeyDown={(e) => {
+              // Enter fills in the limits from the words (Shift+Enter is a new line); the shopper still signs.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (shopper && !drafting && form.description.trim()) void draftWithAgent();
+              }
+            }}
+          />
+          <span className="meta">Press Enter and the agent fills in the limits below. You can edit them.</span>
         </label>
         {config.voiceEnabled && (
           <div className="voice">
@@ -720,16 +638,6 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
                 >
                   {voice.phase === "listening" ? "Listening…" : "Speak your request"}
                 </button>{" "}
-                {canSpeak && (
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={speakBack}
-                      onChange={(e) => setSpeakBack(e.target.checked)}
-                    />
-                    Read the limits aloud
-                  </label>
-                )}
                 <p className="meta">
                   Your browser sends the audio to its own speech service (Google, Apple or Microsoft). Typing
                   works too.
@@ -747,46 +655,6 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             {voice.message && voiceIdle && (
               <p className={voice.phase === "failed" ? "error" : "meta"} role="status">
                 {voice.message}
-              </p>
-            )}
-          </div>
-        )}
-        {readbackCard && ["readback", "confirmed", "signing", "choosing"].includes(voice.phase) && (
-          <div className="verdict warn" role="region" aria-label="Check before signing">
-            <h3>Please check what I heard</h3>
-            {readbackCard.ok ? (
-              <ul className="reasons">
-                {readbackCard.lines.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="error">{readbackCard.problem}</p>
-            )}
-            {voice.phase === "readback" ? (
-              <>
-                <p className="meta">Nothing is signed yet. Confirm to sign exactly this, or cancel.</p>
-                <button
-                  className="btn btn-primary btn-small"
-                  disabled={!armed}
-                  onClick={() => dispatchVoice({ type: "CONFIRM", at: Date.now() })}
-                >
-                  Confirm and sign
-                </button>{" "}
-                {supported && (
-                  <button className="btn btn-ghost btn-small" onClick={listenForConfirmation}>
-                    Say “confirm”
-                  </button>
-                )}{" "}
-                <button className="btn btn-ghost btn-small" onClick={cancelVoice}>
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <p className="meta" aria-live="polite">
-                {voice.phase === "choosing"
-                  ? "Signed. The agent is shopping within these limits…"
-                  : "Signing with your key…"}
               </p>
             )}
           </div>
@@ -841,7 +709,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           Ask me to confirm every cart, even ones that fit
         </label>
         <button className="btn btn-ghost" disabled={!shopper || drafting} onClick={draftWithAgent}>
-          {drafting ? "Agent is reading…" : "Let the agent fill in the limits from my words"}
+          {drafting ? "Agent is reading…" : "Fill in the limits from my words"}
         </button>{" "}
         <button className="btn btn-primary" disabled={!shopper} onClick={sign}>
           Sign my intent
