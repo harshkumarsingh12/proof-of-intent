@@ -36,6 +36,9 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 | Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |
 
 The checkout checks semantic fit through the Vercel AI SDK using NVIDIA Nemotron or versioned replay responses.
+On Nov 7 the live model scored 20/20 on the semantic-fit set (none of the 6 mismatches approved; measured after checkout's local guards)
+and 12/12 on dispute explanations that cite the policy finding, with every model answer schema-valid (31/31).
+See the [eval report](docs/evals/2026-11-07.md).
 The dispute worker replays the checkout rules to recommend a response. The operations dashboard uses AG Grid for
 orders and checkout verdicts, and **Dispute Studio** (AG Studio) for the dispute workspace: KPI tiles, a class donut that
 filters everything, an AG Grid of disputes, a mandate diff and evidence preview that follow the selected dispute, custom
