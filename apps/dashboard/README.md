@@ -6,12 +6,14 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 
 ## Pages
 
-| Page           | Route            | Files                                                            |
-| -------------- | ---------------- | ---------------------------------------------------------------- |
-| Home           | `/`              | `app/(home)/page.tsx`, `app/HomeView.tsx`                        |
-| Dispute queue  | `/disputes`      | `app/disputes/(queue)/page.tsx`, `app/disputes/DisputeQueue.tsx` |
-| Dispute detail | `/disputes/<id>` | `app/disputes/[id]/page.tsx`, `DisputeDetailView.tsx`            |
-| Analytics      | `/analytics`     | `app/analytics/page.tsx`, `AnalyticsView.tsx`                    |
+| Page           | Route               | Files                                                            |
+| -------------- | ------------------- | ---------------------------------------------------------------- |
+| Home           | `/`                 | `app/(home)/page.tsx`, `app/HomeView.tsx`                        |
+| Dispute queue  | `/disputes`         | `app/disputes/(queue)/page.tsx`, `app/disputes/DisputeQueue.tsx` |
+| Dispute detail | `/disputes/<id>`    | `app/disputes/[id]/page.tsx`, `DisputeDetailView.tsx`            |
+| Analytics      | `/analytics`        | `app/analytics/page.tsx`, `AnalyticsView.tsx`                    |
+| Orders         | `/orders`           | `app/orders/page.tsx`, `OrdersView.tsx`                          |
+| Dispute Studio | `/analytics/studio` | `app/analytics/studio/` (`StudioView.tsx`, `studio-widgets.tsx`) |
 
 Dispute Studio is in the sidebar under Analytics and has a banner on the Analytics page. It opens on four KPI tiles, a donut
 of disputes by class (click a slice to filter everything), the agent platform cards, an AG Grid of disputes (click a row, filter,

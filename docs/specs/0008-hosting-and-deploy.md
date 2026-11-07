@@ -38,7 +38,7 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
 
 1. `docker compose config` is valid and the API image builds in CI on every PR. *(done)*
 2. `https://<api host>/healthz` returns 200 from outside the server. *(done: `https://poi-api.iotkiit.in/healthz`, Nov 5)*
-3. A real sandbox webhook reaches the server and is verified. *(open, #19; disputes reach the server either way through the worker's `list_disputes` catch-up)*
+3. A real sandbox webhook reaches the server and is verified. *(done Nov 7, #19: `pnpm sandbox:webhook-check` raised the delivery count 100 to 101 and a repeat left it at 101; `GET /readyz` reports the count)*
 4. Uptime alert fires within 5 minutes of stopping the API. *(M2)*
 5. Pushing `v0.1.0-hackathon` deploys and passes the health check. *(M4)*
 
@@ -47,5 +47,8 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
 - ~~D6 Caddy vs Cloudflare Tunnel, D7 domain.~~ Decided Nov 5: Dokploy behind Cloudflare, `poi-*.iotkiit.in`.
 - The `backup` service is in the `server` profile, which Dokploy doesn't start (its proxy holds 80 and 443).
   Split it out of that profile, or use Dokploy's scheduled backups. @harshkumarsingh12.
+- A redeploy can leave `postgres` on a stale network so the API answers 500 (`ENOTFOUND postgres`) while `/healthz` and
+  `/readyz` stay green (Nov 6 and Nov 7). Permanent fix: #121; `/readyz` should ping the database: #120. Recovery today:
+  Stop then Deploy in Dokploy (SETUP.md, troubleshooting).
 - If SSH from GitHub can't reach the server (NAT), deploy by running `docker compose pull && up -d` on the server
   manually after the images are pushed.

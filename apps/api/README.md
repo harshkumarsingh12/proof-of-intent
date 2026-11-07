@@ -8,7 +8,8 @@ Fastify service on port 3000 (`pnpm dev:api`).
 keys (`POST /keys/shopper`, `POST /keys/agent`, `POST /keys/:kind/:kid/retire`), disputes (`GET /disputes`,
 `/disputes/:id/recommendation`, `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions`,
 `POST /disputes/:id/actions/:action`), `GET /orders`, `GET /verifications`, `POST /orders/:id/tracking`, step-up links
-(`GET /stepup/:token`, `POST /stepup/:token/approve`) and `POST /ai/studio`. Still 501 with its owner:
+(`GET /stepup/:token`, `POST /stepup/:token/approve`) and `POST /ai/studio` (operator token, 60 requests a minute; `list_disputes` reads our own
+table: counts, then what needs a response soonest-first, capped at 12). Still 501 with its owner:
 `GET /analytics/:report` (the dashboard's analytics page computes from the disputes and orders it already reads).
 
 `buildApp(deps)` takes `{ paypal, db?, merchant?, aiMode?, operatorToken?, semanticFit?, now? }`; `await depsFromEnv()`

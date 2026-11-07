@@ -6,18 +6,18 @@ of every `ci` run.
 
 ## M0 Foundations (Oct 31)
 
-| Deliverable                                                | Owner           | Status                                                                                                                  |
-| ---------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Specs 0001–0009 reviewed and Accepted                      | each spec owner | ✅ Built against since Oct 31; 0001–0005, 0007, 0008 In Progress, 0006 and 0009 Accepted (Nov 6)                        |
-| Team server: Docker, Compose, Postgres up                  | Harsh           | ✅ Done (Dokploy, Nov 5)                                                                                                |
-| Public HTTPS and webhook endpoint (D6, D7)                 | Harsh           | ✅ HTTPS live on `poi-*.iotkiit.in`; sandbox webhook points at `https://poi-api.iotkiit.in/webhooks/paypal` (Nov 5)     |
-| PayPal sandbox app and accounts (incl. judge accounts)     | Harsh           | ✅ US merchant app with Disputes and Vault enabled, 4 US shopper accounts (2 for judges), webhook with 8 events (Nov 5) |
-| `PAYPAL_MODE=mock`                                         | Harsh           | ✅ Done                                                                                                                 |
-| All four registered on Devpost; Representative named       | Sumedha         | Pending                                                                                                                 |
-| AG Studio trial key and watermark check                    | Sikruti         | Pending                                                                                                                 |
-| LLM provider chosen (D1)                                   | Sumedha         | ✅ NVIDIA `nemotron-3.5-lightning-30b-a3b`, thinking off (spec 0006)                                                    |
-| Repo, CI/CD, contracts, mandate crypto, policy engine core | Harsh, Sristee  | ✅ Done                                                                                                                 |
-| Server in sandbox mode (PayPal keys, merchant signing key) | Harsh           | ✅ Done; `/readyz` reports `paypalMode: sandbox` (Nov 5)                                                                |
+| Deliverable                                                | Owner           | Status                                                                                                                                                                                                               |
+| ---------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Specs 0001–0009 reviewed and Accepted                      | each spec owner | ✅ Built against since Oct 31; 0001–0005, 0007, 0008 In Progress, 0006 and 0009 Accepted (Nov 6)                                                                                                                     |
+| Team server: Docker, Compose, Postgres up                  | Harsh           | ✅ Done (Dokploy, Nov 5)                                                                                                                                                                                             |
+| Public HTTPS and webhook endpoint (D6, D7)                 | Harsh           | ✅ HTTPS live on `poi-*.iotkiit.in`; sandbox webhook points at `https://poi-api.iotkiit.in/webhooks/paypal` (Nov 5)                                                                                                  |
+| PayPal sandbox app and accounts (incl. judge accounts)     | Harsh           | ✅ US merchant app with Disputes and Vault enabled, 4 US shopper accounts (2 for judges), webhook with 8 events (Nov 5)                                                                                              |
+| `PAYPAL_MODE=mock`                                         | Harsh           | ✅ Done                                                                                                                                                                                                              |
+| All four registered on Devpost; Representative named       | Sumedha         | Pending                                                                                                                                                                                                              |
+| AG Studio trial key and watermark check                    | Sikruti         | ✅ Key in use (45-day trial, ends about Dec 13; renewal is #51). With no key or an invalid one Studio still renders and the console logs "Invalid License Key"; the page needs a key to be offered at all (SETUP.md) |
+| LLM provider chosen (D1)                                   | Sumedha         | ✅ NVIDIA `nemotron-3.5-lightning-30b-a3b`, thinking off (spec 0006)                                                                                                                                                 |
+| Repo, CI/CD, contracts, mandate crypto, policy engine core | Harsh, Sristee  | ✅ Done                                                                                                                                                                                                              |
+| Server in sandbox mode (PayPal keys, merchant signing key) | Harsh           | ✅ Done; `/readyz` reports `paypalMode: sandbox` (Nov 5)                                                                                                                                                             |
 
 **Done when:** specs Accepted, fixtures committed, server answers `/healthz` over public HTTPS.
 
@@ -42,17 +42,17 @@ of every `ci` run.
 
 ## M2 Dispute cycle (Nov 6)
 
-| Deliverable                                                     | Owner           | Status                                                                                                                                        |
-| --------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sandbox dispute recipe script                                   | Harsh           | ✅ Done (live run Nov 5: dispute `PP-R-NSZ-10196423`)                                                                                         |
-| require-evidence, provide-evidence, send-message                | Harsh           | provide-evidence + send-message ✅; require-evidence lives in the recipe script (sandbox-only)                                                |
-| Agent Toolkit dispute tools in the worker                       | Sikruti         | ✅ `get_dispute`, `list_disputes`, `accept_dispute_claim`, `create_shipment_tracking` through `@paypal/agent-toolkit` (#59)                   |
-| Evidence package (PDF + JSON)                                   | Sikruti         | ✅ Built by the worker for MANDATE_COMPLIANT disputes, served at `/disputes/:id/evidence.pdf` (#82)                                           |
-| Recommendation endpoint + operator actions                      | Sikruti + Harsh | ✅ `/disputes*` routes, operator actions behind `OPERATOR_TOKEN` and the dashboard login (#82, #83); override to accept with a note (this PR) |
-| Dispute workspace, mandate diff widget, evidence preview widget | Sikruti         | ✅ Live data from the API; the preview shows the exact PDF that is submitted (#83)                                                            |
-| J2 classification, J3 drafting                                  | Sumedha         | Pending                                                                                                                                       |
-| Step-up links; agent-alone flow with vault; buyer agent         | Sristee         | Step-up links ✅ (#35); buyer agent with its three tools ✅ (#37, replay chooser + live model); agent-alone flow with vault pending           |
-| Uptime monitor, backups, rate limits                            | Harsh           | Rate limits + backups ✅; external monitor pending (public URLs now live); backups need a Dokploy setup (`server` profile not started)        |
+| Deliverable                                                     | Owner           | Status                                                                                                                                                          |
+| --------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sandbox dispute recipe script                                   | Harsh           | ✅ Done (live run Nov 5: dispute `PP-R-NSZ-10196423`)                                                                                                           |
+| require-evidence, provide-evidence, send-message                | Harsh           | provide-evidence + send-message ✅; require-evidence lives in the recipe script (sandbox-only)                                                                  |
+| Agent Toolkit dispute tools in the worker                       | Sikruti         | ✅ `get_dispute`, `list_disputes`, `accept_dispute_claim`, `create_shipment_tracking` through `@paypal/agent-toolkit` (#59)                                     |
+| Evidence package (PDF + JSON)                                   | Sikruti         | ✅ Built by the worker for MANDATE_COMPLIANT disputes, served at `/disputes/:id/evidence.pdf` (#82)                                                             |
+| Recommendation endpoint + operator actions                      | Sikruti + Harsh | ✅ `/disputes*` routes, operator actions behind `OPERATOR_TOKEN` and the dashboard login (#82, #83); override to accept with a note (this PR)                   |
+| Dispute workspace, mandate diff widget, evidence preview widget | Sikruti         | ✅ Live data from the API; the preview shows the exact PDF that is submitted (#83)                                                                              |
+| J2 classification, J3 drafting                                  | Sumedha         | Built (spec 0006 as built); the replay answers are hand-authored, not recorded live; the live J1/J2 runner exists (#104) but no dated report is committed (#43) |
+| Step-up links; agent-alone flow with vault; buyer agent         | Sristee         | Step-up links ✅ (#35); buyer agent with its three tools ✅ (#37, replay chooser + live model); agent-alone flow with vault pending                             |
+| Uptime monitor, backups, rate limits                            | Harsh           | Rate limits + backups ✅; external monitor pending (public URLs now live); backups need a Dokploy setup (`server` profile not started)                          |
 
 **Done when:** a real `CUSTOMER.DISPUTE.CREATED` is classified, evidence is submitted and a claim is accepted in
 sandbox through the UI.
@@ -71,7 +71,7 @@ check (#19; the `list_disputes` catch-up already covers missed webhooks), J2/J3 
 | ------------------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Studio agent harness + DisputeExplainer                                  | Sumedha + Sikruti        | Harness ✅ (#105); custom widgets, theme and the opening report ✅; needs a license key on the server (#15, #51) |
 | Analytics page + agent platform widget                                   | Sikruti (Harsh backup)   | ✅ Analytics page with platform breakdown (#73), polished in #78                                                 |
-| Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | Pending                                                                                                          |
+| Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | ✅ `pnpm demo:seed` (mock stack only: `PP-D-1001` compliant with its PDF, `PP-D-1002` overreach)                 |
 | Security checklist                                                       | Sristee                  | Pending                                                                                                          |
 | Full evals and report                                                    | Sumedha                  | Pending                                                                                                          |
 | Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | ✅ Nov 7, see the status below                                                                                   |
@@ -92,6 +92,15 @@ three times running. Proven directly with `pnpm sandbox:webhook-check` once `/re
 `PAYMENT.AUTHORIZATION.CREATED` resent by PayPal raised the held count 100 to 101, and resending it again left it at 101
 (#19). Still open: the operator-row-before-PayPal-call order was checked in tests,
 not on the hosted server (no audit route, #74).
+
+**Status (Nov 7, evening):** Studio shipped (#117 to #119): four KPI tiles, a class donut that cross-filters everything, the
+agent platform cards, an AG Grid of disputes (filter, CSV export, a row click drives the mandate diff and the PDF), the
+mandate diff and evidence preview, a Studio theme from the dashboard palette, a sidebar entry and an Ask the AI chat that
+opens on DisputeExplainer (checked in Chrome with the real key and the live model). Real webhook delivery is verified
+(#114, #115). A redeploy left the hosted API without a route to Postgres for a while; Stop then Deploy fixed it, and the
+cause and a permanent fix are tracked in #120 and #121. Still open before submission: the hosted check of the new Studio and
+the AI variables (#123), judge disputes that expire before Dec 15 (#122), the chat in replay mode (#124), Studio follow-ups
+(#125), credential rotation (#126), dark mode as a stretch (#127), and the older M4 items below.
 
 ## M4 Submission (Nov 11)
 
