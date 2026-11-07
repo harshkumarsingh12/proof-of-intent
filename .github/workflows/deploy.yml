@@ -82,7 +82,7 @@ jobs:
             docker compose --profile server pull
             docker compose --profile server up -d
             # Not a sleep and one /healthz: wait for each part, and fail naming the one that is not up.
-            scripts/deploy/verify-release.sh
+            REQUIRE_BACKUP=1 scripts/deploy/verify-release.sh
 
   # The server job checks inside the stack. This checks what people reach: the proxy, the certificate and the routes.
   # It runs even when nothing was deployed over SSH (a Dokploy server deploys from main, not from the tag), and says

@@ -12,10 +12,12 @@
 #   buyer      /healthz
 #   dashboard  /healthz
 #   worker     healthy: it finished a poll of the dispute inbox within the last minute (apps/worker/src/heartbeat.ts)
-#   backup     when the backup service is running, a dump less than 26 hours old exists in ./backups
+#   backup     when the backup service is running, a dump less than 26 hours old exists (read through the service, so it
+#              works whether the dumps are in ./backups or in the named volume: see BACKUP_DIR in docker-compose.yml)
 #
 # A service that is still starting is waited for, up to VERIFY_TIMEOUT seconds per check (default 120).
-# COMPOSE overrides the compose command (default: docker compose --profile server).
+# COMPOSE overrides the compose command (default: docker compose --profile server). REQUIRE_BACKUP=1 makes a missing backup
+# service a failure instead of a skip: use it wherever backups are meant to exist (the team server).
 set -u
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -69,9 +71,10 @@ api_ready() {
 buyer_up() { inside buyer http://127.0.0.1:3001/healthz >/dev/null || { echo "the shop's /healthz did not answer 200"; return 1; }; }
 dashboard_up() { inside dashboard http://127.0.0.1:3002/healthz >/dev/null || { echo "the dashboard's /healthz did not answer 200"; return 1; }; }
 
+# shellcheck disable=SC2086
 fresh_backup() {
-  [ -n "$(find backups -name 'poi-*.sql.gz' -mmin "-$BACKUP_MAX_AGE_MIN" 2>/dev/null | head -n1)" ] ||
-    { echo "no dump newer than $((BACKUP_MAX_AGE_MIN / 60)) h in ./backups"; return 1; }
+  [ -n "$($COMPOSE exec -T backup find /backups -name 'poi-*.sql.gz' -mmin "-$BACKUP_MAX_AGE_MIN" 2>/dev/null | head -n1)" ] ||
+    { echo "no dump newer than $((BACKUP_MAX_AGE_MIN / 60)) h in the backup service's /backups"; return 1; }
 }
 
 step "migrate finished" migrate_done
@@ -83,7 +86,10 @@ step "worker polling the dispute inbox" worker_healthy
 # shellcheck disable=SC2086
 if [ -n "$($COMPOSE ps -q backup)" ]; then
   step "a fresh backup exists" fresh_backup
+elif [ "${REQUIRE_BACKUP:-}" = 1 ]; then
+  echo "FAIL  backups: the backup service is not running, and this deployment is meant to have backups (on Dokploy, set COMPOSE_PROFILES=backup)" >&2
+  exit 1
 else
-  echo "skip  backups: the backup service is not running here (on Dokploy, use its scheduled backups)"
+  echo "skip  backups: the backup service is not running here (set COMPOSE_PROFILES=backup, or use --profile server)"
 fi
 echo "release verified"

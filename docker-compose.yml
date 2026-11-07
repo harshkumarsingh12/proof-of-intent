@@ -105,9 +105,22 @@ services:
   # A failed dump never replaces a good file: it's written to .tmp and renamed only on success.
   backup:
     image: postgres:16-alpine
-    profiles: [server]
+    # `server` is the whole team-server profile and also starts caddy, which Dokploy's proxy makes pointless (it holds 80 and
+    # 443). `backup` is just this service: on Dokploy set COMPOSE_PROFILES=backup in the Environment tab (#38).
+    profiles: [server, backup]
     environment: { PGPASSWORD: "${POSTGRES_PASSWORD:-poi}" }
-    volumes: ["./backups:/backups"]
+    # Where the dumps go. By default ./backups, a folder beside this file: fine with plain Compose. Dokploy replaces its
+    # code directory on every deploy, so there set BACKUP_DIR=backups to use the named volume declared below instead: it
+    # survives deploys, and Dokploy's Volume Backups can copy it off the server.
+    volumes: ["${BACKUP_DIR:-./backups}:/backups"]
+    healthcheck:
+      # Healthy while a dump less than 26 hours old exists (it dumps at start and then every 24 h). `docker compose ps` and
+      # Dokploy show a missing or stuck backup as unhealthy instead of nobody noticing.
+      test: ["CMD-SHELL", "find /backups -name 'poi-*.sql.gz' -mmin -1560 | grep -q ."]
+      interval: 5m
+      timeout: 30s
+      retries: 1
+      start_period: 5m
     entrypoint:
       - sh
       - -c
@@ -139,6 +152,8 @@ services:
 volumes:
   pgdata:
   caddy_data:
+  # Used only when BACKUP_DIR=backups (see the backup service).
+  backups:
 
 networks:
   poi:

@@ -275,28 +275,48 @@ Server `.env` beyond the defaults: `PAYPAL_MODE=sandbox` with the PayPal variabl
 Known gap: `TRUST_PROXY=1` trusts every hop, so behind Cloudflare plus a proxy a client can still send its own
 `X-Forwarded-For`. Trusting exactly two hops, or keying on `CF-Connecting-IP`, would close it.
 
-**Backups.** The `backup` service (server profile) dumps Postgres every 24 h to `./backups/poi-<UTC time>.sql.gz`
-and keeps 7 days. A failed dump is logged as `backup FAILED` and never replaces a good file. Restore:
+**Backups.** The `backup` service dumps Postgres when it starts and then every 24 h to `poi-<UTC time>.sql.gz` in its `/backups`,
+keeping 7 days. A failed dump is logged as `backup FAILED` and never replaces a good file. Its healthcheck is healthy only
+while a dump less than 26 hours old exists, so `docker compose ps` and Dokploy show a missing or stuck backup instead of nobody
+noticing. Where `/backups` lives, and what starts the service, depends on where you run it:
+
+| Where | Start it with | Dumps live in |
+|---|---|---|
+| Plain Compose on your own server | `docker compose --profile server up -d` (also starts caddy) | the `./backups` folder beside `docker-compose.yml` (`BACKUP_DIR` unset) |
+| **Dokploy** | Environment tab: `COMPOSE_PROFILES=backup` (starts the backup service and not caddy, which Dokploy's proxy makes pointless) | the named volume `backups`: Environment tab `BACKUP_DIR=backups` |
+
+On Dokploy use the named volume. A `./backups` folder sits inside the code directory, which Dokploy replaces on every deploy, so
+dumps there are not safe. A named volume survives deploys, and Dokploy's **Volume Backups** (named volumes only) can copy it off
+the server. Restore, whichever mode (the dump is read through the service, so the same command works for both):
 
 ```bash
 docker compose exec -T postgres psql -U poi -d postgres -c "create database poi_restore"
-gunzip -c backups/poi-<time>.sql.gz | docker compose exec -T postgres psql -U poi -d poi_restore -v ON_ERROR_STOP=1 -q
+docker compose exec -T backup cat /backups/poi-<time>.sql.gz | gunzip |
+  docker compose exec -T postgres psql -U poi -d poi_restore -v ON_ERROR_STOP=1 -q
 # check it, then point DATABASE_URL at poi_restore (or rename the databases) and restart api and worker
 ```
 
 `-v ON_ERROR_STOP=1` matters: without it `psql` swallows a SQL error and still exits 0, so a damaged dump looks like a success.
 
 **Prove a backup restores (a drill, #175).** A backup nobody has restored is a guess. `scripts/deploy/restore-drill.sh` (the
-newest dump, or the file you give it) restores into a scratch database beside the live one, never touching live data, prints
-each table's restored and live row count, and drops the scratch database again. It stops, saying why, on a missing or
-corrupt file, any SQL error during the restore, or a restored database with no tables or migrations; it only *reports* that
-a restored table is behind live (a dump is up to 24 hours old) or missing (the dump predates a migration). Run it after
-setting up backups, and again whenever you change them. A dump holds everything the database holds: treat it as a secret.
+newest dump the backup service holds, or a file you give it) restores into a scratch database beside the live one, never
+touching live data, prints each table's restored and live row count, and drops the scratch database again. It stops, saying
+why, on a missing or corrupt file, any SQL error during the restore, or a restored database with no tables or migrations; it
+only *reports* that a restored table is behind live (a dump is up to 24 hours old) or missing (the dump predates a migration).
+Run it after setting up backups, and again whenever you change them. A dump holds everything the database holds: treat it as a
+secret. It reads a plain `pg_dump | gzip` file; a custom-format dump needs `pg_restore` instead.
 
-**Backups on Dokploy.** Dokploy does not start the `backup` service, so the dumps above do not exist there until you either
-split the service out of the `server` profile or set up Dokploy's scheduled backups. Either way, confirm it **yourself**,
-because nothing in this repository can see the server: (1) note the schedule and where the dumps go; (2) wait for one run,
-or trigger one; (3) copy the newest dump to a machine with the stack and run the drill on it. The drill reads a plain
-`pg_dump | gzip` file; a custom-format dump needs `pg_restore` instead.
+**Setting up backups on Dokploy (#38).** Nothing in this repository can see the server, so do these on it and confirm each one:
+
+1. Environment tab: add `COMPOSE_PROFILES=backup` and `BACKUP_DIR=backups`, then deploy. (Dokploy writes the Environment tab to a
+   `.env` file beside `docker-compose.yml`, and Docker Compose reads `COMPOSE_PROFILES` from that file.)
+2. On the server: `docker ps --filter name=backup` shows the container, and within a minute
+   `docker compose exec backup ls -l /backups` lists a `poi-<time>.sql.gz`. After 5 minutes the container reads `healthy`.
+3. Run the drill on it: `scripts/deploy/restore-drill.sh` from the compose directory (set `COMPOSE="docker compose -p <project>"`
+   if Dokploy named the project). It should print `restore drill passed`.
+4. **Copy the dumps off the server** (recommended before Dec 15): in Dokploy, add a **Volume Backup** for the `backups` volume to
+   an S3 destination, or copy the newest dump by hand now and then. Dumps beside the database protect you from a bad
+   migration or a deleted database, not from losing the server.
+5. After a redeploy, check the dumps are still there (that is what the named volume is for) and that the container is `healthy`.
 
 `audit_log` is append-only by trigger, so a demo reset means dropping and recreating the database, not deleting rows.
