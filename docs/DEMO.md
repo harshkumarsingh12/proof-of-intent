@@ -48,7 +48,7 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
    come back to the shop. Sign an intent, tick **Let the agent pay alone from my saved wallet** and propose the grey USD 74
    jacket: there is no PayPal step, and **Paid by your agent** shows the capture. The red USD 95 jacket is still refused with
    nothing charged, and a cart the merchant isn't sure about (the grey USD 79 rain shell) is held under **Waiting for your approval** instead of charged: click **Approve and pay from my wallet** to sign it and pay. (Checked on the mock stack
-   and in the browser smoke test; the hosted sandbox run with a real approval is #36.)
+   and in the browser smoke test, and on the hosted sandbox shop for the wallet and the agent-alone payment; the held-cart approval and the wallet removal are mock-stack only so far.)
 9. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
    mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**
    and try the starter prompts. The hosted data has no agent overreach, so the overreach rate reads 0% there.
