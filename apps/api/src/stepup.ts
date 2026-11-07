@@ -228,8 +228,13 @@ async function approveFound(
     semantic: { approvedBy: "shopper", stepUpId: st.id },
   });
   if (placed.status !== 200) {
-    // PayPal failed. The order row is PAYPAL_FAILED; the agent starts a new checkout rather than the link
-    // retrying blind, because PayPal may have charged before the error reached us.
+    // PayPal's answer was lost on an unattended charge: it may have been made. The link stays usable, and opening it
+    // again confirms that same order with PayPal instead of creating a second one (#159).
+    if (placed.body.error === "paypal_outcome_unknown" || placed.body.error === "payment_outcome_unknown") {
+      await deps.db.finishStepUp(st.id, { status: "PENDING" });
+      return { status: placed.status, body: placed.body };
+    }
+    // PayPal refused. The order row is PAYPAL_FAILED and nothing was charged; the agent starts a new checkout.
     await finish(deps.db, st.id, "FAILED");
     return { status: 502, body: placed.body };
   }

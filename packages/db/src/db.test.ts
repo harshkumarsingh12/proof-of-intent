@@ -75,7 +75,14 @@ describe.runIf(ADMIN_URL)("db", () => {
 
   test("a mandate keeps the time this merchant first saw it, which a later save can't change (#162)", async () => {
     const h = (c: string) => c.repeat(64);
-    const base = { hash: h("d"), kind: "intent" as const, mandateId: "m-seen", canonical: "{}", jws: "a.b.c", kid: "k" };
+    const base = {
+      hash: h("d"),
+      kind: "intent" as const,
+      mandateId: "m-seen",
+      canonical: "{}",
+      jws: "a.b.c",
+      kid: "k",
+    };
     await db.saveMandate({ ...base, seenAt: "2026-11-02T10:00:00.000Z" });
     await db.saveMandate({ ...base, seenAt: "2026-12-25T00:00:00.000Z" }); // the same mandate presented again later
     expect((await db.getMandate(h("d")))?.seenAt).toBe("2026-11-02T10:00:00.000Z");
@@ -257,6 +264,15 @@ describe.runIf(ADMIN_URL)("db", () => {
     });
     expect((await db.mandateLedger("m-rt", "ord_rt2")).capturedTotal).toBe(7400);
     expect((await db.mandateLedger("m-rt")).capturedTotal).toBe(14800);
+
+    // An unattended order whose PayPal answer was lost is listed until it is settled (#159).
+    expect(await db.unknownOutcomeOrders("m-rt")).toEqual([]);
+    await db.createOrder({ ...order, id: "ord_rt3", paypalIntent: "CAPTURE", humanPresent: false });
+    await db.updateOrder("ord_rt3", { status: "UNKNOWN_OUTCOME" });
+    expect((await db.unknownOutcomeOrders("m-rt")).map((o) => o.id)).toEqual(["ord_rt3"]);
+    expect(await db.unknownOutcomeOrders("m-other")).toEqual([]);
+    await db.updateOrder("ord_rt3", { status: "COMPLETED", captureId: "CAP-RT3" });
+    expect(await db.unknownOutcomeOrders("m-rt")).toEqual([]);
   });
 
   test("dispute events form the worker's inbox until marked processed", async () => {

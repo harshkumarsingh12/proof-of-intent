@@ -8,13 +8,19 @@
  */
 import type { FastifyPluginAsync } from "fastify";
 import type { WebhookHeaders } from "@poi/paypal";
+import type { Db } from "@poi/db";
 import type { AppDeps } from "../app";
 import { RATE_LIMITS } from "../rate-limits";
 
 interface PayPalEvent {
   id?: unknown;
   event_type?: unknown;
-  resource?: { id?: unknown };
+  resource?: {
+    id?: unknown;
+    /** Our order id: we send it as invoice_id. */
+    invoice_id?: unknown;
+    supplementary_data?: { related_ids?: { order_id?: unknown } };
+  };
 }
 
 const header = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -86,6 +92,7 @@ export const webhookRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           requestBody: { eventId: event.id, eventType: event.event_type, transmissionId: h.transmissionId },
         });
       }
+      await settleUnknownOutcome(deps.db, event);
       req.log.info(
         { eventId: event.id, eventType: event.event_type, duplicate: !stored },
         "webhook accepted",
@@ -94,3 +101,28 @@ export const webhookRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
     },
   );
 };
+
+/**
+ * A verified PAYMENT.CAPTURE.COMPLETED for an order whose create-order answer was lost (UNKNOWN_OUTCOME) settles it:
+ * the charge happened (#159). `invoice_id` is our order id. Nothing else here changes an order.
+ */
+async function settleUnknownOutcome(db: Db, event: PayPalEvent): Promise<void> {
+  if (event.event_type !== "PAYMENT.CAPTURE.COMPLETED") return;
+  const { id, invoice_id: invoiceId, supplementary_data: extra } = event.resource ?? {};
+  if (typeof id !== "string" || typeof invoiceId !== "string") return;
+  const order = await db.getOrder(invoiceId);
+  if (order?.status !== "UNKNOWN_OUTCOME") return;
+  const paypalOrderId = extra?.related_ids?.order_id;
+  await db.updateOrder(order.id, {
+    status: "COMPLETED",
+    captureId: id,
+    capturedAt: new Date().toISOString(),
+    ...(typeof paypalOrderId === "string" ? { paypalOrderId } : {}),
+  });
+  await db.appendAudit({
+    actor: "paypal",
+    action: "order.outcome_confirmed",
+    subjectId: order.id,
+    requestBody: { captureId: id, via: event.event_type },
+  });
+}

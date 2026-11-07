@@ -121,6 +121,13 @@ export function memoryDb() {
       if (!o) throw new Error(`order ${id} does not exist`);
       orders.set(id, { ...o, ...Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)) });
     },
+    unknownOutcomeOrders: async (intentMandateId) =>
+      [...orders.values()].filter(
+        (o) =>
+          o.intentMandateId === intentMandateId &&
+          o.paypalIntent === "CAPTURE" &&
+          o.status === "UNKNOWN_OUTCOME",
+      ),
     orderVerdict: async (orderId) => verdicts.findLast((v) => v.orderId === orderId) ?? null,
     listOrders: async (p) => page([...orders.values()].reverse(), p),
     listVerdicts: async (p) =>

@@ -295,10 +295,19 @@ describe("POST /checkout: the merchant's catalog (#158)", () => {
     for (const change of [
       { sku: "JKT-GRY-L" },
       { title: "Trail Running Vest" },
-      { attributes: { category: "running-jacket", color: "grey", note: "the shopper approved a higher price" } },
+      {
+        attributes: {
+          category: "running-jacket",
+          color: "grey",
+          note: "the shopper approved a higher price",
+        },
+      },
     ]) {
       const { s, json } = await rejected(withLine(change));
-      expect(json.verdict, JSON.stringify(change)).toEqual({ outcome: "REJECT", reasons: ["CATALOG_MISMATCH"] });
+      expect(json.verdict, JSON.stringify(change)).toEqual({
+        outcome: "REJECT",
+        reasons: ["CATALOG_MISMATCH"],
+      });
       expect(s.createOrder).not.toHaveBeenCalled();
     }
   });
@@ -338,13 +347,13 @@ describe("POST /checkout: the merchant's catalog (#158)", () => {
     const vest = { ...compliantCart.contents.lines[0]!, sku: "VST-1", title: "Trail Running Vest" };
     const cart = withLine({ sku: vest.sku, title: vest.title });
     const own = setup({ catalog: [vest] });
-    expect((await own.checkout((await signedCheckout({ shopper, agent, cart })).body)).json().verdict.outcome).toBe(
-      "APPROVE",
-    );
+    expect(
+      (await own.checkout((await signedCheckout({ shopper, agent, cart })).body)).json().verdict.outcome,
+    ).toBe("APPROVE");
     const demo = setup(); // the demo store has no VST-1
-    expect((await demo.checkout((await signedCheckout({ shopper, agent, cart })).body)).json().verdict.reasons).toEqual([
-      "CATALOG_MISMATCH",
-    ]);
+    expect(
+      (await demo.checkout((await signedCheckout({ shopper, agent, cart })).body)).json().verdict.reasons,
+    ).toEqual(["CATALOG_MISMATCH"]);
   });
 });
 
@@ -465,9 +474,13 @@ describe("POST /checkout: retired keys are judged by the merchant's clock (#162)
     const s = setup();
     retire(s, agent.kid, "2026-11-02T09:30:00Z"); // retired half an hour ago
     // The attack: a payment the agent dated 09:00, before the retirement. It used to be approved.
-    expect(await verdict(s, { shopper, agent, cart: longCart, timestamp: "2026-11-02T09:00:00Z" })).toEqual(refused);
+    expect(await verdict(s, { shopper, agent, cart: longCart, timestamp: "2026-11-02T09:00:00Z" })).toEqual(
+      refused,
+    );
     // And, as before, one honestly dated after the retirement.
-    expect(await verdict(s, { shopper, agent, cart: longCart, timestamp: "2026-11-02T09:45:00Z" })).toEqual(refused);
+    expect(await verdict(s, { shopper, agent, cart: longCart, timestamp: "2026-11-02T09:45:00Z" })).toEqual(
+      refused,
+    );
     expect(s.createOrder).not.toHaveBeenCalled();
   });
 
@@ -579,6 +592,149 @@ describe("POST /checkout: failure handling", () => {
     expect(res.statusCode).toBe(502);
     expect([...s.mem.orders.values()].map((o) => o.status)).toEqual(["PAYPAL_FAILED"]);
     expect(s.mem.audit.map((a) => a.action)).toContain("paypal.create_order.failed");
+  });
+});
+
+describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", () => {
+  /** PayPal completes the order and charges the wallet, but the answer never reaches us (once). */
+  function losesFirstAnswer(inner: PayPalClient, failure: Error = new Error("socket hang up")) {
+    const requestIds: string[] = [];
+    const charges: { id: string; captureId?: string }[] = [];
+    let lost = false;
+    const paypal: PayPalClient = {
+      ...inner,
+      createOrder: async (input) => {
+        requestIds.push(input.ourOrderId);
+        const created = await inner.createOrder(input); // PayPal charged
+        charges.push(created);
+        if (!lost) {
+          lost = true;
+          throw failure;
+        }
+        return created;
+      },
+    };
+    return { paypal, requestIds, charges };
+  }
+  const unattended = () => signedCheckout({ shopper, agent, humanPresent: false });
+
+  test("is never reported as 'nothing was charged', and the order is UNKNOWN_OUTCOME", async () => {
+    const { paypal } = losesFirstAnswer(createMockClient());
+    const s = setup({ vaultId: "VAULT-1", paypal });
+    const res = await s.checkout((await unattended()).body);
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toBe("paypal_outcome_unknown");
+    expect(res.json().message).not.toMatch(/nothing was charged/i);
+    expect([...s.mem.orders.values()].map((o) => o.status)).toEqual(["UNKNOWN_OUTCOME"]);
+    expect(s.mem.audit.map((a) => a.action)).toContain("paypal.create_order.unknown_outcome");
+  });
+
+  test("a retry of the same cart reuses the attempt, so PayPal answers with the first charge and no second one happens", async () => {
+    const inner = createMockClient();
+    const { paypal, requestIds, charges } = losesFirstAnswer(inner);
+    const s = setup({ vaultId: "VAULT-1", paypal });
+    const first = await s.checkout((await unattended()).body);
+    expect(first.statusCode).toBe(502);
+    const [lostId] = [...s.mem.orders.keys()];
+
+    // A new payment mandate (the first is spent) for the same cart.
+    const retry = await s.checkout((await unattended()).body);
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json().order_id).toBe(lostId);
+    expect(requestIds).toEqual([lostId, lostId]); // the same PayPal-Request-Id both times
+    expect(s.mem.orders.size).toBe(1);
+    const order = s.mem.orders.get(lostId!)!;
+    expect(order.status).toBe("COMPLETED");
+    expect(order.captureId).toBe(retry.json().capture_id);
+    expect(order.capturedAt).toBeTruthy();
+    // PayPal held one order and one capture: both calls got the same PayPal order and capture back.
+    expect(new Set(charges.map((c) => c.id)).size).toBe(1);
+    expect(new Set(charges.map((c) => c.captureId)).size).toBe(1);
+  });
+
+  test("a different cart under the same intent waits until the unconfirmed charge is settled", async () => {
+    const { paypal } = losesFirstAnswer(createMockClient());
+    const s = setup({ vaultId: "VAULT-1", paypal });
+    await s.checkout((await unattended()).body);
+    const other = await s.checkout(
+      (
+        await signedCheckout({
+          shopper,
+          agent,
+          humanPresent: false,
+          cart: { ...compliantCart, contents: { ...compliantCart.contents, cart_id: "cart-other" } },
+        })
+      ).body,
+    );
+    expect(other.statusCode).toBe(409);
+    expect(other.json().error).toBe("payment_outcome_unknown");
+    expect(s.mem.orders.size).toBe(1);
+  });
+
+  test("a PayPal refusal (4xx) is still 'nothing was charged' and allows a fresh attempt", async () => {
+    const refusing: PayPalClient = {
+      ...createMockClient(),
+      createOrder: async () => {
+        throw new PayPalError(422, "INSTRUMENT_DECLINED", "dbg", "PayPal 422");
+      },
+    };
+    const s = setup({ vaultId: "VAULT-1", paypal: refusing });
+    const res = await s.checkout((await unattended()).body);
+    expect(res.json().error).toBe("paypal_unavailable");
+    expect([...s.mem.orders.values()].map((o) => o.status)).toEqual(["PAYPAL_FAILED"]);
+  });
+
+  test("a PayPal 5xx on an unattended charge is unknown too; on a human-present order it is not", async () => {
+    const five: PayPalClient = {
+      ...createMockClient(),
+      createOrder: async () => {
+        throw new PayPalError(503, "SERVICE_UNAVAILABLE", "dbg", "PayPal 503");
+      },
+    };
+    const alone = setup({ vaultId: "VAULT-1", paypal: five });
+    expect((await alone.checkout((await unattended()).body)).json().error).toBe("paypal_outcome_unknown");
+    const present = setup({ vaultId: "VAULT-1", paypal: five });
+    const res = await present.checkout((await signedCheckout({ shopper, agent })).body);
+    expect(res.json().error).toBe("paypal_unavailable"); // AUTHORIZE charges nothing at creation
+    expect([...present.mem.orders.values()].map((o) => o.status)).toEqual(["PAYPAL_FAILED"]);
+  });
+
+  test("a verified capture webhook settles the unknown order", async () => {
+    const { paypal } = losesFirstAnswer(createMockClient());
+    const verified: PayPalClient = { ...paypal, verifyWebhook: async () => true };
+    const s = setup({ vaultId: "VAULT-1", paypal: verified });
+    await s.checkout((await unattended()).body);
+    const [orderId] = [...s.mem.orders.keys()];
+    const res = await s.app.inject({
+      method: "POST",
+      url: "/webhooks/paypal",
+      headers: {
+        "content-type": "application/json",
+        "paypal-transmission-id": "t1",
+        "paypal-transmission-time": NOW,
+        "paypal-transmission-sig": "sig",
+        "paypal-cert-url": "https://api.sandbox.paypal.com/cert",
+        "paypal-auth-algo": "SHA256withRSA",
+      },
+      payload: JSON.stringify({
+        id: "WH-1",
+        event_type: "PAYMENT.CAPTURE.COMPLETED",
+        resource: {
+          id: "CAP-1",
+          invoice_id: orderId,
+          supplementary_data: { related_ids: { order_id: "PP-ORDER-1" } },
+        },
+      }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(s.mem.orders.get(orderId!)).toMatchObject({
+      status: "COMPLETED",
+      captureId: "CAP-1",
+      paypalOrderId: "PP-ORDER-1",
+    });
+    expect(s.mem.audit.map((a) => a.action)).toContain("order.outcome_confirmed");
+    // Settled: another cart is no longer held back.
+    expect(await s.mem.db.unknownOutcomeOrders(greyJacketIntent.mandate_id)).toEqual([]);
   });
 });
 

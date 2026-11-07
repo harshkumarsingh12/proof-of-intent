@@ -218,6 +218,11 @@ export interface Db {
   getOrder(id: string): Promise<StoredOrder | null>;
   getMandate(hash: string): Promise<MandateRecord | null>;
   updateOrder(id: string, patch: OrderPatch): Promise<void>;
+  /**
+   * Unattended (CAPTURE) orders under an intent whose PayPal result we never learned (status UNKNOWN_OUTCOME),
+   * oldest first. PayPal may have charged; nothing else is attempted under the intent until this list is empty (#159).
+   */
+  unknownOutcomeOrders(intentMandateId: string): Promise<StoredOrder[]>;
   /** The checkout verdict that created an order. */
   orderVerdict(orderId: string): Promise<VerdictRecord | null>;
   /** Newest first, for the dashboard grids. */
@@ -642,6 +647,16 @@ export function createDb(databaseUrl: string): Db {
         ],
       );
       if (res.rowCount !== 1) throw new Error(`order ${id} does not exist`);
+    },
+
+    async unknownOutcomeOrders(intentMandateId) {
+      const res = await pool.query(
+        `select * from orders
+          where intent_mandate_id = $1 and paypal_intent = 'CAPTURE' and status = 'UNKNOWN_OUTCOME'
+          order by created_at, id`,
+        [intentMandateId],
+      );
+      return res.rows.map(toOrder);
     },
 
     async auditTrail(subjectId) {

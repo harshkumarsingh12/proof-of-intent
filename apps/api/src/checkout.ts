@@ -35,7 +35,7 @@ import {
   verifyMandate,
   type SigningKey,
 } from "@poi/mandates";
-import type { PayPalClient } from "@poi/paypal";
+import { PayPalError, type PayPalClient } from "@poi/paypal";
 import { evaluate } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
 
@@ -185,7 +185,10 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     });
   }
   if (misses.length > 0 || !rules.pass) {
-    const reasons: ReasonCode[] = [...(misses.length > 0 ? (["CATALOG_MISMATCH"] as const) : []), ...rules.reasons];
+    const reasons: ReasonCode[] = [
+      ...(misses.length > 0 ? (["CATALOG_MISMATCH"] as const) : []),
+      ...rules.reasons,
+    ];
     return record(deps, intent.mandate_id, cart.contents.cart_id, "REJECT", reasons);
   }
 
@@ -299,6 +302,31 @@ export async function placeOrder(
 ): Promise<CheckoutResult> {
   const now = deps.now();
   const { intent, intentHash, cart, cartHash, outcome, reasons, semantic } = o;
+
+  // An unattended charge whose PayPal result we never learned may already have happened (#159). The same cart is
+  // retried under the SAME order id, which is also PayPal's PayPal-Request-Id, so PayPal answers with the original
+  // result instead of charging again. Anything else under this intent waits until that is settled.
+  let orderId = `ord_${randomUUID()}`;
+  let resumed = false;
+  if (!o.humanPresent) {
+    const unknown = await deps.db.unknownOutcomeOrders(intent.mandate_id);
+    const same = unknown.find((u) => u.cartMandateHash === cartHash);
+    if (same) {
+      orderId = same.id;
+      resumed = true;
+    } else if (unknown.length > 0) {
+      return {
+        status: 409,
+        body: {
+          error: "payment_outcome_unknown",
+          message:
+            "An earlier payment under this intent is unconfirmed and the shopper may have been charged. " +
+            "Retry that same checkout to confirm it before anything else is attempted",
+        },
+      };
+    }
+  }
+
   // Sign the Cart Mandate: the merchant's commitment, issued only after the checks above.
   const cartJws = await signMandate(cart, deps.merchant.privateKey, deps.merchant.kid);
   await deps.db.saveMandate({
@@ -311,37 +339,45 @@ export async function placeOrder(
     seenAt: now,
   });
 
-  const orderId = `ord_${randomUUID()}`;
   const pointer = customId(intent.mandate_id, intentHash);
   const paypalIntent = o.humanPresent ? "AUTHORIZE" : "CAPTURE";
-  await deps.db.createOrder({
-    id: orderId,
-    intentMandateId: intent.mandate_id,
-    intentMandateHash: intentHash,
-    cartMandateHash: cartHash,
-    customId: pointer,
-    paypalIntent,
-    status: "PENDING",
-    totalValue: cart.contents.total.value,
-    currency: cart.contents.total.currency,
-    shopperId: o.shopperId,
-    agentPlatform: o.agentPlatform,
-    humanPresent: o.humanPresent,
-  });
-  await deps.db.recordVerdict({
-    intentMandateId: intent.mandate_id,
-    cartId: cart.contents.cart_id,
-    orderId,
-    outcome,
-    reasons,
-    semantic,
-  });
-  await deps.db.appendAudit({
-    actor: "api",
-    action: "checkout.verdict",
-    subjectId: orderId,
-    requestBody: { outcome, reasons, intentHash, cartHash, semantic },
-  });
+  if (resumed) {
+    await deps.db.appendAudit({
+      actor: "api",
+      action: "paypal.create_order.reconcile",
+      subjectId: orderId,
+      requestBody: { cartHash },
+    });
+  } else {
+    await deps.db.createOrder({
+      id: orderId,
+      intentMandateId: intent.mandate_id,
+      intentMandateHash: intentHash,
+      cartMandateHash: cartHash,
+      customId: pointer,
+      paypalIntent,
+      status: "PENDING",
+      totalValue: cart.contents.total.value,
+      currency: cart.contents.total.currency,
+      shopperId: o.shopperId,
+      agentPlatform: o.agentPlatform,
+      humanPresent: o.humanPresent,
+    });
+    await deps.db.recordVerdict({
+      intentMandateId: intent.mandate_id,
+      cartId: cart.contents.cart_id,
+      orderId,
+      outcome,
+      reasons,
+      semantic,
+    });
+    await deps.db.appendAudit({
+      actor: "api",
+      action: "checkout.verdict",
+      subjectId: orderId,
+      requestBody: { outcome, reasons, intentHash, cartHash, semantic },
+    });
+  }
 
   let created;
   try {
@@ -359,16 +395,28 @@ export async function placeOrder(
       vaultId: o.humanPresent ? undefined : o.vaultId,
     });
   } catch (err) {
-    await deps.db.updateOrder(orderId, { status: "PAYPAL_FAILED" });
+    // "Nothing was charged" is only known when PayPal answered with a refusal (a 4xx), or when creating the order
+    // charges nothing (AUTHORIZE). A lost response, a timeout or a 5xx on an unattended CAPTURE can follow a completed
+    // charge, so that order is UNKNOWN_OUTCOME and must be confirmed, not retried blind (#159).
+    const refused = err instanceof PayPalError && err.status >= 400 && err.status < 500 && err.status !== 408;
+    const unknown = paypalIntent === "CAPTURE" && !refused;
+    await deps.db.updateOrder(orderId, { status: unknown ? "UNKNOWN_OUTCOME" : "PAYPAL_FAILED" });
     await deps.db.appendAudit({
       actor: "api",
-      action: "paypal.create_order.failed",
+      action: unknown ? "paypal.create_order.unknown_outcome" : "paypal.create_order.failed",
       subjectId: orderId,
       requestBody: { message: (err as Error).message },
     });
     return {
       status: 502,
-      body: { error: "paypal_unavailable", message: "PayPal did not create the order; nothing was charged" },
+      body: unknown
+        ? {
+            error: "paypal_outcome_unknown",
+            message:
+              "PayPal did not confirm the payment, and the shopper may have been charged. " +
+              "Retry the same checkout to confirm it; nothing else is accepted under this intent until then",
+          }
+        : { error: "paypal_unavailable", message: "PayPal did not create the order; nothing was charged" },
     };
   }
   await deps.db.updateOrder(orderId, {
