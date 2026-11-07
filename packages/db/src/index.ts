@@ -191,6 +191,8 @@ export interface Db {
   releaseVaultSetup(setupTokenId: string): Promise<void>;
   /** The shopper's saved PayPal wallet (Vault v3 payment token); replaces an earlier one. */
   saveVaultId(shopperId: string, vaultId: string): Promise<void>;
+  /** How many shoppers hold this payment token. The same PayPal wallet can be saved by several browser keys. */
+  countVaultHolders(vaultId: string): Promise<number>;
   /** Forgets the shopper's saved wallet, so agent-alone checkout answers no_vaulted_wallet again. */
   clearVaultId(shopperId: string): Promise<void>;
   /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
@@ -373,6 +375,14 @@ export function createDb(databaseUrl: string): Db {
 
     async saveVaultId(shopperId, vaultId) {
       await pool.query("update shoppers set vault_id = $2 where id = $1", [shopperId, vaultId]);
+    },
+
+    async countVaultHolders(vaultId) {
+      const res = await pool.query<{ n: number }>(
+        "select count(*)::int as n from shoppers where vault_id = $1",
+        [vaultId],
+      );
+      return res.rows[0]!.n;
     },
 
     async clearVaultId(shopperId) {

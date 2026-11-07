@@ -53,6 +53,7 @@ describe.runIf(ADMIN_URL)("db", () => {
       "0002_dispute_copilot.sql",
       "0003_stepups.sql",
       "0004_vault_setups.sql",
+      "0005_shared_vault_id.sql",
     ]);
     expect(await db.migrate()).toEqual([]);
   });
@@ -338,6 +339,23 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect((await db.findKey("shopper", "shp_vault_b"))?.vaultId).toBeUndefined();
     await db.clearVaultId(a.shopperId); // "Remove my wallet"
     expect((await db.findKey("shopper", "shp_vault_a"))?.vaultId).toBeUndefined();
+  });
+
+  test("two shoppers can hold the same PayPal wallet (the 'Use a new key' failure), counted and cleared one at a time", async () => {
+    const jwk = { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) };
+    const oldKey = await db.registerShopperKey({ kid: "shp_old_browser_key", publicJwk: jwk });
+    const newKey = await db.registerShopperKey({ kid: "shp_new_browser_key", publicJwk: jwk });
+    await db.saveVaultId(oldKey.shopperId, "VAULT-SHARED");
+    // This used to throw: duplicate key value violates unique constraint "shoppers_vault_id_key".
+    await expect(db.saveVaultId(newKey.shopperId, "VAULT-SHARED")).resolves.toBeUndefined();
+    expect((await db.findKey("shopper", "shp_new_browser_key"))?.vaultId).toBe("VAULT-SHARED");
+    expect(await db.countVaultHolders("VAULT-SHARED")).toBe(2);
+    await db.clearVaultId(oldKey.shopperId);
+    expect(await db.countVaultHolders("VAULT-SHARED")).toBe(1);
+    expect((await db.findKey("shopper", "shp_new_browser_key"))?.vaultId).toBe("VAULT-SHARED");
+    await db.clearVaultId(newKey.shopperId);
+    expect(await db.countVaultHolders("VAULT-SHARED")).toBe(0);
+    expect(await db.countVaultHolders("VAULT-NEVER-SAVED")).toBe(0);
   });
 
   test("the schema refuses malformed hashes and oversized custom_id", async () => {
