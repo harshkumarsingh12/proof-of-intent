@@ -6,7 +6,7 @@ Fastify service on port 3000 (`pnpm dev:api`).
 
 **Built:** `/healthz`, `/readyz`, checkout (`POST /checkout`, `POST /checkout/:id/approve`), `POST /webhooks/paypal`,
 keys (`POST /keys/shopper`, `POST /keys/agent`, `POST /keys/:kind/:kid/retire`), wallet saving with Vault v3
-(`POST /vault/setup`, `POST /vault/save`, `GET /vault/:kid`), disputes (`GET /disputes`,
+(`POST /vault/setup`, `POST /vault/save`, `POST /vault/remove`, `GET /vault/:kid`), disputes (`GET /disputes`,
 `/disputes/:id/recommendation`, `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions`,
 `POST /disputes/:id/actions/:action`), `GET /orders`, `GET /verifications`, `POST /orders/:id/tracking`, step-up links
 (`GET /stepup/:token`, `POST /stepup/:token/approve`) and `POST /ai/studio` (operator token, 60 requests a minute; `list_disputes` reads our own
@@ -67,6 +67,7 @@ What agent-alone checkout charges. Public routes, but every write carries a proo
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `POST /vault/setup` `{ proof_jws }`                | `{ setup_token_id, approval_url }`: send the shopper to PayPal; PayPal returns them to `BUYER_PUBLIC_URL/shop/wallet?approval_token_id=…`                                                  |
 | `POST /vault/save` `{ setup_token_id, proof_jws }` | `{ wallet: true }`; 403 `proof_invalid` / `proof_expired`; 409 `setup_not_available` (not yours, or used); 409 `paypal_refused` (not approved yet: the setup token is released, try again) |
+| `POST /vault/remove` `{ proof_jws }`               | `{ wallet: false }`: the saved wallet is cleared at once (the agent can no longer charge it), then revoked at PayPal; a revoke failure is audited, not surfaced                            |
 | `GET /vault/:kid`                                  | `{ wallet: boolean }`; 404 for an unknown key                                                                                                                                              |
 
 Proofs are `VaultProof` (`packages/contracts`) signed by the shopper's key, valid 5 minutes. 10/min/IP like `/keys/shopper`.

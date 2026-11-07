@@ -9,7 +9,13 @@
  *
  * Without the proof, anyone who knew a shopper key id could point that shopper at a wallet of their choosing.
  */
-import { VaultProof, type ReasonCode, type VaultSaveResponse, type VaultSetupResponse } from "@poi/contracts";
+import {
+  VaultProof,
+  type ReasonCode,
+  type VaultRemoveResponse,
+  type VaultSaveResponse,
+  type VaultSetupResponse,
+} from "@poi/contracts";
 import type { Db, KeyRecord } from "@poi/db";
 import { keyValidAt, verifyMandate } from "@poi/mandates";
 import { PayPalError, type PayPalClient } from "@poi/paypal";
@@ -33,6 +39,7 @@ type Failure = {
 };
 export type VaultSetupResult = { status: 200; body: VaultSetupResponse } | Failure;
 export type VaultSaveResult = { status: 200; body: VaultSaveResponse } | Failure;
+export type VaultRemoveResult = { status: 200; body: VaultRemoveResponse } | Failure;
 export type VaultStatusResult = { status: 200; body: { wallet: boolean } } | Failure;
 
 type Shopper = KeyRecord & { shopperId: string };
@@ -170,6 +177,39 @@ export async function saveWallet(
   });
   await deps.db.saveVaultId(shopper.shopperId, vaultId);
   return { status: 200, body: { wallet: true } };
+}
+
+/**
+ * Forgets the shopper's saved wallet. Our side goes first: the moment this answers, agent-alone checkout can no
+ * longer charge, whatever PayPal does next. Then the payment token is revoked at PayPal; if that fails the token
+ * lingers there unused, and the audit row keeps its id so it can be revoked later. Asking again is harmless.
+ */
+export async function removeWallet(proofJws: string, deps: VaultDeps): Promise<VaultRemoveResult> {
+  const checked = await checkProof(proofJws, "vault.remove", deps);
+  if (isFailure(checked)) return checked;
+  const { shopper } = checked;
+  const actor = `shopper:${shopper.shopperId}`;
+  const vaultId = shopper.vaultId;
+  if (!vaultId) return { status: 200, body: { wallet: false } };
+
+  await deps.db.clearVaultId(shopper.shopperId);
+  await deps.db.appendAudit({
+    actor,
+    action: "vault.removed",
+    subjectId: shopper.shopperId,
+    requestBody: { vaultId },
+  });
+  try {
+    await deps.paypal.deletePaymentToken(vaultId);
+  } catch (err) {
+    await deps.db.appendAudit({
+      actor: "api",
+      action: "vault.revoke.failed",
+      subjectId: shopper.shopperId,
+      requestBody: { vaultId, message: (err as Error).message },
+    });
+  }
+  return { status: 200, body: { wallet: false } };
 }
 
 /** Whether this shopper key has a wallet. A yes/no only: the vault id never leaves the server. */

@@ -36,6 +36,7 @@ export function createMockClient(): MockPayPalClient {
   const byRequestId = new Map<string, CreatedOrder>();
   const orders = new Map<string, { status: string; authorizationId?: string }>();
   const setupTokens = new Map<string, string | undefined>(); // setup token id → payment token once made
+  const deletedVaults = new Set<string>();
   const authorizations = new Map<string, "CREATED" | "CAPTURED" | "VOIDED">();
   const disputeActions: DisputeAction[] = [];
   const disputes = new Map<string, PayPalDispute>();
@@ -59,6 +60,7 @@ export function createMockClient(): MockPayPalClient {
       if (existing) return existing;
       const id = paypalId();
       let created: CreatedOrder;
+      if (input.vaultId && deletedVaults.has(input.vaultId)) throw unprocessable("INVALID_RESOURCE_ID");
       if (input.intent === "CAPTURE" && input.vaultId) {
         created = { id, status: "COMPLETED", captureId: paypalId() };
       } else {
@@ -88,6 +90,10 @@ export function createMockClient(): MockPayPalClient {
       const vaultId = paypalId();
       setupTokens.set(setupTokenId, vaultId);
       return { vaultId };
+    },
+
+    async deletePaymentToken(vaultId) {
+      deletedVaults.add(vaultId);
     },
 
     async authorizeOrder(orderId) {

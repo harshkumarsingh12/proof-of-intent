@@ -5,17 +5,17 @@
 Next.js shopper app. Run: `pnpm dev:buyer` (port 3001; set `API_INTERNAL_URL` if the API isn't on
 `http://localhost:3000`).
 
-| Path                        | What                                                                                                                   |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `/`                         | Landing page                                                                                                           |
-| `/shop`                     | Journey A: browser key → signed Intent Mandate → agent proposes a cart → verdict → PayPal → capture                    |
-| `/shop/wallet`              | Where PayPal sends the shopper after they approve a wallet: signs the save proof and finishes (Vault v3, #17)          |
-| `/api/vault/*`              | Proxies to `POST /vault/setup`, `POST /vault/save` and `GET /vault/:kid` (wallet saving, signed by the browser's key)  |
-| `/api/keys/shopper`         | Proxy to the API's `POST /keys/shopper` (the browser registers its public key)                                         |
-| `/api/agent/checkout`       | The buyer agent: `{ intent_jws, sku }` → cart + Payment Mandate signed with the agent key → `POST /checkout`           |
-| `/api/agent/choose`         | The buyer agent picks the item itself: `{ intent_jws }` → up to three carts proposed, each with the merchant's verdict |
-| `/api/agent/draft-intent`   | The agent fills the intent form from the shopper's words: `{ text }` → an **unsigned** draft                           |
-| `/api/checkout/:id/approve` | Proxy for PayPal's `onApprove`: the shopper's CartApproval countersignature                                            |
+| Path                        | What                                                                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                         | Landing page                                                                                                                      |
+| `/shop`                     | Journey A: browser key → signed Intent Mandate → agent proposes a cart → verdict → PayPal → capture                               |
+| `/shop/wallet`              | Where PayPal sends the shopper after they approve a wallet: signs the save proof and finishes (Vault v3, #17)                     |
+| `/api/vault/*`              | Proxies to `POST /vault/setup`, `/vault/save`, `/vault/remove` and `GET /vault/:kid` (wallet saving, signed by the browser's key) |
+| `/api/keys/shopper`         | Proxy to the API's `POST /keys/shopper` (the browser registers its public key)                                                    |
+| `/api/agent/checkout`       | The buyer agent: `{ intent_jws, sku }` → cart + Payment Mandate signed with the agent key → `POST /checkout`                      |
+| `/api/agent/choose`         | The buyer agent picks the item itself: `{ intent_jws }` → up to three carts proposed, each with the merchant's verdict            |
+| `/api/agent/draft-intent`   | The agent fills the intent form from the shopper's words: `{ text }` → an **unsigned** draft                                      |
+| `/api/checkout/:id/approve` | Proxy for PayPal's `onApprove`: the shopper's CartApproval countersignature                                                       |
 
 **Keys.** The shopper's key is made in the browser (`src/signing.ts`, WebCrypto, non-extractable) and kept in
 IndexedDB (`src/key-store.ts`); it never reaches a server. The agent's key lives only in the shop's server
@@ -28,7 +28,7 @@ the merchant already created, with a link to `approval_url` as a fallback. Other
 
 **Wallet and paying alone** (`src/wallet.ts`, `/shop/wallet`, #17, #36). "Save a PayPal wallet" signs a short-lived proof with
 the browser's key, asks the merchant for a Vault v3 setup token and sends the shopper to PayPal; PayPal returns them to
-`/shop/wallet`, which signs the save proof and finishes. Once a wallet is saved, "Let the agent pay alone" sends
+`/shop/wallet`, which signs the save proof and finishes. Once a wallet is saved, "Remove my wallet" forgets it again. "Let the agent pay alone" sends
 `human_present: false`: an approved cart is charged to that wallet with no PayPal step, a step-up charges nothing, and the
 agent stops after the merchant accepts one cart. In `PAYPAL_MODE=mock` the approval returns to the shop at once.
 

@@ -117,6 +117,8 @@ export interface PayPalClient {
   createOrder(input: CreateOrderInput): Promise<CreatedOrder>;
   /** Vault v3: a setup token with `usage_type: MERCHANT`, so the merchant can charge the wallet later. */
   createVaultSetupToken(input: VaultSetupInput): Promise<VaultSetup>;
+  /** Vault v3: revokes a saved wallet at PayPal (`DELETE /v3/vault/payment-tokens/{id}`). A token PayPal no longer knows is not an error. */
+  deletePaymentToken(vaultId: string): Promise<void>;
   /** Vault v3 step 2, after the shopper approved: turns the setup token into the payment token (our `vault_id`). One use. */
   createVaultPaymentToken(setupTokenId: string): Promise<{ vaultId: string }>;
   /** Authorizes an order the shopper approved. */

@@ -336,6 +336,8 @@ describe.runIf(ADMIN_URL)("db", () => {
     await db.saveVaultId(a.shopperId, "VAULT-A2"); // a newer wallet replaces it
     expect((await db.findKey("shopper", "shp_vault_a"))?.vaultId).toBe("VAULT-A2");
     expect((await db.findKey("shopper", "shp_vault_b"))?.vaultId).toBeUndefined();
+    await db.clearVaultId(a.shopperId); // "Remove my wallet"
+    expect((await db.findKey("shopper", "shp_vault_a"))?.vaultId).toBeUndefined();
   });
 
   test("the schema refuses malformed hashes and oversized custom_id", async () => {

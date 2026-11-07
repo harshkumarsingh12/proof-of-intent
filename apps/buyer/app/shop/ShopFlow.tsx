@@ -23,7 +23,7 @@ import { buildIntent, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
 import { REASON_TEXT } from "../../src/reasons";
 import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact } from "../../src/signing";
-import { setupProof } from "../../src/wallet";
+import { removeProof, setupProof } from "../../src/wallet";
 
 export interface ShopConfig {
   merchantId: string;
@@ -214,6 +214,28 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       window.location.assign(res.body.approval_url);
     } catch (err) {
       setWalletError((err as Error).message);
+      setWalletBusy(false);
+    }
+  };
+
+  /** Forget the saved wallet: the agent can no longer pay alone, and PayPal is told to revoke it. */
+  const removeWallet = async () => {
+    if (!shopper) return;
+    setWalletBusy(true);
+    setWalletError(undefined);
+    try {
+      const proof = await signCompact(removeProof(new Date()), shopper.key.privateKey, shopper.kid);
+      const res = await postJson<{ wallet: false }>("/api/vault/remove", { proof_jws: proof });
+      if (isError(res.body)) {
+        setWalletError(res.body.message);
+      } else {
+        setWallet("none");
+        setAlone(false);
+        setCheckout(undefined);
+      }
+    } catch (err) {
+      setWalletError((err as Error).message);
+    } finally {
       setWalletBusy(false);
     }
   };
@@ -452,7 +474,12 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
                 : wallet === "saved"
                   ? "Save a different wallet"
                   : "Save a PayPal wallet"}
-            </button>
+            </button>{" "}
+            {wallet === "saved" && (
+              <button className="btn btn-ghost btn-small" disabled={walletBusy} onClick={removeWallet}>
+                Remove my wallet
+              </button>
+            )}
             {walletError && <p className="error">{walletError}</p>}
           </>
         ) : (
