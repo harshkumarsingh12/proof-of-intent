@@ -1,5 +1,5 @@
 import { MockLanguageModelV1 } from "ai/test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import type { IntentMandate } from "@poi/contracts";
 import { MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
 import { evaluate } from "@poi/policy-engine";
@@ -11,7 +11,9 @@ import {
   limitBreaks,
   limitsOf,
   draftTools,
+  isModelUnavailableError,
   parseAgentMode,
+  providerOptionsFor,
   redact,
   requestCheckout,
   runChoose,
@@ -22,8 +24,14 @@ import {
   takeModelCall,
   toolNames,
   withBudget,
+  withFallback,
   type RunContext,
 } from "./agent";
+// The buyer keeps its own copy of the provider rules (it doesn't depend on packages/ai); these tests keep them identical.
+import {
+  isModelUnavailableError as sharedIsModelUnavailableError,
+  providerOptionsFor as sharedProviderOptionsFor,
+} from "../../../packages/ai/src/runtime";
 import { proposeCart } from "./cart";
 import { CATALOG, PRESETS } from "./catalog";
 import { buildIntent, type IntentForm } from "./intent";
@@ -490,5 +498,86 @@ describe("model hygiene", () => {
     expect(parseAgentMode(undefined)).toBe("replay");
     expect(parseAgentMode("live")).toBe("live");
     expect(() => parseAgentMode("mock")).toThrow();
+  });
+});
+
+describe("provider rules (copy of packages/ai)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  const okModel = (record?: (params: unknown) => void) =>
+    new MockLanguageModelV1({
+      doGenerate: async (params) => {
+        record?.(params);
+        return {
+          rawCall: { rawPrompt: null, rawSettings: {} },
+          finishReason: "stop",
+          usage: { promptTokens: 1, completionTokens: 1 },
+          text: "ok",
+        };
+      },
+    });
+
+  test("the thinking switch and the gone-model rule match packages/ai exactly", () => {
+    for (const provider of ["nvidia", "gemini", "groq", "openrouter", "other"])
+      expect(providerOptionsFor(provider)).toEqual(sharedProviderOptionsFor(provider));
+    for (const err of [
+      Object.assign(new Error("x"), { statusCode: 404 }),
+      Object.assign(new Error("x"), { statusCode: 410 }),
+      Object.assign(new Error("x"), { statusCode: 429 }),
+      new Error("The model `m` does not exist"),
+      new Error("invalid api key"),
+      new Error("The operation was aborted due to timeout"),
+      undefined,
+    ])
+      expect(isModelUnavailableError(err)).toBe(sharedIsModelUnavailableError(err));
+  });
+
+  test("the agent's model call carries the thinking switch for nvidia and nothing for another provider", async () => {
+    const seen: Record<string, unknown>[] = [];
+    const record = (params: unknown) => seen.push(params as Record<string, unknown>);
+    vi.stubEnv("AI_PROVIDER", "nvidia");
+    await runDraft({ text: "x", mode: "live", model: okModel(record) }).catch(() => undefined);
+    vi.stubEnv("AI_PROVIDER", "groq");
+    await runDraft({ text: "x", mode: "live", model: okModel(record) }).catch(() => undefined);
+    expect(seen[0]?.providerMetadata).toEqual({
+      nvidia: { chat_template_kwargs: { enable_thinking: false } },
+    });
+    expect(seen.at(-1)?.providerMetadata).toBeUndefined();
+  });
+
+  test("a gone primary model is answered by the fallback once; other failures are not retried", async () => {
+    const calls: string[] = [];
+    const model = (name: string, fail?: unknown) =>
+      new MockLanguageModelV1({
+        modelId: name,
+        doGenerate: async () => {
+          calls.push(name);
+          if (fail) throw fail;
+          return {
+            rawCall: { rawPrompt: null, rawSettings: {} },
+            finishReason: "stop" as const,
+            usage: { promptTokens: 1, completionTokens: 1 },
+            text: name,
+          };
+        },
+      });
+    const goneError = Object.assign(new Error("model not found"), { statusCode: 404 });
+    const params = { inputFormat: "prompt", mode: { type: "regular" }, prompt: [] } as never;
+
+    const withBackup = withFallback(model("primary", goneError), model("backup"));
+    expect((await withBackup.doGenerate(params)).text).toBe("backup");
+    expect(calls).toEqual(["primary", "backup"]);
+
+    calls.length = 0;
+    const limited = withFallback(
+      model("primary", Object.assign(new Error("slow down"), { statusCode: 429 })),
+      model("backup"),
+    );
+    await expect(limited.doGenerate(params)).rejects.toThrow("slow down");
+    expect(calls).toEqual(["primary"]);
+
+    // No fallback configured: the very same model comes back, untouched.
+    const only = model("only");
+    expect(withFallback(only)).toBe(only);
   });
 });

@@ -107,3 +107,10 @@ schema validity 100% after retry.
   "running jacket" → `match` (debatable); grey shoe for "blue shoes" → `partial` (never reaches J1: the color rule
   rejects it first); **trail shoe for "road running shoes" → `match` 0.95, a real miss**: checkout approves it. Hard
   limits still hold, so it's wording, not money. A candidate for the eval set and a prompt revision (#43).
+- **Provider hardening (Nov 7).** The Nemotron thinking switch (`chat_template_kwargs.enable_thinking`) is NVIDIA's field, so
+  it is now sent to `nvidia` only (`providerOptionsFor`); before, `packages/ai` sent it to whatever provider was set and the
+  buyer agent hardcoded `nvidia`. `gemini`, `groq` and `openrouter` have built-in OpenAI-compatible endpoints, so switching
+  provider is an env change. The free lineups churn (Nemotron 3 Super left the free endpoints after Oct 19, 2026), so
+  `AI_FALLBACK_MODEL` is tried once on the same provider when the primary model is gone (HTTP 404/410 or a message naming
+  a missing, retired or renamed model, `isModelUnavailableError`); rate limits, timeouts and bad requests never switch
+  models. The buyer agent keeps its own copy of these rules (it doesn't depend on `packages/ai`); a test keeps them identical.

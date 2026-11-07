@@ -8,8 +8,10 @@
 export {
   AiUnavailableError,
   isAiUnavailable,
+  isModelUnavailableError,
   liveConfigFromEnv,
   parseAiMode,
+  providerOptionsFor,
   redact,
   type AiMode,
   type Generate,
