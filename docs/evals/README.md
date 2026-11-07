@@ -10,6 +10,14 @@ from J1 prediction accuracy. Publish numbers in the root README after verifying 
 
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
 
+## Buyer agent
+
+`pnpm agent:eval` runs the live buyer agent (#37) through eight cases: the four demo presets, a shopper request that
+tries to override the budget, one that asks for another color, a price nothing fits, and a merchant refusal the
+agent has to recover from. The real hard rules stand in for the merchant, so it needs only `AI_MODEL` and
+`AI_API_KEY`. It writes `docs/evals/agent-<date>.md` and fails if any case fails or any proposed cart breaks a hard
+rule.
+
 ## Full-eval handoff for #43
 
 Use the team's configured NVIDIA environment and the current accepted checkout. Keep API keys in the
@@ -33,11 +41,3 @@ Return the dated `docs/evals/<date>.md`, `packages/ai/replay/j1-semantic-fit.jso
 `packages/ai/replay/j2-dispute-classification.json`, the source commit and the configured provider/model
 names. Include any changed prompt files. Verify these artifacts together, then quote the measured figures
 and link the dated report in the root README. The report, matching replay and README figures complete #43.
-
-## Buyer agent
-
-`pnpm agent:eval` runs the live buyer agent (#37) through eight cases: the four demo presets, a shopper request that
-tries to override the budget, one that asks for another color, a price nothing fits, and a merchant refusal the
-agent has to recover from. The real hard rules stand in for the merchant, so it needs only `AI_MODEL` and
-`AI_API_KEY`. It writes `docs/evals/agent-<date>.md` and fails if any case fails or any proposed cart breaks a hard
-rule.
