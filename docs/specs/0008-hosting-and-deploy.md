@@ -23,7 +23,7 @@ deliver webhooks to it. The team runs it on its own server; the same Compose fil
 | Isolation | Own Docker network; only the proxy publishes ports; Postgres unreachable from outside; non-root containers                                                                                                                                                                                                                                                                                           |
 | Abuse     | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/keys/shopper` and `/vault/setup`, `/vault/save` 10/min, `/ai/studio` 60/min (a chat question is several requests; the daily AI budget bounds spend), 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch. The dashboard is read-only without the operator login |
 | DNS       | Containers send outside lookups to `1.1.1.1` / `8.8.8.8` (`dns:` in compose, #88) after the host resolver dropped one (`EAI_AGAIN`, Nov 6)                                                                                                                                                                                                                                                           |
-| Backups   | `backup` service (server profile): `pg_dump` every 24 h, 7 days kept, atomic writes; restore in docs/SETUP.md. Nightly demo reset Dec 1–15                                                                                                                                                                                                                                                           |
+| Backups   | `backup` service (profiles `server` and `backup`): `pg_dump` at start and every 24 h, 7 days kept, atomic writes, a healthcheck that fails when no dump is under 26 h old; on Dokploy `COMPOSE_PROFILES=backup` and `BACKUP_DIR=backups` (a named volume that survives deploys); restore in docs/SETUP.md. Nightly demo reset Dec 1–15                                                                                                                                                                                                                                                           |
 | Secrets   | Server `.env` (mode 600) outside git; GitHub Actions secrets for CI/CD                                                                                                                                                                                                                                                                                                                               |
 | Release   | Dokploy redeploys on every push to `main`. Tag `v*` → `deploy.yml` still builds the 4 images to GHCR and, where SSH secrets are set, runs `compose pull && up -d` with a health check inside the `api` container, then a GitHub Release                                                                                                                                                              |
 
@@ -85,8 +85,25 @@ statement (the old command exits 0 on it), an empty dump, and a scratch database
 taken before the data existed restores cleanly and the report shows `600 newer in live`.
 
 **Not confirmed, and not something the repository can confirm:** that the *hosted* server takes backups on a schedule. The
-`backup` service is in the `server` profile, which Dokploy does not start, so unless Dokploy's scheduled backups are set up there
-may be none. See SETUP.md, "Backups on Dokploy", for the three steps to check it, and #38.
+repository now makes it a one-line change (see "Backups on Dokploy" below), but it only counts once someone has set the two
+variables on the server, redeployed, and run the drill on a dump it produced: SETUP.md, "Setting up backups on Dokploy", has the
+steps, and #38 tracks it.
+
+### Backups on Dokploy (#38)
+
+The `backup` service was in the `server` profile, which also starts caddy, so Dokploy (whose proxy holds 80 and 443) never started
+it. And its dumps went to `./backups` inside the code directory, which Dokploy replaces on every deploy. So:
+
+- The service now has its **own `backup` profile** (and is still in `server`): on Dokploy, `COMPOSE_PROFILES=backup` in the Environment
+  tab starts the dumps and not caddy. Dokploy writes that tab to a `.env` file beside the compose file, and Docker Compose reads
+  `COMPOSE_PROFILES` from it. A plain `docker compose up` is unchanged: no backup service for a judge's local run.
+- **`BACKUP_DIR`** chooses where the dumps go: unset means `./backups`; `BACKUP_DIR=backups` is a **named volume**, which survives
+  deploys and is what Dokploy's Volume Backups can copy off the server (they work on named volumes only).
+- A **healthcheck** is healthy only while a dump less than 26 hours old exists, so a missing or stuck backup shows as `unhealthy`.
+- `verify-release.sh` and `restore-drill.sh` read dumps *through* the service, so they work in either mode; `verify-release.sh`
+  with `REQUIRE_BACKUP=1` (the SSH deploy sets it) fails instead of skipping when the service is not running.
+
+Tested for real with the profile read from a `.env` file, then with a full stack in named-volume mode (see the PR for #38).
 
 ## Interfaces
 
@@ -106,8 +123,9 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
 ## Open questions
 
 - ~~D6 Caddy vs Cloudflare Tunnel, D7 domain.~~ Decided Nov 5: Dokploy behind Cloudflare, `poi-*.iotkiit.in`.
-- The `backup` service is in the `server` profile, which Dokploy doesn't start (its proxy holds 80 and 443).
-  Split it out of that profile, or use Dokploy's scheduled backups. @harshkumarsingh12.
+- ~~The `backup` service is in the `server` profile, which Dokploy doesn't start.~~ It now has its own `backup` profile and a
+  `BACKUP_DIR` for a named volume (#38). Still open: setting the two variables on the server and running the drill there.
+  @harshkumarsingh12.
 - A redeploy can leave `postgres` on a stale network so the API answers 500 (`ENOTFOUND postgres`) while `/healthz` and
   `/readyz` stay green (Nov 6 and Nov 7). Permanent fix: #121; `/readyz` now pings the database and answers 503 (#120, done). Recovery today:
   Stop then Deploy in Dokploy (SETUP.md, troubleshooting).
