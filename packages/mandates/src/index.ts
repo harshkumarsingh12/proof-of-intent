@@ -79,6 +79,11 @@ export async function generateSigningKeyPair(): Promise<{ privateKey: SigningKey
 /**
  * Spec 0001: a retired key still verifies mandates created before `retired_at`, and nothing created after.
  * The one place this rule lives; checkout and the registry both use it.
+ *
+ * `createdAt` must be a time the verifier trusts: now, or when this merchant first saw the mandate. Never a time the
+ * signer wrote into the mandate (`created_at`, `timestamp`): a retired or stolen key can sign any date it likes, so
+ * a fresh mandate dated before the retirement would pass (#162). Checking an *old* mandate for evidence, long after
+ * the fact, is the one place the mandate's own date is fine: it was accepted when first seen.
  */
 export function keyValidAt(key: { retiredAt?: string }, createdAt: string): boolean {
   return !key.retiredAt || Date.parse(createdAt) < Date.parse(key.retiredAt);

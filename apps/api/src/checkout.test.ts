@@ -64,7 +64,7 @@ function setup(overrides: Partial<AppDeps> & { vaultId?: string; retiredAt?: str
     merchant: { id: MERCHANT_ID, kid: "merchant-1", privateKey: merchantKey.privateKey },
     semanticFit,
     catalog: overrides.catalog,
-    now: () => NOW,
+    now: overrides.now ?? (() => NOW),
   });
   const checkout = (body: unknown) =>
     app.inject({ method: "POST", url: "/checkout", payload: body as object });
@@ -447,17 +447,60 @@ describe("POST /checkout: verification", () => {
       "SCHEMA_INVALID",
     ]);
   });
+});
 
-  test("a retired shopper key verifies older intents and rejects newer ones", async () => {
-    const before = setup({ retiredAt: "2026-11-01T10:00:00Z" }); // intent created 09:00
-    expect(
-      (await before.checkout((await signedCheckout({ shopper, agent })).body)).json().verdict.outcome,
-    ).toBe("APPROVE");
-    const after = setup({ retiredAt: "2026-11-01T08:00:00Z" });
-    expect((await after.checkout((await signedCheckout({ shopper, agent })).body)).json().verdict).toEqual({
-      outcome: "REJECT",
-      reasons: ["UNKNOWN_KEY"],
-    });
+describe("POST /checkout: retired keys are judged by the merchant's clock (#162)", () => {
+  // The clock is NOW = 2026-11-02T10:00:00Z unless a test moves it. A cart good until 12:00 outlives the later checkouts.
+  const longCart = {
+    ...compliantCart,
+    contents: { ...compliantCart.contents, cart_expiry: "2026-11-02T12:00:00Z" },
+  };
+  const retire = (s: ReturnType<typeof setup>, kid: string, retiredAt: string) =>
+    s.mem.keys.set(kid, { ...s.mem.keys.get(kid)!, retiredAt });
+  const verdict = async (s: ReturnType<typeof setup>, opts: Parameters<typeof signedCheckout>[0]) =>
+    (await s.checkout((await signedCheckout(opts)).body)).json().verdict;
+  const refused = { outcome: "REJECT", reasons: ["UNKNOWN_KEY"] };
+
+  test("a retired agent key can't get a new payment through by dating it before the retirement", async () => {
+    const s = setup();
+    retire(s, agent.kid, "2026-11-02T09:30:00Z"); // retired half an hour ago
+    // The attack: a payment the agent dated 09:00, before the retirement. It used to be approved.
+    expect(await verdict(s, { shopper, agent, cart: longCart, timestamp: "2026-11-02T09:00:00Z" })).toEqual(refused);
+    // And, as before, one honestly dated after the retirement.
+    expect(await verdict(s, { shopper, agent, cart: longCart, timestamp: "2026-11-02T09:45:00Z" })).toEqual(refused);
+    expect(s.createOrder).not.toHaveBeenCalled();
+  });
+
+  test("a retirement that hasn't happened yet changes nothing", async () => {
+    const s = setup();
+    retire(s, agent.kid, "2026-11-02T11:00:00Z");
+    expect((await verdict(s, { shopper, agent, cart: longCart })).outcome).toBe("APPROVE");
+  });
+
+  test("a retired shopper key can't present a NEW intent, whatever date the intent carries", async () => {
+    // The fixture intent says it was created 2026-11-01T09:00, before this retirement. We have never seen it.
+    const s = setup({ retiredAt: "2026-11-01T10:00:00Z" });
+    expect(await verdict(s, { shopper, agent })).toEqual(refused);
+    expect(s.createOrder).not.toHaveBeenCalled();
+  });
+
+  test("an intent we saw before the key was retired stays usable afterwards", async () => {
+    let clock = NOW;
+    const s = setup({ now: () => clock });
+    expect((await verdict(s, { shopper, agent, cart: longCart })).outcome).toBe("APPROVE"); // first seen 10:00
+    retire(s, shopper.kid, "2026-11-02T10:30:00Z");
+    clock = "2026-11-02T11:00:00Z";
+    // A new attempt (a new Payment Mandate) under the same intent, after the retirement.
+    expect((await verdict(s, { shopper, agent, cart: longCart })).outcome).toBe("APPROVE");
+  });
+
+  test("retiring a key as of an earlier date voids what we first saw after that date", async () => {
+    let clock = NOW;
+    const s = setup({ now: () => clock });
+    expect((await verdict(s, { shopper, agent, cart: longCart })).outcome).toBe("APPROVE"); // first seen 10:00
+    retire(s, shopper.kid, "2026-11-02T09:30:00Z"); // the operator says it was compromised from 09:30
+    clock = "2026-11-02T11:00:00Z";
+    expect(await verdict(s, { shopper, agent, cart: longCart })).toEqual(refused);
   });
 });
 

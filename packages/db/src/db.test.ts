@@ -73,6 +73,18 @@ describe.runIf(ADMIN_URL)("db", () => {
     await victim.close();
   });
 
+  test("a mandate keeps the time this merchant first saw it, which a later save can't change (#162)", async () => {
+    const h = (c: string) => c.repeat(64);
+    const base = { hash: h("d"), kind: "intent" as const, mandateId: "m-seen", canonical: "{}", jws: "a.b.c", kid: "k" };
+    await db.saveMandate({ ...base, seenAt: "2026-11-02T10:00:00.000Z" });
+    await db.saveMandate({ ...base, seenAt: "2026-12-25T00:00:00.000Z" }); // the same mandate presented again later
+    expect((await db.getMandate(h("d")))?.seenAt).toBe("2026-11-02T10:00:00.000Z");
+    // With no time given, it is the database's own clock.
+    await db.saveMandate({ ...base, hash: h("e"), mandateId: "m-seen-2" });
+    const seen = Date.parse((await db.getMandate(h("e")))!.seenAt!);
+    expect(Math.abs(Date.now() - seen)).toBeLessThan(60_000);
+  });
+
   test("ping resolves against a live database", async () => {
     await expect(db.ping()).resolves.toBeUndefined();
   });
@@ -172,7 +184,7 @@ describe.runIf(ADMIN_URL)("db", () => {
     };
     await db.saveMandate(mandate);
     await db.saveMandate({ ...mandate, canonical: "changed" }); // same hash: no-op
-    expect(await db.getMandate(h("b"))).toEqual(mandate);
+    expect(await db.getMandate(h("b"))).toEqual({ ...mandate, seenAt: expect.any(String) });
     await db.saveMandate({ ...mandate, hash: h("c"), kind: "cart", mandateId: "cart-rt" });
 
     const order = {

@@ -121,14 +121,20 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
   const lineTotal = cart.contents.lines.reduce((sum, l) => sum + l.unit_price.value * l.quantity, 0);
   if (lineTotal !== cart.contents.total.value) return reject(["SCHEMA_INVALID"]);
 
-  // A retired key still verifies mandates created before it was retired, nothing newer (spec 0001).
+  // A retired key authorizes nothing new (spec 0001, #162), and "new" is judged by OUR clock, never by a date the signer
+  // wrote: a retired or stolen key can sign a payment or an intent dated before it was retired.
+  //   - The Payment Mandate is per attempt, so its key must be in good standing now.
+  //   - An intent is long-lived. One we saw before the key was retired stays usable (it was authorized while the key was
+  //     good), and retiring a key "as of" an earlier date still voids what we first saw after it. One we have never
+  //     seen counts from now.
   const shopper = shopperKey as KeyRecord | null;
   const agent = agentKey as KeyRecord | null;
-  if (shopper && !keyValidAt(shopper, intent.created_at)) return reject(["UNKNOWN_KEY"]);
-  if (agent && !keyValidAt(agent, payment.timestamp)) return reject(["UNKNOWN_KEY"]);
+  const intentHash = mandateHash(intent);
+  const firstSeen = (await deps.db.getMandate(intentHash))?.seenAt ?? now;
+  if (shopper && !keyValidAt(shopper, firstSeen)) return reject(["UNKNOWN_KEY"]);
+  if (agent && !keyValidAt(agent, now)) return reject(["UNKNOWN_KEY"]);
 
   // 3. Bindings: one intent, one cart, one payment, all pointing at each other, addressed to us.
-  const intentHash = mandateHash(intent);
   const cartHash = mandateHash(cart);
   if (
     payment.intent_mandate_hash !== intentHash ||
@@ -149,6 +155,7 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     canonical: intentSig.canonical,
     jws: input.intent_jws,
     kid: intentSig.kid,
+    seenAt: now,
   });
   await deps.db.saveMandate({
     hash: mandateHash(payment),
@@ -157,6 +164,7 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     canonical: paymentSig.canonical,
     jws: input.payment_mandate_jws,
     kid: paymentSig.kid,
+    seenAt: now,
   });
   if (!(await deps.db.claimNonce(`payment:${payment.payment_mandate_id}`))) {
     return record(deps, intent.mandate_id, cart.contents.cart_id, "REJECT", ["NONCE_REPLAYED"]);
@@ -300,6 +308,7 @@ export async function placeOrder(
     canonical: verifiedCanonical(cartJws),
     jws: cartJws,
     kid: deps.merchant.kid,
+    seenAt: now,
   });
 
   const orderId = `ord_${randomUUID()}`;
