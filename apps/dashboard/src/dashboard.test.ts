@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ATTENTION_STARTER_PROMPT, tools } from "./studio-agent";
+import { ATTENTION_STARTER_PROMPT, studioStarters, tools } from "./studio-agent";
 // The AI package is server code, so the dashboard doesn't depend on it; a relative import is fine for a test.
 import { ATTENTION_STARTER_PROMPT as ANSWERED_LOCALLY } from "../../../packages/ai/src/studio";
+import { planStudio } from "../../../packages/ai/src/studio-plan";
 import { customWidgetDefinitions } from "../app/analytics/studio/studio-widgets";
 import { widgets } from "./widgets";
 
@@ -54,5 +55,20 @@ describe("Studio starters", () => {
   it("the attention starter asks the exact question the AI package answers locally", () => {
     // If someone rewords the starter, the fast path and the replay answer would silently stop applying.
     expect(ATTENTION_STARTER_PROMPT).toBe(ANSWERED_LOCALLY);
+  });
+
+  it("every starter is answered by the planner, with no model: instant, from the tool results, never guessed", () => {
+    const offered = tools.map(({ name, description }) => ({ name, description, parameters: {} }));
+    const starters = studioStarters({ compliant: "PP-D-1001", other: "PP-D-1002" });
+    expect(starters.length).toBeGreaterThanOrEqual(5);
+    for (const { label, prompt } of starters) {
+      const plan = planStudio({
+        kind: "turn",
+        instructions: "",
+        tools: offered,
+        history: [{ role: "user", text: prompt }],
+      });
+      expect(plan, `${label}: ${prompt}`).toMatchObject({ kind: "call" });
+    }
   });
 });

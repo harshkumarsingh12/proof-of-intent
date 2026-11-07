@@ -34,10 +34,10 @@ the page says "Studio is unavailable on this deployment". Put the key on one lin
 like the PayPal secret. With an invalid key Studio renders with an "Invalid License Key" console warning.
 Use the team's valid AI-enabled key for the demo. For new questions, set `AI_MODE=live` on both the API and
 dashboard, with `AI_PROVIDER`, `AI_MODEL` and `AI_API_KEY` in the API environment. The dashboard reads the mode
-to explain chat availability. In replay mode the chat answers only recorded questions with
-matching dispute facts and tools. An unrecorded turn gives a clear unavailable response. Capture all three
-starters with `pnpm studio:record` on the live stack, review the answers, then repeat with both servers in replay
-mode. [Recording steps and timings](evals/README.md#studio-starter-recordings). Studio's
+to explain chat availability. In replay mode the chat still answers the common questions
+without a model or recordings: a named dispute, a reply draft, counts, what needs attention, and what a term means.
+Open-ended questions need live AI and get a clear unavailable response. Check the chat end to end with
+`pnpm smoke:studio`. `pnpm studio:record` is only needed for open-ended recordings. [Recording steps and timings](evals/README.md#studio-starter-recordings). Studio's
 report lives in the browser tab and nothing is saved; the chat's tools are read-only.
 
 **The shop** (http://localhost:3001/shop) runs journey A: your browser makes a key and keeps it, you sign an

@@ -13,11 +13,16 @@ import {
 
 afterEach(() => vi.restoreAllMocks());
 
+// An open-ended question the planner (studio-plan.ts) doesn't recognise, so these tests exercise the model path and its
+// safeguards. Questions that name a dispute, or ask for counts or what needs attention, are answered by the planner.
+const LIST_TOOL = [{ name: "list_disputes", description: "Lists disputes", parameters: {} }];
+const FREE_FORM = "Walk me through what is going on with these disputes, in plain words.";
+
 const turn: StudioTurn = {
   kind: "turn",
   instructions: "Explain using the tool results.",
   history: [
-    { role: "user", text: "Explain PP-D-1001" },
+    { role: "user", text: FREE_FORM },
     { role: "tool", text: "contact private@example.com" },
   ],
   tools: [{ name: "explain_dispute", description: "Reads a policy result", parameters: {} }],
@@ -63,6 +68,7 @@ test("Studio replay hashes the redacted input and retains the exact dispute fact
 test("the attention starter formats the list facts with no additional model calls", async () => {
   const listed: StudioTurn = {
     ...turn,
+    tools: [{ name: "list_disputes", description: "Lists disputes", parameters: {} }],
     history: [
       { role: "user", text: "List the disputes and tell me which ones are waiting for my response." },
       { role: "assistant", text: "Called list_disputes with {}" },
@@ -146,7 +152,7 @@ test("a reply that only announces a step is retried once, whether or not a tool 
         : { text: "", tool: { name: "explain_dispute", arguments: '{"disputeId":"PP-D-1002"}' } },
     );
   };
-  const first: StudioTurn = { ...turn, history: [{ role: "user", text: "Explain PP-D-1002" }] };
+  const first: StudioTurn = { ...turn, history: [{ role: "user", text: FREE_FORM }] };
   await expect(runStudioTurn(first, "live", announcing)).resolves.toMatchObject({
     tool: { name: "explain_dispute" },
   });
@@ -194,7 +200,7 @@ test("tool arguments sent as an object are accepted and returned as a JSON strin
 });
 
 test("text that tells the user to run a supplied tool is retried once instead of ending the turn", async () => {
-  const first: StudioTurn = { ...turn, history: [{ role: "user", text: "Explain PP-D-1002" }] };
+  const first: StudioTurn = { ...turn, history: [{ role: "user", text: FREE_FORM }] };
   let calls = 0;
   const model: Generate = async <T>({ schema }: GenerateRequest<T>) => {
     calls++;
@@ -219,7 +225,7 @@ test("an identical repeat of an earlier tool call is retried without that tool",
     kind: "turn",
     instructions: "Lead agent.",
     history: [
-      { role: "user", text: "Explain PP-D-1002" },
+      { role: "user", text: FREE_FORM },
       { role: "assistant", text: "Called view_schema with {}" },
       { role: "tool", text: "schema" },
     ],
@@ -257,7 +263,7 @@ test("a model that keeps repeating a call is made to answer from the results it 
     kind: "turn",
     instructions: "Dispute agent.",
     history: [
-      { role: "user", text: "Draft a reply for PP-D-1002" },
+      { role: "user", text: FREE_FORM },
       { role: "assistant", text: 'Called draft_buyer_message with {"disputeId":"PP-D-1002"}' },
       { role: "tool", text: '{"draft":"Our review found that the purchase exceeded your limits."}' },
     ],
@@ -298,7 +304,7 @@ test("codes in the chat answer are wrapped in backticks so markdown keeps their 
   ).toBe("It is `ACCEPT_CLAIM` and hello world, case PP-R-ABC-10196871, hash b6e196ee208d71ce.");
   const model: Generate = async <T>({ schema }: GenerateRequest<T>) =>
     schema.parse({ text: "The class is MANDATE_COMPLIANT.", tool: null });
-  const first: StudioTurn = { ...turn, history: [{ role: "user", text: "Explain PP-D-1001" }] };
+  const first: StudioTurn = { ...turn, history: [{ role: "user", text: FREE_FORM }] };
   await expect(runStudioTurn(first, "live", model)).resolves.toMatchObject({
     text: "The class is `MANDATE_COMPLIANT`.",
     tool: null,
@@ -312,7 +318,7 @@ const HASH_B = "b".repeat(64);
 const explainTurn = (hash: string, respondBy: string): StudioTurn => ({
   ...turn,
   history: [
-    { role: "user", text: "Explain dispute PP-D-1001 and cite the available mandate evidence." },
+    { role: "user", text: FREE_FORM },
     { role: "assistant", text: "Called explain_dispute with PP-D-1001" },
     {
       role: "tool",
@@ -414,12 +420,12 @@ test("the attention starter answers in replay mode with no recording, from the c
   vi.spyOn(runtime, "readReplay").mockReturnValue({}); // nothing recorded
   const generate = vi.fn();
   const early = await runStudioTurn(
-    { ...turn, history: history("2026-11-07T12:00:00.000Z") },
+    { ...turn, tools: LIST_TOOL, history: history("2026-11-07T12:00:00.000Z") },
     "replay",
     generate,
   );
   const late = await runStudioTurn(
-    { ...turn, history: history("2026-12-01T09:30:00.000Z") },
+    { ...turn, tools: LIST_TOOL, history: history("2026-12-01T09:30:00.000Z") },
     "replay",
     generate,
   );

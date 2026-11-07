@@ -186,6 +186,24 @@ export function studioExamples(disputes: { id: string; disputeClass: string }[])
   };
 }
 
+/**
+ * The chat's starter questions. Each one is answered by the planner in packages/ai (instantly, from the tool results, with
+ * no model), and a dashboard test checks that, so a starter can't slip back onto the slow path that guessed counts.
+ */
+export const studioStarters = (examples: StudioExamples = {}) => [
+  {
+    label: "Explain a defended dispute",
+    prompt: `Explain dispute ${examples.compliant ?? "PP-D-1001"} and cite the available mandate evidence.`,
+  },
+  {
+    label: "Draft a buyer reply",
+    prompt: `Explain dispute ${examples.other ?? "PP-D-1002"} and draft a reply for the buyer to review.`,
+  },
+  { label: "What needs my attention?", prompt: ATTENTION_STARTER_PROMPT },
+  { label: "Which should I handle first?", prompt: "Which dispute should I handle first?" },
+  { label: "How many are agent overreach?", prompt: "How many disputes are agent overreach?" },
+];
+
 export const createStudioAi =
   (examples: StudioExamples = {}): AgAiHarnessSetup =>
   ({ api }) =>
@@ -198,20 +216,7 @@ export const createStudioAi =
         // view_schema/view_report/view_page, and its nested delegate_to arguments failed validation). Its flat
         // {disputeId} tools and short prompt work; the other agents stay registered.
         primary: disputeAgentId,
-        promptStarters: [
-          {
-            label: "Explain a defended dispute",
-            prompt: `Explain dispute ${examples.compliant ?? "PP-D-1001"} and cite the available mandate evidence.`,
-          },
-          {
-            label: "Draft a buyer reply",
-            prompt: `Explain dispute ${examples.other ?? "PP-D-1002"} and draft a reply for the buyer to review.`,
-          },
-          {
-            label: "What needs my attention?",
-            prompt: ATTENTION_STARTER_PROMPT,
-          },
-        ],
+        promptStarters: studioStarters(examples),
         agents: [
           directLlmRunner({
             ...builtIn.lead,
@@ -236,6 +241,7 @@ export const createStudioAi =
                 "You help a merchant's operator understand disputes. Use the read-only dispute tools yourself; never ask the user to run a tool.",
                 "When the user names a dispute id, call explain_dispute with it right away. Call draft_buyer_message only when the user asks for a reply or a message to the buyer. To see which disputes exist or which are waiting, call list_disputes, then say how many need a response and name the first few with their class and amount. Once you have the result you need, answer; do not call more tools.",
                 "Meanings: MANDATE_COMPLIANT means the cart met every limit the shopper signed, so the merchant defends with evidence (PROVIDE_EVIDENCE). AGENT_OVERREACH means the agent bought outside the signed limits, so the merchant accepts the buyer's claim and refunds (ACCEPT_CLAIM). INTENT_MISREAD means the item was related but not what the shopper meant (offer or accept). NO_MANDATE means there is no signed record, so standard evidence applies. Never say a claim was rejected unless a tool says so. Write codes and ids such as `AGENT_OVERREACH` and `PP-D-1002` in backticks, because the chat renders markdown and would swallow the underscores.",
+                "You only read: you cannot accept claims, submit evidence, send messages or change anything. If asked to, say so plainly and point to the Disputes page; never write that you did it. Use only the numbers the tools give (counts.total, counts.needResponse, counts.other, counts.byClass); never work a count out by counting rows.",
                 "Then answer in a few plain sentences: the class and recommended action, the broken limits, and the case ID. When the user asked for a reply or message, quote the draft text from draft_buyer_message in full and label it a draft. Never claim any action was taken.",
               ].join("\n"),
             tools: disputeTools,

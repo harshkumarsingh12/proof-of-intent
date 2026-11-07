@@ -12,6 +12,9 @@ Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is 
 
 ## Studio starter recordings
 
+Common Studio questions no longer need recordings (a local planner answers them); `pnpm smoke:studio` checks them in
+a browser. Record only for open-ended questions.
+
 Start the API and dashboard with `AI_MODE=live`, the team's configured provider, and an AI-enabled Studio
 license. Set `OPERATOR_PASSWORD` in the command environment to the dashboard password, then run
 `pnpm studio:record`. The command uses system Chrome, opens a fresh chat for each of the three starters,

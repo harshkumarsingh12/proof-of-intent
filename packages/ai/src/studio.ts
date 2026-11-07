@@ -10,6 +10,7 @@ import {
   type AiMode,
   type Generate,
 } from "./runtime";
+import { STUDIO_CANT_ACT, claimsAnAction, planStudio } from "./studio-plan";
 
 const toolName = z
   .string()
@@ -127,6 +128,10 @@ const textOnly = z.object({ text: z.string().max(8000) });
 export const backtickCodes = (text: string): string =>
   text.replace(/(?<![`\w])[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+(?![`\w])/g, "`$&`");
 
+/** The chat is read-only: an answer that says it accepted, refunded or sent something gets the plain truth put first. */
+const readOnlyText = (text: string): string =>
+  claimsAnAction(text) ? `${STUDIO_CANT_ACT}\n\n${text}` : text;
+
 const argsText = (args: string | Record<string, unknown>): string =>
   typeof args === "string" ? args : JSON.stringify(args);
 
@@ -160,11 +165,15 @@ const REPEAT_NUDGE = (name: string) =>
   `You already called ${name} with these arguments and its result is above. Do not call it again: use the result, hand the task to another agent with delegate_to if one fits, or answer.`;
 
 export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: Generate) {
-  // The list tool already returns the counts and the rows in response-deadline order. Formatting those facts
-  // locally avoids another model call, its retries and the repeated-tool loop for the slowest starter. It needs no
-  // recording either, so it answers in replay mode on any database, with that database's own deadlines.
-  const listAnswer = summarizeList(turn);
-  if (listAnswer) return listAnswer;
+  // The planner answers what has an exact answer in the tool results, and says which tool to call first, with no model:
+  // instant, always right, and the same in replay mode on any database (it needs no recording). Anything else falls
+  // through to the model below. See studio-plan.ts for why.
+  const planned = planStudio(turn);
+  if (planned) {
+    return planned.kind === "call"
+      ? { text: "", tool: { name: planned.name, arguments: JSON.stringify(planned.args) } }
+      : { text: planned.text, tool: null };
+  }
 
   if (mode === "replay") {
     const hit = readReplay<StudioAnswer>(J4_REPLAY)[studioReplayKey(turn)];
@@ -179,6 +188,8 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
     "When a response format schema is provided, put a JSON string conforming to it in text. Honor the supplied tool choice.",
     'To call a tool reply like {"text":"","tool":{"name":"<tool name>","arguments":{"<key>":"<value>"}}}. You call tools yourself; never ask the user to run one.',
     'Your text is the final answer shown to the user: never write a plan such as "I\'ll look into it" or "Let me check". If a supplied tool can get what you need, call it now.',
+    "You only read: you cannot accept claims, submit evidence, send messages or change anything. If asked to, say so plainly and point to the Disputes page; never write that you did it.",
+    "Use only the numbers the tools give (counts.total, counts.needResponse, counts.other, counts.byClass). Never work a count out by counting rows, and never reuse one number for another thing.",
     redact(turn.instructions),
   ].join("\n");
   const model = generate ?? generateFromEnv("J4");
@@ -243,7 +254,7 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
       const result = [...turn.history].reverse().find((item) => item.role === "tool")?.text ?? "";
       // If it still has nothing to say, show what the tools returned rather than failing the chat.
       const text = final.text.trim() || `Here is what the tools returned:\n${result.slice(0, 1500)}`;
-      return { text: backtickCodes(text), tool: null };
+      return { text: readOnlyText(backtickCodes(text)), tool: null };
     }
   }
   return validateAnswer(turn, answer);
@@ -255,7 +266,7 @@ function validateAnswer(turn: StudioTurn, answer: StudioAnswer) {
     if (toolChoice === "required" || typeof toolChoice === "object" || !answer.text.trim()) {
       throw new AiUnavailableError("J4", "the response did not complete the turn");
     }
-    return { ...answer, text: backtickCodes(answer.text) };
+    return { ...answer, text: readOnlyText(backtickCodes(answer.text)) };
   }
   if (
     toolChoice === "none" ||
@@ -273,70 +284,3 @@ function validateAnswer(turn: StudioTurn, answer: StudioAnswer) {
   }
   return { text: answer.text, tool: { name: answer.tool.name, arguments: args } };
 }
-
-const disputeList = z.object({
-  counts: z.object({ total: z.number().int().nonnegative(), needResponse: z.number().int().nonnegative() }),
-  disputes: z
-    .array(
-      z.object({
-        id: z.string().regex(/^[A-Za-z0-9-]{1,64}$/),
-        needsResponse: z.boolean(),
-        class: z
-          .string()
-          .regex(/^[A-Z_]+$/)
-          .optional(),
-        amount: z
-          .string()
-          .regex(/^[A-Z]{3} \d+\.\d{2}$/)
-          .optional(),
-        respondBy: z.string().datetime().optional(),
-      }),
-    )
-    .max(12),
-});
-
-function summarizeList(turn: StudioTurn) {
-  if (turn.format || turn.toolChoice === "required" || typeof turn.toolChoice === "object") return;
-  const question = turn.history.findLast((item) => item.role === "user")?.text;
-  if (question !== ATTENTION_STARTER_PROMPT) return;
-  const result = turn.history.at(-1);
-  const call = turn.history.at(-2);
-  if (result?.role !== "tool" || call?.role !== "assistant" || call.text !== "Called list_disputes with {}")
-    return;
-  let data: unknown;
-  try {
-    data = JSON.parse(result.text);
-    // ag-studio wraps ctx.success(JSON.stringify(data)) in its tool-result envelope.
-    const wrapped = z.object({ success: z.literal(true), response: z.string() }).safeParse(data);
-    if (wrapped.success) data = JSON.parse(wrapped.data.response);
-  } catch {
-    return;
-  }
-  const parsed = disputeList.safeParse(data);
-  if (!parsed.success) return;
-  const { counts, disputes } = parsed.data;
-  const waiting = disputes.filter((d) => d.needsResponse);
-  if (counts.needResponse > counts.total || waiting.length > counts.needResponse) return;
-  const text = [
-    `${counts.needResponse} of ${counts.total} loaded disputes need your response.`,
-    ...waiting.map((d) =>
-      [
-        `- \`${d.id}\``,
-        d.class ? `\`${d.class}\`` : "Awaiting analysis",
-        d.amount,
-        d.respondBy ? `respond by ${readableTime(d.respondBy)}` : "Response deadline unavailable",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    ),
-    ...(counts.needResponse > waiting.length
-      ? [
-          `Showing ${waiting.length} of the ${counts.needResponse} disputes needing a response. Open Disputes for the remaining cases.`,
-        ]
-      : []),
-  ].join("\n");
-  return { text, tool: null };
-}
-
-/** `2026-11-17T04:59:59.000Z` → `2026-11-17 04:59 UTC`: a time a person can read, in a fixed zone. */
-const readableTime = (iso: string) => `${new Date(iso).toISOString().slice(0, 16).replace("T", " ")} UTC`;
