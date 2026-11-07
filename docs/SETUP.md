@@ -234,6 +234,14 @@ On the server: `curl -fsS http://127.0.0.1:3100/healthz` (the API's host port fr
 | Ask the AI says the chat can't answer, or answers "Studio AI is unavailable"                                                                     | `AI_MODE` is not `live` on the dashboard or API, the `AI_*` variables are missing, the daily call budget is used up, or the model timed out (the API logs `Studio AI unavailable` with the reason) | Set the variables on both containers; raise `AI_DAILY_CALL_LIMIT`; retry                                                                                                                                                                                             |
 | JSON `Route GET:/ not found` on the API domain                                                                                                   | Working as intended                                                                                                                                                                                | Use `/healthz`                                                                                                                                                                                                                                                       |
 
+**Why `ENOTFOUND postgres` happened, and what changed (#121).** Dokploy rewrites `docker-compose.yml` on every deploy to attach
+its own network, and it does not resolve YAML merge keys (`<<: *app`). `api`, `worker`, `buyer`, `dashboard` and `migrate` used to
+inherit `networks: [poi]` from the shared `x-app` block, so Dokploy saw them as having no network and gave them only its own,
+while `postgres` (which listed `poi` itself) stayed on `poi`: the apps could no longer resolve the name `postgres`. Every service
+now lists `networks: [poi]` directly and the anchor carries none, and `apps/api/src/compose.test.ts` fails if that is undone.
+Keep it that way when you add a service. If you ever see the symptom again, Stop then Deploy still recovers it, and `/readyz`
+(which now answers 503) is the signal to watch.
+
 **Without Dokploy** (plain Compose and Caddy on a server you manage):
 
 ```bash

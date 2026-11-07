@@ -168,7 +168,7 @@ Day-by-day tasks are GitHub issues under each milestone; see [ROADMAP.md](ROADMA
 | R11 | Public demo abused (AI spend, junk data) | M | M | Harsh | Rate limits, budget kill switch, viewer role, nightly reset |
 | R12 | Secrets committed | L | H | Harsh | gitleaks, gitignore, server secrets outside the checkout |
 | R13 | A teammate is out for a day | M | M | all | Backups per area; package READMEs; contracts let others merge |
-| R14 | A redeploy strands Postgres on a stale network and the demo answers 500 (happened Nov 6 and Nov 7) | H | H | Harsh | Stop then Deploy recovers (SETUP.md); permanent fix #121; `/readyz` pings the database #120; avoid redeploys near judging |
+| R14 | A redeploy strands Postgres on a stale network and the demo answers 500 (happened Nov 6 and Nov 7) | H | H | Harsh | Cause found and fixed in the compose file (#121: Dokploy's rewrite drops `networks` inherited through a YAML anchor, so each service now declares it); `/readyz` pings the database #120; confirm with one redeploy, Stop then Deploy recovers (SETUP.md); avoid redeploys near judging |
 | R15 | Sandbox disputes left for judges pass their response date before Dec 15, and each action is one-shot | H | M | Sumedha | Judges file their own with the judge shoppers (DEMO.md click path, #122); fresh pair filed around Dec 1 |
 
 ## 9. Open decisions
