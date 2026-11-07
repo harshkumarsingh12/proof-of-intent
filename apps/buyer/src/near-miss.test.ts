@@ -103,4 +103,32 @@ describe("nearMiss", () => {
       }
     }
   });
+
+  test("an item and color left open stay open: the hint raises the price and adds no limit", () => {
+    const hint = nearMiss({ sku: redJacket.sku, reasons: ["AMOUNT_EXCEEDS_MAX"], limits: { maxCents: 1000 } })!;
+    const cents = price(redJacket.sku);
+    expect(hint.apply?.patch).toEqual({
+      maxPrice: String(cents / 100),
+      category: "",
+      color: "",
+      description: `Anything under $${cents / 100}.`,
+    });
+    expect(() =>
+      buildIntent(
+        { ...hint.apply!.patch, validDays: 7, confirmEachCart: false },
+        { kid: "k", merchantId: "m", now: new Date(), mandateId: crypto.randomUUID(), nonce: "n".repeat(16) },
+      ),
+    ).not.toThrow();
+  });
+
+  test("a color-only limit keeps its color and leaves the item open", () => {
+    const hint = nearMiss({
+      sku: redJacket.sku,
+      reasons: ["AMOUNT_EXCEEDS_MAX"],
+      limits: { maxCents: 1000, color: "red" },
+    })!;
+    expect(hint.apply?.patch).toMatchObject({ category: "", color: "red" });
+    expect(hint.apply?.patch.description).toMatch(/^Red under \$/);
+  });
 });
+

@@ -109,7 +109,8 @@ intent's constraints: no model, no network, and every figure in the text is the 
 
 Rules: it never signs, buys or changes the signed intent; the button replaces the form values, drops the old signed intent and the
 verdict, and the shopper reviews and signs again. A cap is never lowered, and a raise is named in the text. Other refusals (expired
-intent, bad signature, replay, step-up) get no hint. Voice never applies it.
+intent, bad signature, replay, step-up) get no hint. Voice never applies it. An item or color the shopper left open ("Anything")
+stays open in the suggestion: the hint raises the price and never adds a limit they didn't choose.
 
 11. A refusal for price or kind shows what would have fit, from catalog data only; other refusals show nothing. _(unit)_
 12. Applying a suggestion only fills the form: nothing is signed or ordered until the shopper signs again, and the patch always builds a valid intent. _(unit)_

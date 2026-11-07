@@ -529,9 +529,12 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
   // The signed intent's category first: that's where the agent shops. Everything else is a click away, so a
   // cross-category cart can still be tried (and refused with ATTRIBUTE_MISMATCH).
-  const shownCategory = signed?.intent.constraints.attributes?.category ?? form.category;
-  const inCategory = CATALOG.filter((p) => p.line.attributes.category === shownCategory);
-  const others = CATALOG.filter((p) => p.line.attributes.category !== shownCategory);
+  // An intent signed with no category ("Anything") shops the whole store, so there is no "elsewhere".
+  const shownCategory = signed ? (signed.intent.constraints.attributes?.category ?? "") : form.category;
+  const inCategory = shownCategory
+    ? CATALOG.filter((p) => p.line.attributes.category === shownCategory)
+    : CATALOG;
+  const others = shownCategory ? CATALOG.filter((p) => p.line.attributes.category !== shownCategory) : [];
   const card = (p: Product) => (
     <div className="product" key={p.line.sku}>
       <strong>{p.line.title}</strong>
@@ -611,6 +614,19 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         <p className="sub">
           The merchant checks every cart against these limits before PayPal takes any money.
         </p>
+        <p className="meta">
+          Quick start:{" "}
+          {PRESETS.map((p) => (
+            <button
+              key={p.category}
+              type="button"
+              className="btn btn-ghost btn-small"
+              onClick={() => setForm((f) => presetForm(p.category, f.confirmEachCart))}
+            >
+              {p.label}
+            </button>
+          ))}
+        </p>
         <label className="field">
           What should the agent buy?
           <textarea
@@ -670,10 +686,8 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           </label>
           <label className="field">
             Category
-            <select
-              value={form.category}
-              onChange={(e) => setForm((f) => presetForm(e.target.value, f.confirmEachCart))}
-            >
+            <select value={form.category} onChange={(e) => set("category", e.target.value)}>
+              <option value="">Anything</option>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {categoryLabel(c)}
@@ -684,6 +698,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           <label className="field">
             Color
             <select value={form.color} onChange={(e) => set("color", e.target.value)}>
+              <option value="">Any color</option>
               {COLORS.map((c) => (
                 <option key={c}>{c}</option>
               ))}
@@ -775,12 +790,14 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         </button>
         {agentNote && <p className="meta">{agentNote}</p>}
         {agentTrace.length > 0 && <AgentTrace steps={agentTrace} />}
-        <h3 className="group">{categoryLabel(shownCategory)}</h3>
+        <h3 className="group">{shownCategory ? categoryLabel(shownCategory) : "All products"}</h3>
         <div className="products">{inCategory.map(card)}</div>
-        <details className="others">
-          <summary>Elsewhere in the store ({others.length})</summary>
-          <div className="products">{others.map(card)}</div>
-        </details>
+        {others.length > 0 && (
+          <details className="others">
+            <summary>Elsewhere in the store ({others.length})</summary>
+            <div className="products">{others.map(card)}</div>
+          </details>
+        )}
         {checkoutError && <p className="error">{checkoutError}</p>}
         {verdict && product && (
           <div
