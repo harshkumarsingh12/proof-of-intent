@@ -32,7 +32,7 @@ Checks run in this order and stop at the first stage that fails (built in `apps/
    cart line's SKU, title, attributes and unit price (value and currency) must equal what the merchant's catalog says for
    that SKU, exactly (no extra attributes; quantity is the shopper's and isn't compared) → `CATALOG_MISMATCH`. The agent
    proposes the cart and the merchant signs it, so without this the price was whatever the agent wrote: a real SKU at one
-   cent was approved and captured. The two checks run together, so an agent that gets a fact wrong *and* breaks a limit
+   cent was approved and captured. The two checks run together, so an agent that gets a fact wrong _and_ breaks a limit
    hears both (`CATALOG_MISMATCH` first). The agent only hears the code; the audit log gets a
    `checkout.catalog_mismatch` row naming each differing fact. The catalog is `CheckoutDeps.catalog` (an `AppDeps`
    option); by default it is the demo store (`packages/contracts/src/catalog.ts`, the same list the shop and the buyer
@@ -50,9 +50,22 @@ Checks run in this order and stop at the first stage that fails (built in `apps/
 
 Agent alone with an `APPROVE` but no vaulted wallet on the shopper: HTTP 409 `no_vaulted_wallet`, nothing charged.
 The shopper saves a wallet with Vault v3 (`/vault/*`, spec 0004 §Vault, #17) and the same checkout then charges it.
-If PayPal fails to create the order: HTTP 502 `paypal_unavailable`, the order row is marked `PAYPAL_FAILED`.
-The order row (status `PENDING`) and its verdict are written before the PayPal call, so a crash never leaves a
-PayPal order we have no record of.
+If PayPal refuses to create the order (a 4xx), or the order is human present (`AUTHORIZE` charges nothing when it is
+created): HTTP 502 `paypal_unavailable`, the order row is marked `PAYPAL_FAILED`, and nothing was charged.
+
+An agent-alone `CAPTURE` charges the wallet when PayPal creates the order, so a lost answer (timeout, dropped
+connection, 5xx) can follow a completed charge (#159). That order is marked `UNKNOWN_OUTCOME`, the answer is HTTP 502
+`paypal_outcome_unknown`, and the message never says nothing was charged. The order id is the payment attempt's stable
+identifier and PayPal's `PayPal-Request-Id`:
+
+- A retry of the **same cart** (with a fresh Payment Mandate) reuses that order id, so PayPal returns the first result
+  instead of charging again. The order then finishes as normal.
+- Any **other** cart under the same intent is refused with HTTP 409 `payment_outcome_unknown` until the unknown order
+  is settled, so a possible double charge is never stacked on a second purchase.
+- A verified `PAYMENT.CAPTURE.COMPLETED` webhook whose `invoice_id` is that order also settles it.
+- A step-up link whose charge ended unknown stays usable; opening it again confirms the same order.
+  The order row (status `PENDING`) and its verdict are written before the PayPal call, so a crash never leaves a
+  PayPal order we have no record of.
 
 ### Stage 2, before capture (human present only)
 
@@ -68,7 +81,7 @@ nothing there and cannot void anyone's order. In order:
    exact Cart Mandate we signed. Any failure
    (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `SCHEMA_INVALID`, `MANDATE_MISMATCH`) is **403 `approval_invalid`** with the
    reason codes, and nothing changes: no PayPal call, the order stays as it was and can still be approved properly.
-   This includes a *genuine* signature that names a different order or cart, so a shopper's real approval of one order
+   This includes a _genuine_ signature that names a different order or cart, so a shopper's real approval of one order
    cannot be replayed to void another.
 2. The shopper's authority is still current (#161): the **intent** has started and hasn't expired and the cart hasn't
    expired, by the same `freshness` rules checkout ran (else `MANDATE_NOT_YET_VALID`, `MANDATE_EXPIRED`,
