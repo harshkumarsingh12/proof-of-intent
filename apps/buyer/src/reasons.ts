@@ -19,6 +19,7 @@ export const REASON_TEXT: Record<ReasonCode, string> = {
   QUANTITY_EXCEEDS_MAX: "It's more items than you allowed",
   ADDRESS_MISMATCH: "It ships somewhere else",
   RECURRENCE_EXCEEDED: "You've reached your limit of orders for now",
+  CATALOG_MISMATCH: "The cart doesn't match what the store sells (product or price)",
   SEMANTIC_UNCERTAIN: "The merchant isn't sure it's what you meant, so you confirm",
   SEMANTIC_MISMATCH: "The merchant's check says it isn't what you described",
 };

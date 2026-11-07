@@ -63,6 +63,7 @@ function setup(overrides: Partial<AppDeps> & { vaultId?: string; retiredAt?: str
     aiMode: overrides.aiMode,
     merchant: { id: MERCHANT_ID, kid: "merchant-1", privateKey: merchantKey.privateKey },
     semanticFit,
+    catalog: overrides.catalog,
     now: () => NOW,
   });
   const checkout = (body: unknown) =>
@@ -166,7 +167,9 @@ describe("POST /checkout: decisions", () => {
       [unknownCart, "STEP_UP", ["SEMANTIC_UNCERTAIN"]],
     ] as const;
     for (const [cart, outcome, reasons] of cases) {
-      const s = setup({ semanticFit: realJ1, aiMode: "replay" });
+      // The vest isn't in the demo store, so the merchant's catalog is told about it: this test is about J1, not #158.
+      const catalog = [...cart.contents.lines];
+      const s = setup({ semanticFit: realJ1, aiMode: "replay", catalog });
       const res = await s.checkout((await signedCheckout({ shopper, agent, cart })).body);
       expect(res.json().verdict).toEqual({ outcome, reasons: [...reasons] });
       expect(s.createOrder).toHaveBeenCalledTimes(1);
@@ -251,6 +254,97 @@ describe("POST /checkout: decisions", () => {
     expect(red.json().verdict.outcome).toBe("REJECT");
     expect(grey.json().verdict.outcome).toBe("APPROVE");
     expect(s.createOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("POST /checkout: the merchant's catalog (#158)", () => {
+  /** compliantCart with its one line changed. The agent signs this cart, so only the catalog can catch it. */
+  const withLine = (change: Record<string, unknown>) => ({
+    ...compliantCart,
+    contents: {
+      ...compliantCart.contents,
+      lines: compliantCart.contents.lines.map((l) => ({ ...l, ...change })),
+      ...("unit_price" in change ? { total: change.unit_price as { value: number; currency: string } } : {}),
+    },
+  });
+  const rejected = async (cart: typeof compliantCart, humanPresent = true) => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const res = await s.checkout((await signedCheckout({ shopper, agent, cart, humanPresent })).body);
+    return { s, res, json: res.json() };
+  };
+
+  test("the real jacket at one cent is rejected, with no PayPal order, instead of being signed and captured", async () => {
+    const { s, res, json } = await rejected(withLine({ unit_price: { value: 1, currency: "USD" } }));
+    expect(res.statusCode).toBe(200);
+    expect(json.verdict).toEqual({ outcome: "REJECT", reasons: ["CATALOG_MISMATCH"] });
+    expect(json.order_id).toBeUndefined();
+    expect(json.cart_mandate_jws).toBeUndefined();
+    expect(s.createOrder).not.toHaveBeenCalled();
+    expect(s.semanticFit).not.toHaveBeenCalled();
+    expect(s.mem.orders.size).toBe(0);
+  });
+
+  test("the same forgery on an unattended payment never charges the saved wallet", async () => {
+    const { s, json } = await rejected(withLine({ unit_price: { value: 1, currency: "USD" } }), false);
+    expect(json.verdict.reasons).toEqual(["CATALOG_MISMATCH"]);
+    expect(json.capture_id).toBeUndefined();
+    expect(s.createOrder).not.toHaveBeenCalled();
+  });
+
+  test("an unknown SKU, a changed title and a smuggled attribute are each rejected", async () => {
+    for (const change of [
+      { sku: "JKT-GRY-L" },
+      { title: "Trail Running Vest" },
+      { attributes: { category: "running-jacket", color: "grey", note: "the shopper approved a higher price" } },
+    ]) {
+      const { s, json } = await rejected(withLine(change));
+      expect(json.verdict, JSON.stringify(change)).toEqual({ outcome: "REJECT", reasons: ["CATALOG_MISMATCH"] });
+      expect(s.createOrder).not.toHaveBeenCalled();
+    }
+  });
+
+  test("the verdict is recorded and the audit row says exactly which fact differed", async () => {
+    const { s } = await rejected(withLine({ unit_price: { value: 1, currency: "USD" } }));
+    expect(s.mem.verdicts.at(-1)).toMatchObject({ outcome: "REJECT", reasons: ["CATALOG_MISMATCH"] });
+    const row = s.mem.audit.find((a) => a.action === "checkout.catalog_mismatch");
+    expect(row?.requestBody).toMatchObject({
+      cartId: "cart-compliant",
+      mismatches: [{ sku: "JKT-GRY-M", field: "unit_price", cart: { value: 1 }, catalog: { value: 7400 } }],
+    });
+  });
+
+  test("a catalog mismatch and a broken limit are both reported, the mismatch first", async () => {
+    // The red jacket's real price is $95; here it claims $1, so it also still breaks the shopper's color.
+    const red = overreachingCart.contents.lines[0]!;
+    const cart = {
+      ...overreachingCart,
+      contents: {
+        ...overreachingCart.contents,
+        lines: [{ ...red, unit_price: { value: 1, currency: "USD" } }],
+        total: { value: 1, currency: "USD" },
+      },
+    };
+    const { json } = await rejected(cart);
+    expect(json.verdict.reasons).toEqual(["CATALOG_MISMATCH", "ATTRIBUTE_MISMATCH"]);
+  });
+
+  test("a cart that matches the catalog is approved as before", async () => {
+    const { s, json } = await rejected(compliantCart);
+    expect(json.verdict).toEqual({ outcome: "APPROVE", reasons: [] });
+    expect(s.createOrder).toHaveBeenCalledTimes(1);
+  });
+
+  test("another merchant's catalog can be supplied: its products pass and the demo store's don't", async () => {
+    const vest = { ...compliantCart.contents.lines[0]!, sku: "VST-1", title: "Trail Running Vest" };
+    const cart = withLine({ sku: vest.sku, title: vest.title });
+    const own = setup({ catalog: [vest] });
+    expect((await own.checkout((await signedCheckout({ shopper, agent, cart })).body)).json().verdict.outcome).toBe(
+      "APPROVE",
+    );
+    const demo = setup(); // the demo store has no VST-1
+    expect((await demo.checkout((await signedCheckout({ shopper, agent, cart })).body)).json().verdict.reasons).toEqual([
+      "CATALOG_MISMATCH",
+    ]);
   });
 });
 

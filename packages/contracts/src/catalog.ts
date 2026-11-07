@@ -85,6 +85,46 @@ export const CATALOG: Product[] = [
   },
 ];
 
+/** One way a proposed cart line differs from the merchant's catalog. */
+export interface CatalogMismatch {
+  sku: string;
+  /** `sku` means the merchant doesn't sell that SKU at all. */
+  field: "sku" | "title" | "attributes" | "unit_price";
+  /** What the cart said. */
+  cart: unknown;
+  /** What the catalog says (absent for an unknown SKU). */
+  catalog?: unknown;
+}
+
+const sameAttributes = (a: Record<string, string>, b: Record<string, string>): boolean => {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => Object.hasOwn(b, k) && a[k] === b[k]);
+};
+
+/**
+ * What in a proposed cart the merchant's catalog doesn't back (#158): a SKU it doesn't sell, or a title, attributes
+ * (exactly, no extras) or price (value and currency) that differ from that product's. The agent proposes the cart and
+ * the merchant signs it, so without this the price and product facts are whatever the agent wrote. Quantity is the
+ * shopper's to choose and is not compared. Pure; `catalog` defaults to the demo store.
+ */
+export function catalogMismatches(
+  lines: readonly CartLine[],
+  catalog: readonly CartLine[] = CATALOG.map((p) => p.line),
+): CatalogMismatch[] {
+  const bySku = new Map(catalog.map((l) => [l.sku, l]));
+  return lines.flatMap((l): CatalogMismatch[] => {
+    const known = bySku.get(l.sku);
+    if (!known) return [{ sku: l.sku, field: "sku", cart: l.sku }];
+    const out: CatalogMismatch[] = [];
+    if (l.title !== known.title) out.push({ sku: l.sku, field: "title", cart: l.title, catalog: known.title });
+    if (!sameAttributes(l.attributes, known.attributes))
+      out.push({ sku: l.sku, field: "attributes", cart: l.attributes, catalog: known.attributes });
+    if (l.unit_price.value !== known.unit_price.value || l.unit_price.currency !== known.unit_price.currency)
+      out.push({ sku: l.sku, field: "unit_price", cart: l.unit_price, catalog: known.unit_price });
+    return out;
+  });
+}
+
 export const PRESETS: ShopperPreset[] = [
   {
     category: "running-jacket",

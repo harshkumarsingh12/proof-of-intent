@@ -135,6 +135,7 @@ const REASON_TEXT: Record<string, string> = {
   QUANTITY_EXCEEDS_MAX: "the quantity was above the limit",
   ADDRESS_MISMATCH: "it shipped to a different address",
   RECURRENCE_EXCEEDED: "the shopper's order limit for the period was reached",
+  CATALOG_MISMATCH: "the cart's product or price didn't match the merchant's catalog",
   SEMANTIC_UNCERTAIN: "the semantic check wasn't sure it was what they meant",
   SEMANTIC_MISMATCH: "the semantic check said it wasn't what they described",
 };

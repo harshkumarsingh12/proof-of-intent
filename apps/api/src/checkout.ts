@@ -7,13 +7,16 @@
  *   2. signatures      shopper key for the intent, agent key for the payment        → SIGNATURE_INVALID / UNKNOWN_KEY
  *   3. bindings        payment commits to this intent and this cart, cart → intent  → MANDATE_MISMATCH
  *   4. replay          the Payment Mandate id is claimed once, ever                 → NONCE_REPLAYED
- *   5. hard rules      packages/policy-engine with the intent's capture ledger
+ *   5. hard rules      packages/policy-engine with the intent's capture ledger, and the merchant's own
+ *                      catalog: every cart line's SKU, title, attributes and price must be what the
+ *                      merchant sells (#158)                                            → CATALOG_MISMATCH
  *   6. semantic (J1)   only if every hard rule passed; can only lower the outcome
  * Invariant 1: no PayPal order exists for a REJECT.
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { APPROVE_AT, STEP_UP_AT, isAiUnavailable, type AiMode, type SemanticFit } from "@poi/ai";
 import {
+  CartLine,
   CartMandate,
   IntentMandate,
   PaymentMandate,
@@ -22,6 +25,7 @@ import {
   type Outcome,
   type ReasonCode,
 } from "@poi/contracts";
+import { catalogMismatches } from "@poi/contracts/catalog";
 import type { Db, KeyRecord, StepUpRecord } from "@poi/db";
 import {
   customId,
@@ -56,6 +60,11 @@ export interface StepUpConfig {
 }
 
 export interface CheckoutDeps {
+  /**
+   * What the merchant sells: the facts a cart line must match. The agent proposes the cart and the merchant signs it,
+   * so these come from here and never from the agent. Defaults to the demo store (packages/contracts catalog).
+   */
+  catalog?: readonly CartLine[];
   db: Db;
   paypal: PayPalClient;
   merchant: Merchant;
@@ -153,10 +162,24 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     return record(deps, intent.mandate_id, cart.contents.cart_id, "REJECT", ["NONCE_REPLAYED"]);
   }
 
-  // 5. Hard rules.
+  // 5. Hard rules, and the merchant's own facts. Both are reported together, so an agent that gets one wrong and also
+  //    breaks a limit hears about both.
   const ledger = await deps.db.mandateLedger(intent.mandate_id);
   const rules = evaluate({ intent, cart, now, ledger });
-  if (!rules.pass) return record(deps, intent.mandate_id, cart.contents.cart_id, "REJECT", rules.reasons);
+  const misses = catalogMismatches(cart.contents.lines, deps.catalog);
+  if (misses.length > 0) {
+    // The agent only hears the reason code; the operator can see exactly which fact differed.
+    await deps.db.appendAudit({
+      actor: "api",
+      action: "checkout.catalog_mismatch",
+      subjectId: intent.mandate_id,
+      requestBody: { cartId: cart.contents.cart_id, mismatches: misses },
+    });
+  }
+  if (misses.length > 0 || !rules.pass) {
+    const reasons: ReasonCode[] = [...(misses.length > 0 ? (["CATALOG_MISMATCH"] as const) : []), ...rules.reasons];
+    return record(deps, intent.mandate_id, cart.contents.cart_id, "REJECT", reasons);
+  }
 
   // 6. Semantic fit, downgrade only.
   let outcome: Outcome = "APPROVE";

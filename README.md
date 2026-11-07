@@ -13,7 +13,8 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 
 > **Who sends the mandates?** The demo shop signs the shopper's intent in the browser. Its buyer agent signs
 > the payment mandate and proposes a cart. External agents can integrate through the documented checkout
-> endpoint using our AP2-style schemas and a registered agent key. Disputes on orders without a mandate use
+> endpoint using our AP2-style schemas and a registered agent key; the cart lines must be the merchant's own products
+> at its own prices (checked against its catalog). Disputes on orders without a mandate use
 > the standard PayPal evidence path.
 
 ## How it works
