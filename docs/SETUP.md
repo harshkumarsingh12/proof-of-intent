@@ -114,7 +114,10 @@ Postgres for local work: `docker compose up -d postgres` and set
    `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.CAPTURE.COMPLETED`,
    `PAYMENT.CAPTURE.DENIED`, `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`,
    `CUSTOMER.DISPUTE.RESOLVED`, `VAULT.PAYMENT-TOKEN.CREATED`. Put its id in `PAYPAL_WEBHOOK_ID`.
-5. For live model calls: `AI_MODE=live` plus `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`. After editing a prompt in
+5. For live model calls: `AI_MODE=live` plus `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`. NVIDIA is the default; `gemini`,
+   `groq` and `openrouter` have their endpoints built in (any other OpenAI-compatible host needs `AI_BASE_URL`), and the
+   Nemotron thinking switch is sent to NVIDIA only. Optionally set `AI_FALLBACK_MODEL`: it is tried once, on the same
+   provider, when `AI_MODEL` has been retired or renamed (the free model lineups change without notice). After editing a prompt in
    `packages/ai/prompts/`, run `pnpm ai:record` to re-record the replay answers (it uses the live model).
 6. Merchant signing key: `pnpm keys:gen > merchant-key.pem`, then put it in `MERCHANT_SIGNING_KEY`.
 7. Operator actions: `OPERATOR_TOKEN` (e.g. `openssl rand -hex 32`) and `OPERATOR_PASSWORD`.
