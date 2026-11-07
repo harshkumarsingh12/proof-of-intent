@@ -164,6 +164,27 @@ export const CartApproval = z.object({
 });
 export type CartApproval = z.infer<typeof CartApproval>;
 
+/**
+ * The shopper's proof that they are the one saving a wallet (docs/specs/0004 §Vault), signed with the same key as
+ * their Intent Mandates. `vault.setup` starts a save; `vault.save` finishes it for one setup token. A proof is only
+ * good for a few minutes (`issued_at`), so a leaked one can't be kept and replayed later.
+ */
+export const VaultProof = z.discriminatedUnion("purpose", [
+  z.object({ purpose: z.literal("vault.setup"), issued_at: isoDateTime }),
+  z.object({ purpose: z.literal("vault.save"), setup_token_id: z.string().min(1), issued_at: isoDateTime }),
+]);
+export type VaultProof = z.infer<typeof VaultProof>;
+
+/** POST /vault/setup: `{ proof_jws }` (purpose vault.setup) → where the shopper approves the wallet with PayPal. */
+export const VaultSetupRequest = z.object({ proof_jws: z.string().min(1) });
+export const VaultSetupResponse = z.object({ setup_token_id: z.string(), approval_url: z.string().url() });
+export type VaultSetupResponse = z.infer<typeof VaultSetupResponse>;
+
+/** POST /vault/save: PayPal sent the shopper back with `approval_token_id`; the proof names that setup token. */
+export const VaultSaveRequest = z.object({ setup_token_id: z.string().min(1), proof_jws: z.string().min(1) });
+export const VaultSaveResponse = z.object({ wallet: z.literal(true) });
+export type VaultSaveResponse = z.infer<typeof VaultSaveResponse>;
+
 /** POST /checkout/:id/approve, sent by the buyer app from PayPal's onApprove. */
 export const ApproveRequest = z.object({ approval_jws: z.string().min(1) });
 export type ApproveRequest = z.infer<typeof ApproveRequest>;

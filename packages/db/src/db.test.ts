@@ -48,7 +48,12 @@ describe.runIf(ADMIN_URL)("db", () => {
     const other = createDb(url.toString());
     const [a, b] = await Promise.all([db.migrate(), other.migrate()]);
     await other.close();
-    expect([...a, ...b]).toEqual(["0001_init.sql", "0002_dispute_copilot.sql", "0003_stepups.sql"]);
+    expect([...a, ...b]).toEqual([
+      "0001_init.sql",
+      "0002_dispute_copilot.sql",
+      "0003_stepups.sql",
+      "0004_vault_setups.sql",
+    ]);
     expect(await db.migrate()).toEqual([]);
   });
 
@@ -309,6 +314,28 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect(await db.retireKey("shopper", "shp_reg", "2026-11-06T10:00:00Z")).toBe("2026-11-06T10:00:00.000Z");
     expect(await db.retireKey("shopper", "shp_reg", "2026-12-01T00:00:00Z")).toBe("2026-11-06T10:00:00.000Z");
     expect(await db.retireKey("agent", "agt_missing", "2026-11-06T10:00:00Z")).toBeNull();
+  });
+
+  test("a vault setup token is claimed once, by its own shopper, and can be released after a PayPal failure", async () => {
+    const jwk = { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) };
+    const a = await db.registerShopperKey({ kid: "shp_vault_a", publicJwk: jwk });
+    const b = await db.registerShopperKey({ kid: "shp_vault_b", publicJwk: jwk });
+    await db.createVaultSetup("SETUP-A", a.shopperId);
+
+    expect(await db.claimVaultSetup("SETUP-A", b.shopperId)).toBe(false); // someone else's token
+    expect(await db.claimVaultSetup("SETUP-MISSING", a.shopperId)).toBe(false);
+    const claims = await Promise.all([1, 2, 3].map(() => db.claimVaultSetup("SETUP-A", a.shopperId)));
+    expect(claims.filter(Boolean)).toHaveLength(1);
+
+    await db.releaseVaultSetup("SETUP-A"); // PayPal failed before making the payment token
+    expect(await db.claimVaultSetup("SETUP-A", a.shopperId)).toBe(true);
+
+    expect((await db.findKey("shopper", "shp_vault_a"))?.vaultId).toBeUndefined();
+    await db.saveVaultId(a.shopperId, "VAULT-A1");
+    expect((await db.findKey("shopper", "shp_vault_a"))?.vaultId).toBe("VAULT-A1");
+    await db.saveVaultId(a.shopperId, "VAULT-A2"); // a newer wallet replaces it
+    expect((await db.findKey("shopper", "shp_vault_a"))?.vaultId).toBe("VAULT-A2");
+    expect((await db.findKey("shopper", "shp_vault_b"))?.vaultId).toBeUndefined();
   });
 
   test("the schema refuses malformed hashes and oversized custom_id", async () => {

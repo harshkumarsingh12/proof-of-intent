@@ -35,6 +35,7 @@ const paypalId = () =>
 export function createMockClient(): MockPayPalClient {
   const byRequestId = new Map<string, CreatedOrder>();
   const orders = new Map<string, { status: string; authorizationId?: string }>();
+  const setupTokens = new Map<string, string | undefined>(); // setup token id → payment token once made
   const authorizations = new Map<string, "CREATED" | "CAPTURED" | "VOIDED">();
   const disputeActions: DisputeAction[] = [];
   const disputes = new Map<string, PayPalDispute>();
@@ -70,6 +71,23 @@ export function createMockClient(): MockPayPalClient {
       orders.set(id, { status: created.status });
       byRequestId.set(input.ourOrderId, created);
       return created;
+    },
+
+    // Nobody to click in mock mode: "approval" sends the shopper straight back, as PayPal does after a real one.
+    async createVaultSetupToken({ returnUrl }) {
+      const id = paypalId();
+      setupTokens.set(id, undefined);
+      const back = new URL(returnUrl);
+      back.searchParams.set("approval_token_id", id);
+      return { setupTokenId: id, approvalUrl: back.toString() };
+    },
+
+    async createVaultPaymentToken(setupTokenId) {
+      if (!setupTokens.has(setupTokenId)) throw notFound("setup token", setupTokenId);
+      if (setupTokens.get(setupTokenId)) throw unprocessable("SETUP_TOKEN_ALREADY_USED");
+      const vaultId = paypalId();
+      setupTokens.set(setupTokenId, vaultId);
+      return { vaultId };
     },
 
     async authorizeOrder(orderId) {

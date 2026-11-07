@@ -1,12 +1,12 @@
 # 0003: Checkout API and verification flow
 
-| | |
-|---|---|
-| **Status** | In Progress |
-| **Owner** | @harshkumarsingh12 |
-| **Reviewers** | @srshriv, @sumedhag28 |
-| **Milestone** | M1 |
-| **Code** | `apps/api`, `packages/db` |
+|               |                           |
+| ------------- | ------------------------- |
+| **Status**    | In Progress               |
+| **Owner**     | @harshkumarsingh12        |
+| **Reviewers** | @srshriv, @sumedhag28     |
+| **Milestone** | M1                        |
+| **Code**      | `apps/api`, `packages/db` |
 
 ## Context
 
@@ -33,13 +33,14 @@ Checks run in this order and stop at the first stage that fails (built in `apps/
    switch), the outcome is `STEP_UP` with `SEMANTIC_UNCERTAIN`: a person confirms instead of the model.
 7. Decision:
 
-| Outcome | Condition | Action |
-|---|---|---|
-| `APPROVE` | hard rules pass; J1 `match` with confidence ≥ 0.8 | sign Cart Mandate; human present: create order `AUTHORIZE`; agent alone: create order `CAPTURE` against the vault id |
-| `STEP_UP` | hard rules pass; J1 `partial`, or confidence 0.5–0.8, or `user_cart_confirmation_required` | human present: show warnings before the PayPal button; agent alone: email link (24 h), **no order until approved** |
-| `REJECT` | any hard failure, or confidence < 0.5 | no order; reason codes returned |
+| Outcome   | Condition                                                                                  | Action                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `APPROVE` | hard rules pass; J1 `match` with confidence ≥ 0.8                                          | sign Cart Mandate; human present: create order `AUTHORIZE`; agent alone: create order `CAPTURE` against the vault id |
+| `STEP_UP` | hard rules pass; J1 `partial`, or confidence 0.5–0.8, or `user_cart_confirmation_required` | human present: show warnings before the PayPal button; agent alone: email link (24 h), **no order until approved**   |
+| `REJECT`  | any hard failure, or confidence < 0.5                                                      | no order; reason codes returned                                                                                      |
 
 Agent alone with an `APPROVE` but no vaulted wallet on the shopper: HTTP 409 `no_vaulted_wallet`, nothing charged.
+The shopper saves a wallet with Vault v3 (`/vault/*`, spec 0004 §Vault, #17) and the same checkout then charges it.
 If PayPal fails to create the order: HTTP 502 `paypal_unavailable`, the order row is marked `PAYPAL_FAILED`.
 The order row (status `PENDING`) and its verdict are written before the PayPal call, so a crash never leaves a
 PayPal order we have no record of.
@@ -105,40 +106,43 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 
 ### Tables (`packages/db`)
 
-`shoppers`, `shopper_keys`, `agent_keys`, `mandates` (canonical bytes + JWS), `nonces` (UNIQUE), `orders`,
+`shoppers`, `shopper_keys`, `vault_setups`, `agent_keys`, `mandates` (canonical bytes + JWS), `nonces` (UNIQUE), `orders`,
 `verdicts`, `webhook_events` (UNIQUE event id), `disputes`, `stepups` (UNIQUE token hash), `audit_log` (append-only).
 
 ## Interfaces
 
-| Method | Path | Owner | Request → Response |
-|---|---|---|---|
-| POST | `/checkout` | Harsh | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, cart_mandate_jws?, paypal_order_id?, approval_url? }` |
-| POST | `/checkout/:id/approve` | Harsh | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }` |
-| GET | `/stepup/:token` | Sristee | the waiting cart for the approval page → `StepUpView`; `cache-control: no-store` |
-| POST | `/stepup/:token/approve` | Sristee | `{ approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse` |
-| GET | `/orders`, `/verifications` | Harsh | paginated grids for the dashboard |
-| GET | `/disputes`, `/disputes/:id/recommendation` | Sikruti | spec 0005 |
-| POST | `/disputes/:id/actions/:action` | Sikruti | operator token; `action ∈ provide-evidence, accept-claim, send-message, escalate` (`make-offer` → 501, out of scope) |
-| GET | `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions` | Harsh | the stored attestation PDF; what PayPal allows right now (live `get_dispute`) |
-| POST | `/orders/:id/tracking` | Harsh | operator token; `{ trackingNumber, carrier, status? }` → shipment tracking on the capture |
-| GET | `/analytics/:report` | Sikruti | spec 0007 |
-| POST | `/webhooks/paypal` | Harsh | spec 0004 |
-| POST | `/keys/shopper` | Sristee | `{ public_jwk }` (P-256) → `{ kid, shopper_id }`; public, rate-limited, `kid` = `shp_<RFC 7638 thumbprint>` (spec 0001) |
-| POST | `/keys/agent` | Sristee | `{ public_jwk, platform }` → `{ kid }`; operator token; `kid` = `agt_<thumbprint>` |
-| POST | `/keys/:kind/:kid/retire` | Sristee | `{ at? }` → `{ kid, retired_at }`; operator token; first retirement date wins |
-| POST | `/ai/studio` | Sumedha | Studio harness proxy, spec 0007 |
+| Method | Path                                                         | Owner   | Request → Response                                                                                                                                                                                                             |
+| ------ | ------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/checkout`                                                  | Harsh   | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, cart_mandate_jws?, paypal_order_id?, approval_url? }`                                                                                                                |
+| POST   | `/checkout/:id/approve`                                      | Harsh   | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }`                                                                                                                                                        |
+| GET    | `/stepup/:token`                                             | Sristee | the waiting cart for the approval page → `StepUpView`; `cache-control: no-store`                                                                                                                                               |
+| POST   | `/stepup/:token/approve`                                     | Sristee | `{ approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse`                                                                                                            |
+| GET    | `/orders`, `/verifications`                                  | Harsh   | paginated grids for the dashboard                                                                                                                                                                                              |
+| GET    | `/disputes`, `/disputes/:id/recommendation`                  | Sikruti | spec 0005                                                                                                                                                                                                                      |
+| POST   | `/disputes/:id/actions/:action`                              | Sikruti | operator token; `action ∈ provide-evidence, accept-claim, send-message, escalate` (`make-offer` → 501, out of scope)                                                                                                           |
+| GET    | `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions` | Harsh   | the stored attestation PDF; what PayPal allows right now (live `get_dispute`)                                                                                                                                                  |
+| POST   | `/orders/:id/tracking`                                       | Harsh   | operator token; `{ trackingNumber, carrier, status? }` → shipment tracking on the capture                                                                                                                                      |
+| GET    | `/analytics/:report`                                         | Sikruti | spec 0007                                                                                                                                                                                                                      |
+| POST   | `/webhooks/paypal`                                           | Harsh   | spec 0004                                                                                                                                                                                                                      |
+| POST   | `/keys/shopper`                                              | Sristee | `{ public_jwk }` (P-256) → `{ kid, shopper_id }`; public, rate-limited, `kid` = `shp_<RFC 7638 thumbprint>` (spec 0001)                                                                                                        |
+| POST   | `/keys/agent`                                                | Sristee | `{ public_jwk, platform }` → `{ kid }`; operator token; `kid` = `agt_<thumbprint>`                                                                                                                                             |
+| POST   | `/vault/setup`                                               | Harsh   | `{ proof_jws }` (`VaultProof` purpose `vault.setup`) → `{ setup_token_id, approval_url }`; public, rate-limited; spec 0004 §Vault                                                                                              |
+| POST   | `/vault/save`                                                | Harsh   | `{ setup_token_id, proof_jws }` (purpose `vault.save`, naming that setup token) → `{ wallet: true }`; 409 `setup_not_available` if it isn't this shopper's or was used; 409 `paypal_refused` if PayPal hasn't got the approval |
+| GET    | `/vault/:kid`                                                | Harsh   | `{ wallet: boolean }` for a shopper key; never the vault id                                                                                                                                                                    |
+| POST   | `/keys/:kind/:kid/retire`                                    | Sristee | `{ at? }` → `{ kid, retired_at }`; operator token; first retirement date wins                                                                                                                                                  |
+| POST   | `/ai/studio`                                                 | Sumedha | Studio harness proxy, spec 0007                                                                                                                                                                                                |
 
 A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVENTIONS.md.
 
 ## Acceptance criteria
 
-1. `/checkout` rejects the red $95 fixture with no PayPal order created. *(done; `pnpm sandbox:checkout-smoke`)*
-2. A replayed nonce is rejected with `NONCE_REPLAYED`. *(done)*
-3. An approved human-present cart is authorized, re-checked and captured; a modified cart is voided. *(done with the
-   mock; live on integration day, needs a sandbox shopper to approve)*
-4. Step-up: no order exists until the shopper approves; an expired link creates nothing. *(done, #35:
-   `apps/api/src/stepup.test.ts`, with Postgres)*
-5. Every verdict and PayPal call is in `audit_log` with the request body. *(done for stage 1)*
+1. `/checkout` rejects the red $95 fixture with no PayPal order created. _(done; `pnpm sandbox:checkout-smoke`)_
+2. A replayed nonce is rejected with `NONCE_REPLAYED`. _(done)_
+3. An approved human-present cart is authorized, re-checked and captured; a modified cart is voided. _(done with the
+   mock; live on integration day, needs a sandbox shopper to approve)_
+4. Step-up: no order exists until the shopper approves; an expired link creates nothing. _(done, #35:
+   `apps/api/src/stepup.test.ts`, with Postgres)_
+5. Every verdict and PayPal call is in `audit_log` with the request body. _(done for stage 1)_
 
 ## Out of scope
 

@@ -101,8 +101,24 @@ export interface TrackingInput {
   status?: "SHIPPED" | "ON_HOLD" | "DELIVERED" | "CANCELLED";
 }
 
+/** Vault v3 step 1: where the shopper approves saving their PayPal wallet for the merchant. */
+export interface VaultSetupInput {
+  /** PayPal sends the shopper here with `approval_token_id` (the setup token id) once they approve. */
+  returnUrl: string;
+  cancelUrl: string;
+}
+
+export interface VaultSetup {
+  setupTokenId: string;
+  approvalUrl: string;
+}
+
 export interface PayPalClient {
   createOrder(input: CreateOrderInput): Promise<CreatedOrder>;
+  /** Vault v3: a setup token with `usage_type: MERCHANT`, so the merchant can charge the wallet later. */
+  createVaultSetupToken(input: VaultSetupInput): Promise<VaultSetup>;
+  /** Vault v3 step 2, after the shopper approved: turns the setup token into the payment token (our `vault_id`). One use. */
+  createVaultPaymentToken(setupTokenId: string): Promise<{ vaultId: string }>;
   /** Authorizes an order the shopper approved. */
   authorizeOrder(orderId: string): Promise<{ authorizationId: string }>;
   captureAuthorization(authorizationId: string): Promise<{ captureId: string }>;

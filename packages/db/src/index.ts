@@ -183,6 +183,14 @@ export interface Db {
   }): Promise<boolean>;
   /** Retires a key once (a later call keeps the first date). The effective retired_at, or null for an unknown key. */
   retireKey(kind: "shopper" | "agent", kid: string, at: string): Promise<string | null>;
+  /** Vault v3: remembers which shopper a PayPal setup token was made for. */
+  createVaultSetup(setupTokenId: string, shopperId: string): Promise<void>;
+  /** Marks the setup token as being turned into a payment token. False if it isn't this shopper's or was already used. */
+  claimVaultSetup(setupTokenId: string, shopperId: string): Promise<boolean>;
+  /** Gives a claimed setup token back when PayPal failed before making the payment token, so the shopper can retry. */
+  releaseVaultSetup(setupTokenId: string): Promise<void>;
+  /** The shopper's saved PayPal wallet (Vault v3 payment token); replaces an earlier one. */
+  saveVaultId(shopperId: string, vaultId: string): Promise<void>;
   /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
   saveMandate(m: MandateRecord): Promise<void>;
   /**
@@ -336,6 +344,30 @@ export function createDb(databaseUrl: string): Db {
         [kid, platform, owner, json(publicJwk)],
       );
       return res.rowCount === 1;
+    },
+
+    async createVaultSetup(setupTokenId, shopperId) {
+      await pool.query("insert into vault_setups (setup_token_id, shopper_id) values ($1, $2)", [
+        setupTokenId,
+        shopperId,
+      ]);
+    },
+
+    async claimVaultSetup(setupTokenId, shopperId) {
+      const res = await pool.query(
+        `update vault_setups set claimed_at = now()
+          where setup_token_id = $1 and shopper_id = $2 and claimed_at is null`,
+        [setupTokenId, shopperId],
+      );
+      return res.rowCount === 1;
+    },
+
+    async releaseVaultSetup(setupTokenId) {
+      await pool.query("update vault_setups set claimed_at = null where setup_token_id = $1", [setupTokenId]);
+    },
+
+    async saveVaultId(shopperId, vaultId) {
+      await pool.query("update shoppers set vault_id = $2 where id = $1", [shopperId, vaultId]);
     },
 
     async retireKey(kind, kid, at) {

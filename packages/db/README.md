@@ -20,6 +20,9 @@ bytes + JWS), `nonces`, `orders`, `verdicts`, `webhook_events`, `disputes`, `aud
 `migrations/0002_dispute_copilot.sql`: on `disputes`, the PayPal object and its `update_time`, the recommendation,
 the evidence PDF and the JSON bundle.
 
+`migrations/0003_stepups.sql`: step-up links. `migrations/0004_vault_setups.sql`: which shopper a Vault v3 setup token
+was made for, claimed once (`createVaultSetup`, `claimVaultSetup`, `releaseVaultSetup`, `saveVaultId`).
+
 Beyond checkout's methods, `Db` has the worker's inbox (`pendingDisputeEvents`, `markEventProcessed`), disputes
 (`saveDispute` refuses an older PayPal version, `getDispute`, `listDisputes` deadline first), the dashboard grids
 (`listOrders`, `listVerdicts`, `orderVerdict`), `mandateLedger(intent, asOfOrderId)` for what an order's checkout

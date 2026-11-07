@@ -25,6 +25,7 @@
     "sandbox:checkout-smoke": "tsx --env-file=.env scripts/sandbox/checkout-smoke.ts",
     "sandbox:dispute-cycle": "tsx --env-file=.env scripts/sandbox/dispute-cycle.ts",
     "sandbox:hosted-order": "tsx scripts/sandbox/hosted-order.ts",
+    "sandbox:vault-wallet": "tsx --env-file=.env scripts/sandbox/vault-wallet.ts",
     "sandbox:webhook-check": "tsx --env-file=.env scripts/sandbox/webhook-check.ts",
     "ai:record": "tsx --env-file=.env scripts/ai/record-j1.ts",
     "eval": "tsx scripts/ai/eval.ts",

@@ -31,6 +31,7 @@ export function memoryDb() {
   const processed = new Set<string>();
   const disputes = new Map<string, DisputeRow>();
   const stepups = new Map<string, StoredStepUp>();
+  const vaultSetups = new Map<string, { shopperId: string; claimed: boolean }>();
   const page = <T>(rows: T[], p: { limit: number; offset: number }) =>
     rows.slice(p.offset, p.offset + p.limit);
   const db: Db = {
@@ -74,6 +75,20 @@ export function memoryDb() {
       if (!k || k.kind !== kind) return null;
       k.retiredAt ??= new Date(at).toISOString();
       return k.retiredAt;
+    },
+    createVaultSetup: async (id, shopperId) => void vaultSetups.set(id, { shopperId, claimed: false }),
+    claimVaultSetup: async (id, shopperId) => {
+      const v = vaultSetups.get(id);
+      if (!v || v.shopperId !== shopperId || v.claimed) return false;
+      v.claimed = true;
+      return true;
+    },
+    releaseVaultSetup: async (id) => {
+      const v = vaultSetups.get(id);
+      if (v) v.claimed = false;
+    },
+    saveVaultId: async (shopperId, vaultId) => {
+      for (const k of keys.values()) if (k.shopperId === shopperId) k.vaultId = vaultId;
     },
     saveMandate: async (m) => void (mandates.has(m.hash) || mandates.set(m.hash, m)),
     mandateLedger: async (intentMandateId, asOfOrderId) => {
@@ -149,7 +164,20 @@ export function memoryDb() {
     migrate: async () => [],
     close: async () => {},
   };
-  return { db, nonces, events, keys, mandates, orders, verdicts, audit, disputes, processed, stepups };
+  return {
+    db,
+    nonces,
+    events,
+    keys,
+    mandates,
+    orders,
+    verdicts,
+    audit,
+    disputes,
+    processed,
+    stepups,
+    vaultSetups,
+  };
 }
 
 export interface Party {

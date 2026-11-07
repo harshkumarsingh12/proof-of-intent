@@ -15,6 +15,7 @@ import { disputeRoutes } from "./routes/disputes";
 import { keyRoutes } from "./routes/keys";
 import { registerRoutes } from "./routes/index";
 import { studioRoutes } from "./routes/studio";
+import { vaultRoutes } from "./routes/vault";
 import { webhookRoutes } from "./routes/webhooks";
 
 export interface AppDeps {
@@ -93,6 +94,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(disputeRoutes, deps);
   app.register(studioRoutes, deps);
   app.register(keyRoutes, deps);
+  app.register(vaultRoutes, {
+    ...deps,
+    now: deps.now ?? (() => new Date().toISOString()),
+    buyerBase: deps.stepUp?.linkBase ?? "http://localhost:3001",
+  });
   app.register(checkoutRoutes, {
     ...deps,
     aiMode: deps.aiMode ?? "replay",
