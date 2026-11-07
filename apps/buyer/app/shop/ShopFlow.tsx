@@ -14,7 +14,7 @@ import type {
   StepUpApproveResponse,
   StepUpView,
 } from "@poi/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   CATALOG,
   CATEGORIES,
@@ -30,12 +30,16 @@ import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../
 import { REASON_TEXT } from "../../src/reasons";
 import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact } from "../../src/signing";
 import { stepUpApproval, stepUpListProof } from "../../src/stepup";
+import { initialVoice, MIN_READBACK_MS, READBACK_TIMEOUT_MS, readBack, voiceReducer } from "../../src/voice";
 import { removeProof, setupProof } from "../../src/wallet";
+import { useSpeech } from "./useVoice";
 
 export interface ShopConfig {
   merchantId: string;
   paypalMode: "mock" | "sandbox";
   paypalClientId?: string;
+  /** Voice ordering (spec 0010), off unless BUYER_VOICE=1. */
+  voiceEnabled?: boolean;
 }
 
 /** The form for a category's demo words (catalog PRESETS), which replay mode has recorded J1 answers for. */
@@ -169,6 +173,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [shopper, setShopper] = useState<StoredShopper>();
   const [keyError, setKeyError] = useState<string>();
   const [form, setForm] = useState<IntentForm>(() => presetForm(CATEGORIES[0] ?? ""));
+  // The latest form, for async steps that must not read a stale render (voice drafts, then signs, in one go).
+  const formRef = useRef(form);
+  formRef.current = form;
   const [resetting, setResetting] = useState(false);
   const [signed, setSigned] = useState<Signed>();
   const [formError, setFormError] = useState<string>();
@@ -304,11 +311,12 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       .finally(() => setResetting(false));
   };
 
-  const sign = async () => {
-    if (!shopper) return;
+  /** Signs `f` with the browser key and remembers it. Returns what it signed, so callers can chain on the result. */
+  const signIntent = async (f: IntentForm): Promise<Signed | undefined> => {
+    if (!shopper) return undefined;
     setFormError(undefined);
     try {
-      const intent = buildIntent(form, {
+      const intent = buildIntent(f, {
         kid: shopper.kid,
         merchantId: config.merchantId,
         now: new Date(),
@@ -316,13 +324,18 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         nonce: crypto.randomUUID().replace(/-/g, ""),
       });
       const jws = await signCompact(intent, shopper.key.privateKey, shopper.kid);
-      setSigned({ intent, jws, hash: await sha256Hex(jwsPayloadText(jws)) });
+      const next = { intent, jws, hash: await sha256Hex(jwsPayloadText(jws)) };
+      setSigned(next);
       setCheckout(undefined);
       setApproval(undefined);
+      return next;
     } catch (err) {
       setFormError((err as Error).message);
+      return undefined;
     }
   };
+
+  const sign = () => signIntent(form);
 
   const propose = async (sku: string) => {
     if (!signed) return;
@@ -350,32 +363,36 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   };
 
   /** The agent fills the form from the shopper's words. It only drafts: the shopper still signs. */
-  const draftWithAgent = async () => {
+  const draftFrom = async (text: string): Promise<{ form: IntentForm } | { error: string }> => {
     setDrafting(true);
     setDraftNote(undefined);
     setFormError(undefined);
     try {
       const res = await postJson<{ source: "live" | "scripted"; draft: { form: IntentForm } }>(
         "/api/agent/draft-intent",
-        { text: form.description },
+        { text },
       );
       if (isError(res.body)) {
         setFormError(res.body.message);
-      } else {
-        const { draft, source } = res.body;
-        setForm((f) => ({ ...draft.form, confirmEachCart: f.confirmEachCart }));
-        setDraftNote(
-          `${source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} filled in the limits below. Check them, then sign.`,
-        );
+        return { error: res.body.message };
       }
+      const { draft, source } = res.body;
+      // Only the shopper's own switch survives a draft: the agent can't turn "ask me before every purchase" on or off.
+      const next = { ...draft.form, confirmEachCart: formRef.current.confirmEachCart };
+      setForm(next);
+      setDraftNote(
+        `${source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} filled in the limits below. Check them, then sign.`,
+      );
+      return { form: next };
     } finally {
       setDrafting(false);
     }
   };
 
+  const draftWithAgent = () => draftFrom(form.description);
+
   /** The agent picks the item itself; the merchant still answers for each cart it tries. */
-  const chooseWithAgent = async () => {
-    if (!signed) return;
+  const chooseWith = async (s: Signed) => {
     setChoosing(true);
     setCheckoutError(undefined);
     setAgentNote(undefined);
@@ -389,7 +406,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         trace: TraceStep[];
         attempts: { sku: string; body: CheckoutResponse | ApiError }[];
         message?: string;
-      }>("/api/agent/choose", { intent_jws: signed.jws, human_present: !payAlone });
+      }>("/api/agent/choose", { intent_jws: s.jws, human_present: !payAlone });
       if (isError(res.body)) {
         setCheckout(undefined);
         setCheckoutError(res.body.message);
@@ -420,6 +437,131 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       setChoosing(false);
     }
   };
+
+  const chooseWithAgent = () => (signed ? chooseWith(signed) : undefined);
+
+  // ---- voice ordering (spec 0010) ----
+  // Speech only ever fills the box. The agent drafts the limits, the card below reads them back, and signing needs a
+  // separate confirmation: a tap, or a new utterance after the card is up (never part of the request itself).
+  const { ready, supported, canSpeak, listen, stop, speak } = useSpeech();
+  const [voice, dispatchVoice] = useReducer(voiceReducer, initialVoice);
+  const [speakBack, setSpeakBack] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+  const voiceRun = useRef(false);
+  const readbackCard = voice.snapshot ? readBack(voice.snapshot) : undefined;
+  const voiceIdle = voice.phase === "idle" || voice.phase === "done" || voice.phase === "failed";
+
+  const listenForConfirmation = useCallback(() => {
+    listen({
+      onResult: (text, final) => {
+        if (final) dispatchVoice({ type: "CONFIRM_HEARD", text, at: Date.now() });
+      },
+      onEnd: () => {},
+    });
+  }, [listen]);
+
+  const draftFromVoice = async (text: string) => {
+    const drafted = await draftFrom(text);
+    if ("error" in drafted) {
+      dispatchVoice({ type: "FAILED", message: drafted.error });
+      return;
+    }
+    const rb = readBack(drafted.form);
+    if (!rb.ok) {
+      dispatchVoice({ type: "FAILED", message: rb.problem });
+      return;
+    }
+    dispatchVoice({ type: "DRAFTED", form: drafted.form, at: Date.now() });
+  };
+
+  const startVoice = () => {
+    if (!shopper) return;
+    dispatchVoice({ type: "LISTEN" });
+    listen({
+      onResult: (text, final) => {
+        dispatchVoice({ type: "HEARD", text, final });
+        setForm((f) => ({ ...f, description: text }));
+        if (final) void draftFromVoice(text);
+      },
+      onEnd: (error) => dispatchVoice(error ? { type: "FAILED", message: error } : { type: "LISTEN_ENDED" }),
+    });
+  };
+
+  const cancelVoice = () => {
+    stop();
+    dispatchVoice({ type: "CANCEL" });
+  };
+
+  // The microphone is only on while listening for the request or for the confirmation.
+  useEffect(() => {
+    if (voice.phase !== "listening" && voice.phase !== "readback") stop();
+  }, [voice.phase, stop]);
+
+  // The confirm button arms itself a beat after the card appears (the reducer ignores anything sooner anyway).
+  useEffect(() => {
+    setArmed(false);
+    if (voice.phase !== "readback") return;
+    const timer = setTimeout(() => setArmed(true), MIN_READBACK_MS);
+    return () => clearTimeout(timer);
+  }, [voice.phase, voice.shownAt]);
+
+  // A read-back that nobody answers expires, and editing the limits while it is up discards it.
+  useEffect(() => {
+    if (voice.phase !== "readback") return;
+    const timer = setTimeout(
+      () => dispatchVoice({ type: "TIMEOUT", at: Date.now() }),
+      READBACK_TIMEOUT_MS + 50,
+    );
+    return () => clearTimeout(timer);
+  }, [voice.phase, voice.shownAt]);
+  useEffect(() => {
+    if (
+      voice.phase === "readback" &&
+      voice.snapshot &&
+      JSON.stringify(form) !== JSON.stringify(voice.snapshot)
+    )
+      dispatchVoice({ type: "EDITED" });
+  }, [form, voice.phase, voice.snapshot]);
+
+  // The card is up: read it aloud if asked (microphone off meanwhile), then listen once for "confirm".
+  useEffect(() => {
+    if (voice.phase !== "readback") return;
+    const rb = voice.snapshot ? readBack(voice.snapshot) : undefined;
+    if (!rb?.ok) return;
+    if (speakBack && canSpeak) speak(rb.speech, listenForConfirmation);
+    else listenForConfirmation();
+    // Only when the card first appears: `shownAt` identifies it.
+  }, [voice.shownAt]);
+
+  // Confirmed: sign exactly the limits that were read back, then let the agent shop, using the returned values.
+  useEffect(() => {
+    if (voice.phase !== "confirmed" || !voice.snapshot || voiceRun.current) return;
+    voiceRun.current = true;
+    const snapshot = voice.snapshot;
+    void (async () => {
+      try {
+        dispatchVoice({ type: "SIGNING" });
+        const s = await signIntent(snapshot);
+        if (!s) {
+          dispatchVoice({
+            type: "FAILED",
+            message: "Signing didn't work. Check the message in the limits section.",
+          });
+          return;
+        }
+        // Cancelled while signing: the intent is signed, but nothing is proposed or bought.
+        if (voiceRef.current.phase !== "signing") return;
+        dispatchVoice({ type: "CHOOSING" });
+        await chooseWith(s);
+        dispatchVoice({ type: "DONE" });
+      } finally {
+        voiceRun.current = false;
+      }
+    })();
+    // signIntent and chooseWith are recreated every render; the ref and the phase guard make this run once.
+  }, [voice.phase, voice.snapshot]);
 
   /** onApprove: countersign the exact Cart Mandate the merchant signed, then let the merchant capture. */
   const approve = useCallback(async () => {
@@ -548,6 +690,89 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           What should the agent buy?
           <textarea value={form.description} onChange={(e) => set("description", e.target.value)} />
         </label>
+        {config.voiceEnabled && (
+          <div className="voice">
+            {supported ? (
+              <>
+                <button
+                  className="btn btn-ghost btn-small"
+                  disabled={!shopper || !voiceIdle}
+                  onClick={startVoice}
+                  aria-label="Speak your request"
+                >
+                  {voice.phase === "listening" ? "Listening…" : "Speak your request"}
+                </button>{" "}
+                {canSpeak && (
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={speakBack}
+                      onChange={(e) => setSpeakBack(e.target.checked)}
+                    />
+                    Read the limits aloud
+                  </label>
+                )}
+                <p className="meta">
+                  Your browser sends the audio to its own speech service (Google, Apple or Microsoft). Typing
+                  works too.
+                </p>
+              </>
+            ) : (
+              ready && <p className="meta">Voice input isn&apos;t available in this browser. Typing works.</p>
+            )}
+            {voice.phase === "listening" && (
+              <p className="meta" aria-live="polite">
+                {voice.transcript || "Say what you want to buy, like “a grey running jacket under $80”."}
+              </p>
+            )}
+            {voice.phase === "drafting" && <p className="meta">Reading your limits…</p>}
+            {voice.message && voiceIdle && (
+              <p className={voice.phase === "failed" ? "error" : "meta"} role="status">
+                {voice.message}
+              </p>
+            )}
+          </div>
+        )}
+        {readbackCard && ["readback", "confirmed", "signing", "choosing"].includes(voice.phase) && (
+          <div className="verdict warn" role="region" aria-label="Check before signing">
+            <h3>Please check what I heard</h3>
+            {readbackCard.ok ? (
+              <ul className="reasons">
+                {readbackCard.lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="error">{readbackCard.problem}</p>
+            )}
+            {voice.phase === "readback" ? (
+              <>
+                <p className="meta">Nothing is signed yet. Confirm to sign exactly this, or cancel.</p>
+                <button
+                  className="btn btn-primary btn-small"
+                  disabled={!armed}
+                  onClick={() => dispatchVoice({ type: "CONFIRM", at: Date.now() })}
+                >
+                  Confirm and sign
+                </button>{" "}
+                {supported && (
+                  <button className="btn btn-ghost btn-small" onClick={listenForConfirmation}>
+                    Say “confirm”
+                  </button>
+                )}{" "}
+                <button className="btn btn-ghost btn-small" onClick={cancelVoice}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <p className="meta" aria-live="polite">
+                {voice.phase === "choosing"
+                  ? "Signed. The agent is shopping within these limits…"
+                  : "Signing with your key…"}
+              </p>
+            )}
+          </div>
+        )}
         <div className="row">
           <label className="field">
             Spend at most (USD)
