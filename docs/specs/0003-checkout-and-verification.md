@@ -50,16 +50,26 @@ PayPal order we have no record of.
 `POST /checkout/:id/approve { approval_jws }`, called by the buyer app from PayPal's `onApprove`. Built in
 `apps/api/src/approve.ts`.
 
-1. Authorize the PayPal order (PayPal refuses with `ORDER_NOT_APPROVED` → 409 `shopper_has_not_approved`).
-2. Re-check: the countersignature (`CartApproval { order_id, cart_mandate_hash, approved_at }`, see spec 0001)
-   verifies with **the key that signed the Intent Mandate** (else `UNKNOWN_KEY` / `SIGNATURE_INVALID`); it names
-   this order and the exact Cart Mandate we signed (else `MANDATE_MISMATCH`); the cart hasn't expired (else
-   `CART_EXPIRED`).
-3. All good → capture → `{ status: "CAPTURED", capture_id }`. Otherwise void → `{ status: "VOIDED", reasons }`.
+PayPal is not contacted until the approval has been checked (#160), so a caller who has no valid signature changes
+nothing there and cannot void anyone's order. In order:
 
-Authorizing before re-checking means a failed check releases the hold instead of leaving the shopper's money
-held. A retry after completion returns the same outcome; a PayPal failure answers 502 and leaves the order at its
-last state (`AUTHORIZED`), so a retry finishes the job with the same idempotent capture request.
+1. The countersignature (`CartApproval { order_id, cart_mandate_hash, approved_at }`, see spec 0001) verifies with
+   **the key that signed the Intent Mandate** and names this order and the exact Cart Mandate we signed. Any failure
+   (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `SCHEMA_INVALID`, `MANDATE_MISMATCH`) is **403 `approval_invalid`** with the
+   reason codes, and nothing changes: no PayPal call, the order stays as it was and can still be approved properly.
+   This includes a *genuine* signature that names a different order or cart, so a shopper's real approval of one order
+   cannot be replayed to void another.
+2. The cart hasn't expired (else `CART_EXPIRED`). A genuine approval that arrives too late answers
+   `{ status: "VOIDED", reasons }`: a hold we already took (an earlier capture failed) is voided so the shopper's
+   money isn't left held; with no hold, nothing was held and PayPal is not called.
+3. Authorize the PayPal order (PayPal refuses with `ORDER_NOT_APPROVED` → 409 `shopper_has_not_approved`), then
+   capture → `{ status: "CAPTURED", capture_id }`.
+
+_Changed from the first design, which authorized first and voided on a failed check ("so a failed check releases the
+hold"). That let anyone who knew an order id void an approved order with a bad signature. Checking first means there
+is no hold to release in the common failure._ A retry after completion returns the same outcome; a PayPal failure
+answers 502 and leaves the order at its last state (`AUTHORIZED`), so a retry finishes the job with the same
+idempotent capture request.
 
 ### Step-up links (agent alone), as built (#35)
 
