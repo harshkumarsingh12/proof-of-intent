@@ -9,6 +9,8 @@ Next.js shopper app. Run: `pnpm dev:buyer` (port 3001; set `API_INTERNAL_URL` if
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `/`                         | Landing page                                                                                                           |
 | `/shop`                     | Journey A: browser key → signed Intent Mandate → agent proposes a cart → verdict → PayPal → capture                    |
+| `/shop/wallet`              | Where PayPal sends the shopper after they approve a wallet: signs the save proof and finishes (Vault v3, #17)          |
+| `/api/vault/*`              | Proxies to `POST /vault/setup`, `POST /vault/save` and `GET /vault/:kid` (wallet saving, signed by the browser's key)  |
 | `/api/keys/shopper`         | Proxy to the API's `POST /keys/shopper` (the browser registers its public key)                                         |
 | `/api/agent/checkout`       | The buyer agent: `{ intent_jws, sku }` → cart + Payment Mandate signed with the agent key → `POST /checkout`           |
 | `/api/agent/choose`         | The buyer agent picks the item itself: `{ intent_jws }` → up to three carts proposed, each with the merchant's verdict |
@@ -23,6 +25,12 @@ PayPal's button.
 
 **PayPal.** `PAYPAL_MODE=sandbox` with `PAYPAL_CLIENT_ID`: PayPal's JS SDK button (`intent=authorize`) for the order
 the merchant already created, with a link to `approval_url` as a fallback. Otherwise a mock approve button.
+
+**Wallet and paying alone** (`src/wallet.ts`, `/shop/wallet`, #17, #36). "Save a PayPal wallet" signs a short-lived proof with
+the browser's key, asks the merchant for a Vault v3 setup token and sends the shopper to PayPal; PayPal returns them to
+`/shop/wallet`, which signs the save proof and finishes. Once a wallet is saved, "Let the agent pay alone" sends
+`human_present: false`: an approved cart is charged to that wallet with no PayPal step, a step-up charges nothing, and the
+agent stops after the merchant accepts one cart. In `PAYPAL_MODE=mock` the approval returns to the shop at once.
 
 **Buyer agent** (`src/agent.ts`, #37). Three tools and nothing else: `create_intent_mandate` (a draft only: the
 shopper's key never leaves their browser, so the shopper reviews and signs it), `search_catalog` and

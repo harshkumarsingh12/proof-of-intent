@@ -44,10 +44,15 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
 7. Back in the shop, sign an intent and click **Let the agent choose**. The agent searches the store, proposes a cart,
    and the page lists what it did and the merchant's answer. It never proposes a product that breaks the signed limits.
-8. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
+8. **Agent alone.** Under "Your signing key" click **Save a PayPal wallet**, approve as the judge sandbox shopper on PayPal, and
+   come back to the shop. Sign an intent, tick **Let the agent pay alone from my saved wallet** and propose the grey USD 74
+   jacket: there is no PayPal step, and **Paid by your agent** shows the capture. The red USD 95 jacket is still refused with
+   nothing charged, and a cart the merchant isn't sure about is held for you instead of charged. (Checked on the mock stack
+   and in the browser smoke test; the hosted sandbox run with a real approval is #36.)
+9. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
    mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**
    and try the starter prompts. The hosted data has no agent overreach, so the overreach rate reads 0% there.
-9. **File your own dispute.** The disputes prepared in advance run past their response date before judging ends, so use
+10. **File your own dispute.** The disputes prepared in advance run past their response date before judging ends, so use
    the judge shopper accounts: buy in the shop, then in the PayPal sandbox open Activity, the payment, Report a problem,
    "different or not as described". It appears in Disputes after about 5 minutes (PayPal's sandbox emits the event late).
 

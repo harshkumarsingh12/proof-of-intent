@@ -148,6 +148,25 @@ describe("buyer agent tools (#37)", () => {
     expect(await requestCheckout(ctx, CATALOG[0]!.line.sku)).toMatchObject({ error: "checkout_limit" });
   });
 
+  test("once the merchant accepts a cart, no second cart is proposed (alone, the first already charged)", async () => {
+    const stepUp = { status: 200, body: { verdict: { outcome: "STEP_UP" as const, reasons: [] } } };
+    for (const first of [approve, stepUp]) {
+      let calls = 0;
+      const ctx = ctxWith(async () => (calls++, first));
+      await requestCheckout(ctx, CATALOG[0]!.line.sku);
+      expect(await requestCheckout(ctx, CATALOG[1]!.line.sku)).toMatchObject({ error: "already_proposed" });
+      expect(calls).toBe(1);
+    }
+  });
+
+  test("a refusal doesn't stop the agent trying a better cart", async () => {
+    let calls = 0;
+    const ctx = ctxWith(async () => (calls++ === 0 ? reject : approve));
+    await requestCheckout(ctx, CATALOG[0]!.line.sku);
+    expect(await requestCheckout(ctx, CATALOG[1]!.line.sku)).toMatchObject({ outcome: "APPROVE" });
+    expect(calls).toBe(2);
+  });
+
   test("a merchant error is reported as a failure, not as a verdict", async () => {
     const ctx = ctxWith(async () => ({
       status: 502,

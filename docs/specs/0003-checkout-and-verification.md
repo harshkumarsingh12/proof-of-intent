@@ -94,6 +94,13 @@ shopper reviews and signs in the browser (spec 0001), and `request_checkout` goe
 and reason codes only. Limits per run: three carts, six model calls, the daily AI budget. With `AI_MODE=replay` a
 scripted chooser (catalog filtered by the signed limits, best word match first) stands in for the model.
 
+**Paying alone (#36).** The shop's "Let the agent pay alone from my saved wallet" switch (enabled once the shopper has a
+Vault v3 wallet, spec 0004 §Vault) sends `human_present: false` to `/api/agent/checkout` and `/api/agent/choose`, which
+puts it in the Payment Mandate the agent signs. The merchant's checks are the same. An `APPROVE` charges the wallet at
+once and the response carries the `capture_id`; a `STEP_UP` charges nothing, creates no order and sends the step-up
+link; a `REJECT` is as always. With nobody present an approved cart has already been charged, so `request_checkout`
+refuses a second cart once the merchant has accepted one (`already_proposed`) in code, not only in the prompt.
+
 The agent returns a trace (each search, each cart with its reason and the merchant's answer) that `/shop` shows.
 `request_checkout` skips products that break the signed price, category or color (`OUT_OF_LIMITS`, shown, merchant not
 asked) so the shopper's words can't talk the model past their own limits; the merchant still checks everything.
@@ -113,7 +120,7 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 
 | Method | Path                                                         | Owner   | Request → Response                                                                                                                                                                                                             |
 | ------ | ------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| POST   | `/checkout`                                                  | Harsh   | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, cart_mandate_jws?, paypal_order_id?, approval_url? }`                                                                                                                |
+| POST   | `/checkout`                                                  | Harsh   | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, order_id?, cart_mandate_jws?, paypal_order_id?, approval_url?, capture_id? }` (`capture_id` only for an agent-alone order, charged at creation)                      |
 | POST   | `/checkout/:id/approve`                                      | Harsh   | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }`                                                                                                                                                        |
 | GET    | `/stepup/:token`                                             | Sristee | the waiting cart for the approval page → `StepUpView`; `cache-control: no-store`                                                                                                                                               |
 | POST   | `/stepup/:token/approve`                                     | Sristee | `{ approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse`                                                                                                            |

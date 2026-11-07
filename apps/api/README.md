@@ -20,7 +20,7 @@ client and the in-memory `Db` from `src/test-helpers.ts`.
 
 ## POST /checkout
 
-`{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, order_id?, cart_mandate_jws?, paypal_order_id?, approval_url? }`
+`{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, order_id?, cart_mandate_jws?, paypal_order_id?, approval_url?, capture_id? }`
 (`CheckoutRequest` / `CheckoutResponse` in `packages/contracts`). The order of checks and the decision table are in
 spec 0003 §Stage 1. A REJECT is HTTP 200; 400 is a malformed request, 409 an agent-alone order with no saved wallet,
 502 PayPal down, 503 missing configuration.

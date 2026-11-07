@@ -234,6 +234,14 @@ export async function requestCheckout(ctx: RunContext, sku: string, reason?: str
       message: `No more than ${MAX_CHECKOUTS} carts per request. Stop and report.`,
     };
   }
+  // One accepted cart per request, enforced here rather than by the prompt: with the shopper absent an APPROVE has
+  // already charged their wallet, and a second approved cart would charge it again.
+  if (ctx.attempts.some((a) => isVerdict(a.body) && a.body.verdict.outcome !== "REJECT")) {
+    return {
+      error: "already_proposed",
+      message: "The merchant already accepted a cart for this request. Stop and report.",
+    };
+  }
   const product = productBySku(sku);
   if (!product) return { error: "unknown_sku", message: `The store has no product ${sku}. Search again.` };
   const line = product.line;
@@ -266,7 +274,7 @@ export async function requestCheckout(ctx: RunContext, sku: string, reason?: str
     next:
       outcome === "REJECT"
         ? "Refused, nothing was charged. Search again for a product that meets every limit, or stop."
-        : "Done. The shopper finishes at the PayPal step. Do not propose anything else.",
+        : "Done. The merchant takes it from here (the shopper approves, or their saved wallet is charged if they asked you to buy alone). Do not propose anything else.",
   };
 }
 

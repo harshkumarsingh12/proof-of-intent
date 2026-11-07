@@ -5,6 +5,8 @@
 //   2. the shopper's words and limits, signed as an Intent Mandate
 //   3. the agent proposes a cart; the merchant answers APPROVE, STEP_UP or REJECT before any PayPal order exists
 //   4. PayPal approval, then the shopper countersigns the exact cart and the merchant captures or voids
+// Optional (#17, #36): save a PayPal wallet with Vault v3, then let the agent pay alone. The merchant runs the same
+// checks; an approved cart is charged to the saved wallet at once, and a step-up charges nothing.
 import type { CheckoutResponse, IntentMandate, ReasonCode } from "@poi/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -21,6 +23,7 @@ import { buildIntent, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
 import { REASON_TEXT } from "../../src/reasons";
 import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact } from "../../src/signing";
+import { setupProof } from "../../src/wallet";
 
 export interface ShopConfig {
   merchantId: string;
@@ -163,7 +166,11 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [signed, setSigned] = useState<Signed>();
   const [formError, setFormError] = useState<string>();
   const [busySku, setBusySku] = useState<string>();
-  const [checkout, setCheckout] = useState<{ sku: string; res: CheckoutResponse }>();
+  const [checkout, setCheckout] = useState<{ sku: string; res: CheckoutResponse; alone: boolean }>();
+  const [wallet, setWallet] = useState<"unknown" | "none" | "saved">("unknown");
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletError, setWalletError] = useState<string>();
+  const [alone, setAlone] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string>();
   const [approval, setApproval] = useState<Approval>();
   const [approveError, setApproveError] = useState<string>();
@@ -178,11 +185,46 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     ensureShopper().then(setShopper, (err: Error) => setKeyError(err.message));
   }, []);
 
+  // Whether this key already has a saved wallet (a yes or no: the merchant never shows the vault id).
+  useEffect(() => {
+    if (!shopper) return;
+    let cancelled = false;
+    fetch(`/api/vault/${encodeURIComponent(shopper.kid)}`)
+      .then((r) => r.json() as Promise<{ wallet?: boolean }>)
+      .then((b) => !cancelled && setWallet(b.wallet ? "saved" : "none"))
+      .catch(() => !cancelled && setWallet("none"));
+    return () => {
+      cancelled = true;
+    };
+  }, [shopper]);
+
+  /** Vault v3: prove it's us, get PayPal's approval link, and go approve. PayPal sends us back to /shop/wallet. */
+  const saveWallet = async () => {
+    if (!shopper) return;
+    setWalletBusy(true);
+    setWalletError(undefined);
+    try {
+      const proof = await signCompact(setupProof(new Date()), shopper.key.privateKey, shopper.kid);
+      const res = await postJson<{ approval_url: string }>("/api/vault/setup", { proof_jws: proof });
+      if (isError(res.body)) {
+        setWalletError(res.body.message);
+        setWalletBusy(false);
+        return;
+      }
+      window.location.assign(res.body.approval_url);
+    } catch (err) {
+      setWalletError((err as Error).message);
+      setWalletBusy(false);
+    }
+  };
+
   const newKey = async () => {
     if (resetting) return;
     setResetting(true);
     await forgetShopper();
     shopperLoad = undefined;
+    setWallet("unknown");
+    setAlone(false);
     setShopper(undefined);
     setSigned(undefined);
     setCheckout(undefined);
@@ -218,13 +260,18 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     setCheckoutError(undefined);
     setApproval(undefined);
     setApproveError(undefined);
+    const payAlone = alone;
     try {
-      const res = await postJson<CheckoutResponse>("/api/agent/checkout", { intent_jws: signed.jws, sku });
+      const res = await postJson<CheckoutResponse>("/api/agent/checkout", {
+        intent_jws: signed.jws,
+        sku,
+        human_present: !payAlone,
+      });
       if (isError(res.body)) {
         setCheckout(undefined);
         setCheckoutError(res.body.message);
       } else {
-        setCheckout({ sku, res: res.body });
+        setCheckout({ sku, res: res.body, alone: payAlone });
       }
     } finally {
       setBusySku(undefined);
@@ -264,13 +311,14 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
     setAgentTrace([]);
     setApproval(undefined);
     setApproveError(undefined);
+    const payAlone = alone;
     try {
       const res = await postJson<{
         source: "live" | "scripted";
         trace: TraceStep[];
         attempts: { sku: string; body: CheckoutResponse | ApiError }[];
         message?: string;
-      }>("/api/agent/choose", { intent_jws: signed.jws });
+      }>("/api/agent/choose", { intent_jws: signed.jws, human_present: !payAlone });
       if (isError(res.body)) {
         setCheckout(undefined);
         setCheckoutError(res.body.message);
@@ -278,6 +326,12 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       }
       setAgentTrace(res.body.trace);
       const last = res.body.attempts.at(-1);
+      if (last && isError(last.body)) {
+        // The merchant answered with an error, such as "no saved wallet", not with a verdict: say so.
+        setCheckout(undefined);
+        setCheckoutError(last.body.message);
+        return;
+      }
       if (!last || isError(last.body)) {
         setCheckout(undefined);
         setAgentNote(
@@ -285,7 +339,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         );
         return;
       }
-      setCheckout({ sku: last.sku, res: last.body });
+      setCheckout({ sku: last.sku, res: last.body, alone: payAlone });
       const refused = res.body.attempts.length - 1;
       setAgentNote(
         `${res.body.source === "live" ? "The agent" : "The scripted agent (no model in replay mode)"} proposed ${res.body.attempts.length} cart${res.body.attempts.length === 1 ? "" : "s"}${refused > 0 ? `; the merchant refused ${refused} before this one` : ""}.${res.body.message ? ` ${res.body.message}` : ""}`,
@@ -329,7 +383,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
   const verdict = checkout?.res.verdict;
   const product = CATALOG.find((p) => p.line.sku === checkout?.sku);
-  const hasOrder = Boolean(checkout?.res.paypal_order_id);
+  const paidAlone = Boolean(checkout?.alone && verdict?.outcome === "APPROVE" && checkout.res.order_id);
+  // A human-present order waits for the shopper at PayPal; an agent-alone one was charged when it was created.
+  const hasOrder = Boolean(checkout?.res.paypal_order_id) && !checkout?.alone;
   const set = <K extends keyof IntentForm>(k: K, v: IntentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   // The signed intent's category first: that's where the agent shops. Everything else is a click away, so a
@@ -375,6 +431,29 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             <button className="btn btn-ghost btn-small" disabled={resetting} onClick={newKey}>
               Use a new key
             </button>
+            <h3 className="group">PayPal wallet (optional)</h3>
+            <p className="sub">
+              Save a PayPal wallet and your agent can pay without you at the PayPal step. The merchant still
+              checks every cart against your signed limits first, and asks you when it isn&apos;t sure.
+            </p>
+            {wallet === "saved" && (
+              <p className="meta">
+                A PayPal wallet is saved for this key.{" "}
+                {config.paypalMode === "mock" && "(Mock PayPal: nothing real is saved.)"}
+              </p>
+            )}
+            <button
+              className="btn btn-ghost btn-small"
+              disabled={walletBusy || wallet === "unknown"}
+              onClick={saveWallet}
+            >
+              {walletBusy
+                ? "Opening PayPal…"
+                : wallet === "saved"
+                  ? "Save a different wallet"
+                  : "Save a PayPal wallet"}
+            </button>
+            {walletError && <p className="error">{walletError}</p>}
           </>
         ) : (
           <p className="sub">Making your key…</p>
@@ -468,6 +547,21 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           Pick what the agent sends to the merchant. Try one that breaks your limits: it&apos;s refused before
           any PayPal order exists.
         </p>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={alone}
+            disabled={wallet !== "saved"}
+            onChange={(e) => {
+              setAlone(e.target.checked);
+              setCheckout(undefined);
+              setCheckoutError(undefined);
+              setApproval(undefined);
+            }}
+          />
+          Let the agent pay alone from my saved wallet (no PayPal approval from me)
+          {wallet !== "saved" && " — save a PayPal wallet above first"}
+        </label>
         <button
           className="btn btn-primary"
           disabled={!signed || choosing || busySku !== undefined}
@@ -493,9 +587,18 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
                 ? `Refused: ${product.line.title}, ${product.line.attributes.color}, ${money(product.line.unit_price.value)}`
                 : verdict.outcome === "STEP_UP"
                   ? "Fits your limits, but please confirm it's what you meant"
-                  : "Fits what you signed"}
+                  : paidAlone
+                    ? "Fits what you signed, so your agent paid"
+                    : "Fits what you signed"}
             </h3>
             {verdict.outcome === "REJECT" && <p>No PayPal order was created. Nothing was charged.</p>}
+            {verdict.outcome === "STEP_UP" && checkout?.alone && (
+              <p>
+                Nothing was charged and no PayPal order exists. The merchant holds this cart until you approve
+                it from a link it sends you (in this demo the link is only written to the merchant&apos;s
+                log).
+              </p>
+            )}
             <Reasons reasons={verdict.reasons} />
             {checkout?.res.order_id && (
               <p className="meta">
@@ -507,13 +610,25 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         )}
       </section>
 
-      <section className={`panel${hasOrder && !approval ? "" : " muted"}`}>
+      <section className={`panel${(hasOrder && !approval) || paidAlone ? "" : " muted"}`}>
         <h2>
-          <span className="num">4</span> Pay with PayPal
+          <span className="num">4</span> {paidAlone ? "Paid by your agent" : "Pay with PayPal"}
         </h2>
         <p className="sub">
-          PayPal holds the money first. The merchant captures only after your browser signs this exact cart.
+          {paidAlone
+            ? "You weren't asked at PayPal: the merchant charged the wallet you saved, because this cart fits what you signed."
+            : "PayPal holds the money first. The merchant captures only after your browser signs this exact cart."}
         </p>
+        {paidAlone && checkout && (
+          <div className="verdict ok">
+            <h3>Paid</h3>
+            <p className="meta">
+              Capture <code>{checkout.res.capture_id ?? "pending"}</code>. The signed intent and the
+              agent&apos;s payment mandate are on record for any dispute; there is no shopper approval because
+              nobody was asked.
+            </p>
+          </div>
+        )}
         {hasOrder && !approval && checkout && (
           <PayPalStep config={config} res={checkout.res} onApproved={approve} approving={approving} />
         )}

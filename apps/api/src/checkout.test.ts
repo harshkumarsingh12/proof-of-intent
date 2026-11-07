@@ -353,6 +353,8 @@ describe("POST /checkout: agent alone", () => {
     const res = await s.checkout((await signedCheckout({ shopper, agent, humanPresent: false })).body);
     expect(res.json().verdict.outcome).toBe("APPROVE");
     expect(res.json().approval_url).toBeUndefined();
+    expect(res.json().capture_id).toBe(s.mem.orders.get(res.json().order_id)?.captureId);
+    expect(res.json().capture_id).toBeTruthy();
     expect(s.createOrder).toHaveBeenCalledWith(
       expect.objectContaining({ intent: "CAPTURE", vaultId: "VAULT-1" }),
     );
