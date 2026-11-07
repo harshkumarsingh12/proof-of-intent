@@ -216,6 +216,144 @@ await step("'Let the agent choose' proposes a cart and shows what it did", async
   await verdictBox(/Fits what you signed|please confirm/).waitFor({ timeout: 10_000 });
 });
 
+// Voice ordering (spec 0010). Headless Chrome can't recognize speech, so a fake SpeechRecognition is installed before the
+// page loads and says whatever the test queues. Needs the shop started with BUYER_VOICE=1; run with VOICE=1.
+if (process.env.VOICE === "1") {
+  // Plain JavaScript on purpose: a function would be serialized after tsx has rewritten it with helpers (__name) that
+  // don't exist in the page.
+  const installFakeSpeech = `
+    (() => {
+      const said = [];
+      window.__said = said;
+      class FakeRecognition {
+        constructor() { this.lang = ""; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1; this.onresult = null; this.onerror = null; this.onend = null; }
+        start() {
+          setTimeout(() => {
+            const text = said.shift();
+            if (text === undefined) { if (this.onerror) this.onerror({ error: "no-speech" }); }
+            else if (this.onresult) this.onresult({ resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: text } } } });
+            if (this.onend) this.onend();
+          }, 30);
+        }
+        stop() {}
+        abort() {}
+      }
+      window.SpeechRecognition = FakeRecognition;
+      window.webkitSpeechRecognition = FakeRecognition;
+    })();
+  `;
+  const say = (p: Page, text: string) =>
+    p.evaluate((t) => (window as unknown as { __said: string[] }).__said.push(t), text);
+  // Headless Chrome ships a real recognizer, so "no support" has to remove it explicitly.
+  const removeSpeech = `
+    for (const name of ["SpeechRecognition", "webkitSpeechRecognition"])
+      Object.defineProperty(window, name, { value: undefined, configurable: true });
+  `;
+  const voiceShop = async (fake: boolean) => {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    const p = await context.newPage();
+    await p.addInitScript({ content: fake ? installFakeSpeech : removeSpeech });
+    await p.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
+    await p.getByText("Key id").waitFor({ timeout: 30_000 });
+    return p;
+  };
+  const speak = (p: Page) => p.getByRole("button", { name: "Speak your request" }).click();
+  const readback = (p: Page) => p.getByRole("region", { name: "Check before signing" });
+  const signedBanner = (p: Page) => p.getByText("Signed in your browser");
+  const aloneChecked = (p: Page) => p.getByLabel(/Let the agent pay alone/).isChecked();
+
+  await step(
+    "voice: a request and 'confirm' in one breath fills the box and shows the read-back, and signs nothing",
+    async () => {
+      const p = await voiceShop(true);
+      await say(p, "buy a grey running jacket under $80 and confirm");
+      await speak(p);
+      await readback(p).waitFor({ timeout: 30_000 });
+      const text = await readback(p).innerText();
+      for (const line of ["Spend at most $80.00", "Item: Running jackets", "Color: grey"])
+        if (!text.includes(line)) throw new Error(`read-back is missing "${line}"`);
+      if (!/Nothing is signed yet/.test(text)) throw new Error("the card doesn't say nothing is signed");
+      if ((await p.locator("textarea").inputValue()) !== "buy a grey running jacket under $80 and confirm")
+        throw new Error("the transcript isn't in the text box");
+      await p.waitForTimeout(1_500); // longer than the guard: if the request could confirm itself, it would have by now
+      if (await signedBanner(p).count()) throw new Error("a request containing 'confirm' signed by itself");
+      if (await aloneChecked(p)) throw new Error("voice ticked 'agent pays alone'");
+      await p.context().close();
+    },
+  );
+
+  await step(
+    "voice: tapping Confirm signs what was read back and the agent shops, without touching 'pays alone'",
+    async () => {
+      const p = await voiceShop(true);
+      await say(p, "buy a grey running jacket under $80");
+      await speak(p);
+      await readback(p).waitFor({ timeout: 30_000 });
+      await p.getByRole("button", { name: "Confirm and sign" }).click();
+      await signedBanner(p).waitFor({ timeout: 30_000 });
+      await p
+        .locator(".verdict", { hasText: /Fits what you signed|please confirm/ })
+        .first()
+        .waitFor({ timeout: 90_000 });
+      if (await aloneChecked(p)) throw new Error("voice ticked 'agent pays alone'");
+      await p.context().close();
+    },
+  );
+
+  await step(
+    "voice: saying 'confirm' after the card signs; other words don't; Cancel takes the card down",
+    async () => {
+      const p = await voiceShop(true);
+      await say(p, "buy a grey running jacket under $80");
+      await speak(p);
+      await readback(p).waitFor({ timeout: 30_000 });
+      await p.waitForTimeout(1_000); // past the first 700 ms, when a confirmation is ignored
+      await say(p, "buy it and confirm");
+      await p.getByRole("button", { name: "Say “confirm”" }).click();
+      await p.waitForTimeout(800);
+      if (await signedBanner(p).count()) throw new Error("'buy it and confirm' counted as a confirmation");
+      await say(p, "confirm");
+      await p.getByRole("button", { name: "Say “confirm”" }).click();
+      await signedBanner(p).waitFor({ timeout: 30_000 });
+      await p.context().close();
+
+      const q = await voiceShop(true);
+      await say(q, "buy a grey running jacket under $80");
+      await speak(q);
+      await readback(q).waitFor({ timeout: 30_000 });
+      await q.getByRole("button", { name: "Cancel" }).click();
+      await readback(q).waitFor({ state: "detached", timeout: 5_000 });
+      if (await signedBanner(q).count()) throw new Error("cancel still signed");
+      await q.context().close();
+    },
+  );
+
+  await step("voice: editing the limits while the card is up discards it", async () => {
+    const p = await voiceShop(true);
+    await say(p, "buy a grey running jacket under $80");
+    await speak(p);
+    await readback(p).waitFor({ timeout: 30_000 });
+    await p.locator('input[inputmode="decimal"]').fill("95");
+    await readback(p).waitFor({ state: "detached", timeout: 5_000 });
+    await p.getByText(/read-back no longer applies/).waitFor({ timeout: 5_000 });
+    if (await signedBanner(p).count()) throw new Error("an edited form was signed");
+    await p.context().close();
+  });
+
+  await step(
+    "voice: without speech recognition the microphone is hidden and typing still works",
+    async () => {
+      const p = await voiceShop(false);
+      if (await p.getByRole("button", { name: "Speak your request" }).count())
+        throw new Error("the mic shows without support");
+      await p.getByText(/Voice input isn.t available in this browser/).waitFor({ timeout: 10_000 });
+      await p.getByRole("button", { name: "Sign my intent" }).click();
+      await signedBanner(p).waitFor({ timeout: 20_000 });
+      await p.context().close();
+    },
+  );
+}
+
 await browser.close();
 console.log(failed ? `\n${failed} check(s) failed` : "\nshop smoke test passed");
 process.exitCode = failed ? 1 : 0;
