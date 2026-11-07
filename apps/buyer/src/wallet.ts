@@ -26,3 +26,8 @@ export const saveProof = (setupTokenId: string, now: Date): VaultProof => ({
 
 /** A shopper key id: `shp_` plus the key's thumbprint. Checked before it goes into a URL. */
 export const isShopperKid = (kid: string): boolean => /^shp_[A-Za-z0-9_-]{20,100}$/.test(kid);
+
+export const removeProof = (now: Date): VaultProof => ({
+  purpose: "vault.remove",
+  issued_at: now.toISOString(),
+});

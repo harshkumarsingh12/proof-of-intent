@@ -679,3 +679,35 @@ describe("Vault v3 wallet saving", () => {
     expect((await mock.createOrder({ ...order, intent: "CAPTURE", vaultId })).status).toBe("COMPLETED");
   });
 });
+
+describe("Vault v3 wallet removal", () => {
+  test("revokes the payment token at PayPal; a token PayPal no longer has is not an error", async () => {
+    const ok = fakePayPal({ "/v3/vault/payment-tokens/VAULT-9": { status: 204, body: null } });
+    await ok.client.deletePaymentToken("VAULT-9");
+    expect(ok.requests[0]).toMatchObject({ method: "DELETE", path: "/v3/vault/payment-tokens/VAULT-9" });
+
+    const gone = fakePayPal({
+      "/v3/vault/payment-tokens/VAULT-8": { status: 404, body: { name: "RESOURCE_NOT_FOUND" } },
+    });
+    await expect(gone.client.deletePaymentToken("VAULT-8")).resolves.toBeUndefined();
+
+    const refused = fakePayPal({
+      "/v3/vault/payment-tokens/VAULT-7": { status: 500, body: { name: "INTERNAL_SERVER_ERROR" } },
+    });
+    await expect(refused.client.deletePaymentToken("VAULT-7")).rejects.toMatchObject({ status: 500 });
+  });
+
+  test("mock: a revoked vault id can't be charged any more", async () => {
+    const mock = createMockClient();
+    await mock.deletePaymentToken("VAULT-1");
+    await expect(mock.createOrder({ ...order, intent: "CAPTURE", vaultId: "VAULT-1" })).rejects.toMatchObject(
+      {
+        issue: "INVALID_RESOURCE_ID",
+      },
+    );
+    expect(
+      (await mock.createOrder({ ...order, ourOrderId: "ord_2", intent: "CAPTURE", vaultId: "VAULT-2" }))
+        .status,
+    ).toBe("COMPLETED");
+  });
+});

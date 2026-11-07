@@ -1,9 +1,9 @@
 /** Vault v3 wallet saving (docs/specs/0004 §Vault). Public routes: every write carries the shopper's own signature. */
 import type { FastifyPluginAsync } from "fastify";
-import { VaultSaveRequest, VaultSetupRequest } from "@poi/contracts";
+import { VaultRemoveRequest, VaultSaveRequest, VaultSetupRequest } from "@poi/contracts";
 import type { AppDeps } from "../app";
 import { RATE_LIMITS } from "../rate-limits";
-import { saveWallet, startWalletSetup, walletStatus, type VaultDeps } from "../vault";
+import { removeWallet, saveWallet, startWalletSetup, walletStatus, type VaultDeps } from "../vault";
 
 type Options = AppDeps & Pick<VaultDeps, "now" | "buyerBase">;
 
@@ -37,6 +37,19 @@ export const vaultRoutes: FastifyPluginAsync<Options> = async (app, deps) => {
         ...deps,
         db: deps.db,
       });
+      return reply.code(result.status).send(result.body);
+    },
+  );
+
+  app.post(
+    "/vault/remove",
+    { bodyLimit: 4 * 1024, config: { rateLimit: RATE_LIMITS.keys } },
+    async (req, reply) => {
+      const parsed = VaultRemoveRequest.safeParse(req.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: "invalid_request", message: "Expected { proof_jws }" });
+      if (!deps.db) return reply.code(503).send(notConfigured);
+      const result = await removeWallet(parsed.data.proof_jws, { ...deps, db: deps.db });
       return reply.code(result.status).send(result.body);
     },
   );

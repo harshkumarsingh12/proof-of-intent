@@ -90,6 +90,9 @@ export function memoryDb() {
     saveVaultId: async (shopperId, vaultId) => {
       for (const k of keys.values()) if (k.shopperId === shopperId) k.vaultId = vaultId;
     },
+    clearVaultId: async (shopperId) => {
+      for (const k of keys.values()) if (k.shopperId === shopperId) delete k.vaultId;
+    },
     saveMandate: async (m) => void (mandates.has(m.hash) || mandates.set(m.hash, m)),
     mandateLedger: async (intentMandateId, asOfOrderId) => {
       const asOf = asOfOrderId ? orders.get(asOfOrderId)?.createdAt : undefined;

@@ -191,6 +191,8 @@ export interface Db {
   releaseVaultSetup(setupTokenId: string): Promise<void>;
   /** The shopper's saved PayPal wallet (Vault v3 payment token); replaces an earlier one. */
   saveVaultId(shopperId: string, vaultId: string): Promise<void>;
+  /** Forgets the shopper's saved wallet, so agent-alone checkout answers no_vaulted_wallet again. */
+  clearVaultId(shopperId: string): Promise<void>;
   /** Stores a verified mandate. Same content (same hash) twice is a no-op. */
   saveMandate(m: MandateRecord): Promise<void>;
   /**
@@ -368,6 +370,10 @@ export function createDb(databaseUrl: string): Db {
 
     async saveVaultId(shopperId, vaultId) {
       await pool.query("update shoppers set vault_id = $2 where id = $1", [shopperId, vaultId]);
+    },
+
+    async clearVaultId(shopperId) {
+      await pool.query("update shoppers set vault_id = null where id = $1", [shopperId]);
     },
 
     async retireKey(kind, kid, at) {

@@ -156,6 +156,22 @@ if (!hosted) {
         throw new Error("a held cart didn't say nothing was charged");
     },
   );
+
+  await step(
+    "removing the wallet turns agent-alone off, and the agent can't charge it any more",
+    async () => {
+      await page.getByRole("button", { name: "Remove my wallet" }).click();
+      await page.getByRole("button", { name: "Save a PayPal wallet" }).waitFor({ timeout: 30_000 });
+      if (await page.getByLabel(/Let the agent pay alone/).isEnabled())
+        throw new Error("agent-alone is still on offer");
+      if (await page.getByText(/A PayPal wallet is saved for this key/).count())
+        throw new Error("still says a wallet is saved");
+      // Reloading asks the merchant again: the wallet really is gone, not just hidden.
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByText("Key id").waitFor({ timeout: 30_000 });
+      await page.getByRole("button", { name: "Save a PayPal wallet" }).waitFor({ timeout: 30_000 });
+    },
+  );
 }
 
 await step("'Let the agent fill in the limits' drafts but does not sign", async () => {

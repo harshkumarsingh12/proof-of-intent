@@ -261,3 +261,90 @@ describe("the saved wallet is what agent-alone checkout charges", () => {
     });
   });
 });
+
+describe("POST /vault/remove", () => {
+  const removeProof = (s: ReturnType<typeof setup>, who = shopper, issued_at = NOW) =>
+    signMandate({ purpose: "vault.remove", issued_at }, who.privateKey, who.kid);
+
+  async function withWallet(paypal?: PayPalClient) {
+    const s = setup(paypal);
+    const id = (await s.post("/vault/setup", { proof_jws: await s.setupProof() })).json().setup_token_id;
+    await s.post("/vault/save", { setup_token_id: id, proof_jws: await s.saveProof(id) });
+    return { s, vaultId: s.mem.keys.get(shopper.kid)!.vaultId! };
+  }
+
+  test("forgets the wallet, revokes it at PayPal, and the agent can no longer charge it", async () => {
+    const { s, vaultId } = await withWallet();
+    const revoke = vi.spyOn(s.paypal, "deletePaymentToken");
+    const createOrder = vi.spyOn(s.paypal, "createOrder");
+
+    const res = await s.post("/vault/remove", { proof_jws: await removeProof(s) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ wallet: false });
+    expect(revoke).toHaveBeenCalledWith(vaultId);
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeUndefined();
+    expect((await s.app.inject({ method: "GET", url: `/vault/${shopper.kid}` })).json()).toEqual({
+      wallet: false,
+    });
+    expect(s.mem.audit.map((a) => a.action)).toEqual(["vault.setup", "vault.saved", "vault.removed"]);
+
+    const alone = await s.post(
+      "/checkout",
+      (await signedCheckout({ shopper, agent, humanPresent: false })).body,
+    );
+    expect(alone.statusCode).toBe(409);
+    expect(alone.json().error).toBe("no_vaulted_wallet");
+    expect(createOrder).not.toHaveBeenCalled();
+  });
+
+  test("even if PayPal can't revoke it, the wallet is gone on our side and the failure is audited with the id", async () => {
+    const paypal = createMockClient();
+    paypal.deletePaymentToken = async () => {
+      throw new Error("getaddrinfo EAI_AGAIN");
+    };
+    const { s, vaultId } = await withWallet(paypal);
+    const res = await s.post("/vault/remove", { proof_jws: await removeProof(s) });
+    expect(res.statusCode).toBe(200);
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeUndefined();
+    expect(s.mem.audit.at(-1)).toMatchObject({ action: "vault.revoke.failed", requestBody: { vaultId } });
+  });
+
+  test("with no wallet it's a harmless 200 and PayPal isn't called", async () => {
+    const s = setup();
+    const revoke = vi.spyOn(s.paypal, "deletePaymentToken");
+    const res = await s.post("/vault/remove", { proof_jws: await removeProof(s) });
+    expect(res.json()).toEqual({ wallet: false });
+    expect(revoke).not.toHaveBeenCalled();
+    expect(s.mem.audit).toEqual([]);
+  });
+
+  test("only the wallet's own shopper can remove it", async () => {
+    const { s } = await withWallet();
+    const revoke = vi.spyOn(s.paypal, "deletePaymentToken");
+    // another registered shopper's proof removes nothing of ours
+    await s.post("/vault/remove", { proof_jws: await removeProof(s, other) });
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeDefined();
+    expect(revoke).not.toHaveBeenCalled();
+    // an unregistered key, a proof for another purpose, and a stale proof are refused
+    expect(
+      (await s.post("/vault/remove", { proof_jws: await removeProof(s, stranger) })).json().reasons,
+    ).toEqual(["UNKNOWN_KEY"]);
+    expect((await s.post("/vault/remove", { proof_jws: await s.setupProof() })).json().reasons).toEqual([
+      "MANDATE_MISMATCH",
+    ]);
+    const old = new Date(Date.parse(NOW) - 6 * 60_000).toISOString();
+    expect(
+      (await s.post("/vault/remove", { proof_jws: await removeProof(s, shopper, old) })).json().error,
+    ).toBe("proof_expired");
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeDefined();
+  });
+
+  test("after removing, the shopper can save a new wallet", async () => {
+    const { s, vaultId } = await withWallet();
+    await s.post("/vault/remove", { proof_jws: await removeProof(s) });
+    const id = (await s.post("/vault/setup", { proof_jws: await s.setupProof() })).json().setup_token_id;
+    await s.post("/vault/save", { setup_token_id: id, proof_jws: await s.saveProof(id) });
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeDefined();
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).not.toBe(vaultId);
+  });
+});

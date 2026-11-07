@@ -126,6 +126,15 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
       return { vaultId: res.id };
     },
 
+    async deletePaymentToken(vaultId) {
+      try {
+        await call("DELETE", `/v3/vault/payment-tokens/${encodeURIComponent(vaultId)}`);
+      } catch (err) {
+        if (err instanceof PayPalError && err.status === 404) return; // already gone: that is what was asked for
+        throw err;
+      }
+    },
+
     async authorizeOrder(orderId) {
       const order = await call<OrderResponse>(
         "POST",

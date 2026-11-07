@@ -25,11 +25,13 @@ the team must be able to work before the sandbox is wired, hence a mock with the
   `createVaultPaymentToken` (`POST /v3/vault/payment-tokens` from that setup token, one use) → the payment token's id is
   stored as `shoppers.vault_id`. The merchant API drives it (`apps/api/src/vault.ts`, routes below) and every write
   carries a **shopper proof**: a compact JWS by the key that signs the shopper's Intent Mandates over
-  `VaultProof { purpose: "vault.setup" | "vault.save", setup_token_id?, issued_at }`, good for 5 minutes. Without it
+  `VaultProof { purpose: "vault.setup" | "vault.save" | "vault.remove", setup_token_id?, issued_at }`, good for 5 minutes. Without it
   anyone who knew a shopper key id could point that shopper at a wallet of their choosing. Setup tokens are stored in
   `vault_setups` for the shopper they were made for and claimed once, so a token can't be saved onto another shopper
-  or twice; a PayPal refusal (typically "not approved yet") gives the claim back so the shopper can retry. The vault id
-  never leaves the server: `GET /vault/:kid` answers only `{ wallet: boolean }`. Verified against the sandbox: PayPal
+  or twice; a PayPal refusal (typically "not approved yet") gives the claim back so the shopper can retry. A shopper
+  can remove the wallet (`POST /vault/remove`, a `vault.remove` proof): our `vault_id` is cleared first, so the agent
+  can't charge it from that moment, then PayPal is asked to revoke the payment token (`deletePaymentToken`; a failure
+  there is audited with the id for a later revoke and doesn't undo the removal). The vault id never leaves the server: `GET /vault/:kid` answers only `{ wallet: boolean }`. Verified against the sandbox: PayPal
   accepts the setup token request (Nov 7). The approval and the vaulted capture need a person:
   `pnpm sandbox:vault-wallet` runs the loop.
 - **Webhooks:** verify every delivery with `POST /v1/notifications/verify-webhook-signature` (transmission headers,

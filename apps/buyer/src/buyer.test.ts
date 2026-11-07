@@ -14,7 +14,14 @@ import { agentCheckout, intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
 import { canApprove, isStepUpToken, stepUpApproval } from "./stepup";
-import { isSetupTokenId, isShopperKid, saveProof, setupProof, setupTokenFromQuery } from "./wallet";
+import {
+  isSetupTokenId,
+  isShopperKid,
+  removeProof,
+  saveProof,
+  setupProof,
+  setupTokenFromQuery,
+} from "./wallet";
 import { buildIntent, CLOCK_SKEW_MS, dollarsToCents, type IntentForm } from "./intent";
 import {
   generateShopperKey,
@@ -299,6 +306,11 @@ describe("saving a PayPal wallet (#17)", () => {
       await signCompact(saveProof("SETUP-1", now), key.privateKey, kid),
       resolve,
     );
+    const remove = await verifyMandate(await signCompact(removeProof(now), key.privateKey, kid), resolve);
+    expect(remove.ok && VaultProof.parse(remove.payload)).toEqual({
+      purpose: "vault.remove",
+      issued_at: now.toISOString(),
+    });
     expect(save.ok && VaultProof.parse(save.payload)).toEqual({
       purpose: "vault.save",
       setup_token_id: "SETUP-1",
