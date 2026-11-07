@@ -606,13 +606,14 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const hasOrder = Boolean(checkout?.res.paypal_order_id) && !checkout?.alone;
   const set = <K extends keyof IntentForm>(k: K, v: IntentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   // After a refusal: what would have fit, worked out from the signed limits and the store (no model).
+  const signedMax = signed?.intent.constraints.amount_max?.value;
   const hint =
-    verdict?.outcome === "REJECT" && checkout && signed
+    verdict?.outcome === "REJECT" && checkout && signed && signedMax !== undefined
       ? nearMiss({
           sku: checkout.sku,
           reasons: verdict.reasons,
           limits: {
-            maxCents: signed.intent.constraints.amount_max.value,
+            maxCents: signedMax,
             category: signed.intent.constraints.attributes?.category,
             color: signed.intent.constraints.attributes?.color,
           },
