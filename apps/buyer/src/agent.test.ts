@@ -6,6 +6,7 @@ import { evaluate } from "@poi/policy-engine";
 import {
   AgentUnavailableError,
   FALLBACK_MAX_PRICE_USD,
+  groundInWords,
   MAX_CHECKOUTS,
   chooseTools,
   defaultMaxPriceUsd,
@@ -466,6 +467,52 @@ describe("live agent (scripted model, no network)", () => {
     expect(await reasonFor({})).toBe("Best word match inside your signed price, category and color.");
     expect(await reasonFor({ color: "" })).toBe("Best word match inside your signed price and category.");
     expect(await reasonFor({ category: "", color: "" })).toBe("Best word match inside your signed price.");
+  });
+
+  describe("a live draft is checked against the shopper's own words", () => {
+    const draftVia = (text: string, args: Record<string, unknown>) =>
+      runDraft({
+        text,
+        mode: "live",
+        model: scriptedModel([{ name: "create_intent_mandate", args: { description: text, ...args } }]),
+      });
+
+    test("a price the model made up is dropped when the words contain no number, and the cap is proposed", async () => {
+      const out = await draftVia("a running jacket", { max_price_usd: 150, category: "running-jacket" });
+      expect(out.draft.form).toMatchObject({ maxPrice: "80", category: "running-jacket", color: "" });
+      expect(out.draft.priceDefaulted).toBe(true);
+    });
+
+    test("an item or color the model left out is filled in from the words", async () => {
+      const out = await draftVia("white socks", { color: "white" });
+      expect(out.draft.form).toMatchObject({ maxPrice: "20", category: "socks", color: "white" });
+      expect((await draftVia("a grey running jacket under $80", {})).draft.form).toMatchObject({
+        maxPrice: "80",
+        category: "running-jacket",
+        color: "grey",
+      });
+    });
+
+    test("a price the shopper did state is kept, including one spoken in words", async () => {
+      expect((await draftVia("grey socks under $15", { max_price_usd: 15 })).draft.priceDefaulted).toBeUndefined();
+      const spoken = await draftVia("a grey running jacket under seventy dollars", {
+        max_price_usd: 70,
+        category: "running-jacket",
+        color: "grey",
+      });
+      expect(spoken.draft.form.maxPrice).toBe("70");
+      expect(spoken.draft.priceDefaulted).toBeUndefined();
+    });
+
+    test("what the model did set is left as it chose, and nothing is guessed that the words don't name", () => {
+      const args = { description: "trainers under $90", max_price_usd: 90, category: "running-shoe" } as const;
+      expect(groundInWords(args, "trainers under $90")).toMatchObject({ category: "running-shoe", max_price_usd: 90 });
+      expect(groundInWords({ description: "x" }, "something nice")).toMatchObject({
+        category: undefined,
+        color: undefined,
+        max_price_usd: undefined,
+      });
+    });
   });
 
   test("the draft tool fills the form and never signs", async () => {
