@@ -1,0 +1,54 @@
+name: uptime
+
+# An uptime monitor that needs no account and runs from GitHub's network, so it still works when the server does not
+# (spec 0008, #38). Every 5 minutes it checks what people reach: the API's /readyz (database reachable, not just /healthz),
+# the shop and the dashboard. It messages the team chat when the site goes DOWN and when it is back UP, not on every failed run.
+#
+# OFF until you set the repository VARIABLES PUBLIC_API_URL, PUBLIC_SHOP_URL and PUBLIC_DASHBOARD_URL (the same ones deploy.yml
+# uses). The job is skipped, visibly, until PUBLIC_API_URL exists: a monitor that quietly checks nothing is worse than none.
+# For chat messages add the repository SECRET UPTIME_WEBHOOK_URL (a Slack or Discord incoming webhook). Without it a failed run
+# still shows red and GitHub emails whoever last edited this schedule.
+#
+# GitHub runs schedules on a best-effort basis, so a run can start several minutes late, and it stops scheduled runs in a repo
+# with no activity for 60 days. Treat this as the backup monitor; docs/MONITORING.md sets up a dedicated one as well.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  check:
+    if: vars.PUBLIC_API_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the public endpoints
+        id: check
+        env:
+          API_URL: ${{ vars.PUBLIC_API_URL }}
+          SHOP_URL: ${{ vars.PUBLIC_SHOP_URL }}
+          DASHBOARD_URL: ${{ vars.PUBLIC_DASHBOARD_URL }}
+          REPORT: ${{ runner.temp }}/uptime-report.txt
+        run: scripts/ops/uptime-check.sh
+      - name: Tell the team chat when the state changes
+        if: always() && steps.check.outcome != 'skipped'
+        env:
+          WEBHOOK: ${{ secrets.UPTIME_WEBHOOK_URL }}
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.check.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT: ${{ runner.temp }}/uptime-report.txt
+        run: |
+          # The last completed run before this one (this run is still in progress). A first run, or an unreadable list,
+          # counts as "was fine", so the first failure is announced.
+          previous=$(gh run list --workflow uptime.yml --status completed --limit 1 --json conclusion --jq '.[0].conclusion // "success"' 2>/dev/null || true)
+          scripts/ops/uptime-alert.sh "$RESULT" "${previous:-success}" "$REPORT"

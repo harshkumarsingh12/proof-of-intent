@@ -19,7 +19,7 @@ deliver webhooks to it. The team runs it on its own server; the same Compose fil
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Services  | `postgres`, `api`, `worker`, `buyer`, `dashboard`, one-shot `migrate`, and `caddy` + `backup` (profile `server`); `restart: unless-stopped`; health checks on HTTP services. Host ports are `127.0.0.1`-only and configurable (`API_HOST_PORT`, `SHOP_HOST_PORT`, `OPS_HOST_PORT`, default 3000–3002)                                                                                                |
 | HTTPS     | **Decided (D6):** Dokploy's proxy with Let's Encrypt, behind Cloudflare, on `poi-api.iotkiit.in`, `poi-buyer.iotkiit.in` and `poi-dashboard.iotkiit.in` (D7). Single-level names because Cloudflare's free certificate covers one level. Caddy (profile `server`) stays for servers without Dokploy                                                                                                  |
-| Uptime    | External monitor (e.g. UptimeRobot) on the three `/healthz` URLs and on the API's `/readyz`, alerting the team chat; Compose starts on boot. `/healthz` is liveness only. `/readyz` runs `select 1` (2 s timeout) and answers 503 `database: unreachable` when Postgres can't be reached, and the API container's Docker healthcheck uses it (#120)                                                                                                                                                                                                                                                                                     |
+| Uptime    | Two monitors (docs/MONITORING.md): a dedicated external one you create (keyword checks on the API's `/readyz` and the shop's and dashboard's `/healthz`, alerting the team chat), and the in-repo `uptime.yml`, which checks the same URLs every 5 minutes from GitHub and messages the chat on down and on recovery; Compose starts on boot. `/healthz` is liveness only. `/readyz` runs `select 1` (2 s timeout) and answers 503 `database: unreachable` when Postgres can't be reached, and the API container's Docker healthcheck uses it (#120)                                                                                                                                                                                                                                                                                     |
 | Isolation | Own Docker network; only the proxy publishes ports; Postgres unreachable from outside; non-root containers                                                                                                                                                                                                                                                                                           |
 | Abuse     | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/keys/shopper` and `/vault/setup`, `/vault/save` 10/min, `/ai/studio` 60/min (a chat question is several requests; the daily AI budget bounds spend), 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch. The dashboard is read-only without the operator login |
 | DNS       | Containers send outside lookups to `1.1.1.1` / `8.8.8.8` (`dns:` in compose, #88) after the host resolver dropped one (`EAI_AGAIN`, Nov 6)                                                                                                                                                                                                                                                           |
@@ -38,6 +38,24 @@ different network from `postgres` and answered `getaddrinfo ENOTFOUND postgres` 
 fails if the anchor gets `networks` back or a service lacks its own. Checked locally by recreating the app containers while
 `postgres` kept running: all of them still resolve it. **Confirmed on the team server** (Nov 8, #121 closed): after a redeploy that recreated the app containers, `/readyz`,
 `/disputes` and the dashboard all worked.
+
+### Uptime monitoring (#38)
+
+There was no monitor at all. Two now exist (docs/MONITORING.md): a **dedicated** one you create at a monitoring service, and an
+**in-repo** one, `.github/workflows/uptime.yml`, that runs `scripts/ops/uptime-check.sh` every 5 minutes from GitHub's network, so it
+still works when the server does not. Both check the API through **`/readyz`** (database reachable, matched on the body text, not
+just the status code) and the shop and dashboard through `/healthz`.
+
+The in-repo monitor is **off until the repository variables `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and `PUBLIC_DASHBOARD_URL` are set**
+(the job is skipped visibly rather than passing), and it messages a Slack or Discord webhook (`UPTIME_WEBHOOK_URL`) only when the
+state changes: once on down, once on recovery, not every 5 minutes. GitHub runs schedules best effort (a run can start late, and
+schedules stop after 60 days of repo inactivity), so it is the backup monitor, not the main one.
+
+_Tested_: the check script against the real hosted site (all three up), and against a local server returning a 503 with the database
+unreachable, a 200 with the wrong content, a flaky first request (retried, passes), and nothing listening; the alert script's
+decision matrix, real delivery of the payload to a local webhook (valid JSON, special characters escaped, both `text` and `content`),
+and an unreachable webhook (warns, never fails the job); and the two steps run back to back. `actionlint` and `shellcheck` pass. What
+could not be tested here: GitHub actually running the schedule, and any real chat integration.
 
 ### Release verification (#175)
 
@@ -115,7 +133,10 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
 1. `docker compose config` is valid and the API image builds in CI on every PR. _(done)_
 2. `https://<api host>/healthz` returns 200 from outside the server. _(done: `https://poi-api.iotkiit.in/healthz`, Nov 5)_
 3. A real sandbox webhook reaches the server and is verified. _(done Nov 7, #19: `pnpm sandbox:webhook-check` raised the delivery count 100 to 101 and a repeat left it at 101; `GET /readyz` reports the count)_
-4. Uptime alert fires within 5 minutes of stopping the API. _(M2)_
+4. Uptime alert reaches the team chat within 5 minutes of stopping the API. _(M2)_ Built and tested: the in-repo monitor and its
+   check and alert scripts (#38). **Not proven, and not something the repository can prove:** that the *dedicated* monitor is set up
+   and that an alert actually arrives and how fast. docs/MONITORING.md has the setup and a way to test it without stopping the
+   real API; write the measured time here.
    `/readyz` answers 503 when the database can't be reached. _(done, #120: `apps/api/src/api.test.ts`, and checked against a live and a dead database)_
 5. Pushing `v0.1.0-hackathon` deploys, and the release is published only after `scripts/deploy/verify-release.sh` and (when
    configured) the public checks pass. _(M4; the script is tested against a real stack, see Release verification, #175)_
