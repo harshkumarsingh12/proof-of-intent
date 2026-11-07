@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   ChartIcon,
+  SparkleIcon,
   CloseIcon,
   DocIcon,
   ExternalIcon,
@@ -17,6 +18,7 @@ import {
   ScaleIcon,
 } from "./icons";
 import { MERCHANT_NAME, merchantInitials, REPO_URL, type PayPalMode } from "../src/merchant";
+import { activeHref } from "../src/nav";
 import { v } from "../src/theme";
 import { DisputeSearch } from "./DisputeSearch";
 
@@ -28,7 +30,7 @@ const isPhone = () => window.matchMedia(PHONE_QUERY).matches;
 
 type NavItem = { label: string; icon: ReactNode; href?: string; external?: boolean };
 
-const PRIMARY: NavItem[] = [
+const PRIMARY_BASE: NavItem[] = [
   { label: "Home", icon: <HomeIcon />, href: "/" },
   { label: "Orders", icon: <ReceiptIcon />, href: "/orders" },
   { label: "Disputes", icon: <ScaleIcon />, href: "/disputes" },
@@ -40,8 +42,20 @@ const SECONDARY: NavItem[] = [
   { label: "Help", icon: <HelpIcon />, href: `${REPO_URL}/blob/main/docs/SETUP.md`, external: true },
 ];
 
-export function AppShell({ mode, children }: { mode: PayPalMode; children: ReactNode }) {
+/** Dispute Studio sits right under Analytics, but only where it is turned on (it needs a key and the operator login). */
+const STUDIO_ITEM: NavItem = { label: "Dispute Studio", icon: <SparkleIcon />, href: "/analytics/studio" };
+
+export function AppShell({
+  mode,
+  studio = false,
+  children,
+}: {
+  mode: PayPalMode;
+  studio?: boolean;
+  children: ReactNode;
+}) {
   const pathname = usePathname() ?? "/";
+  const PRIMARY = studio ? [...PRIMARY_BASE, STUDIO_ITEM] : PRIMARY_BASE;
   const [collapsed, setCollapsed] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
   // Animate width only for the user's own toggles, not when the saved state is restored on load.
@@ -52,7 +66,9 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
     const saved = localStorage.getItem(COLLAPSED_KEY);
     // Phones always start closed: an open sidebar there covers the page. Elsewhere, restore the saved choice,
     // or start collapsed on narrow screens.
-    setCollapsed(isPhone() || (saved === null ? window.matchMedia("(max-width: 900px)").matches : saved === "1"));
+    setCollapsed(
+      isPhone() || (saved === null ? window.matchMedia("(max-width: 900px)").matches : saved === "1"),
+    );
     setBannerOpen(sessionStorage.getItem(BANNER_KEY) !== "1");
     requestAnimationFrame(() => setReady(true));
   }, []);
@@ -84,7 +100,11 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
     setBannerOpen(false);
   };
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const current = activeHref(
+    pathname,
+    PRIMARY.flatMap((item) => (item.href ? [item.href] : [])),
+  );
+  const isActive = (href: string) => href === current;
   const width = collapsed ? 72 : 260;
 
   return (
@@ -157,7 +177,13 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
             <>
               <span
                 className="poi-sidebar-extra"
-                style={{ display: "block", fontSize: 24, fontWeight: 800, color: v("navy"), letterSpacing: "-0.02em" }}
+                style={{
+                  display: "block",
+                  fontSize: 24,
+                  fontWeight: 800,
+                  color: v("navy"),
+                  letterSpacing: "-0.02em",
+                }}
               >
                 Proof of Intent
               </span>
@@ -172,7 +198,12 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
 
         <nav style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 20 }}>
           {PRIMARY.map((item) => (
-            <NavLink key={item.label} item={item} active={!!item.href && isActive(item.href)} collapsed={collapsed} />
+            <NavLink
+              key={item.label}
+              item={item}
+              active={!!item.href && isActive(item.href)}
+              collapsed={collapsed}
+            />
           ))}
           <hr style={{ border: 0, borderTop: `1px solid ${v("border")}`, margin: "16px 8px" }} />
           {SECONDARY.map((item) => (
@@ -202,13 +233,28 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
             onClick={toggleSidebar}
             aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
             aria-expanded={!collapsed}
-            style={{ background: "none", border: "none", padding: 6, cursor: "pointer", color: v("text"), display: "flex" }}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 6,
+              cursor: "pointer",
+              color: v("text"),
+              display: "flex",
+            }}
           >
             <MenuIcon size={24} />
           </button>
           <span
             className="poi-merchant"
-            style={{ fontSize: 22, fontWeight: 700, color: v("text"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: v("text"),
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+            }}
           >
             {MERCHANT_NAME}
           </span>
@@ -224,7 +270,11 @@ export function AppShell({ mode, children }: { mode: PayPalMode; children: React
           >
             Dispute queue
           </Link>
-          <span className="poi-header-link" style={{ width: 1, height: 32, background: v("border") }} aria-hidden="true" />
+          <span
+            className="poi-header-link"
+            style={{ width: 1, height: 32, background: v("border") }}
+            aria-hidden="true"
+          />
           <span
             title={MERCHANT_NAME}
             aria-label={`Merchant: ${MERCHANT_NAME}`}
@@ -315,7 +365,10 @@ function ModeBadge({ mode }: { mode: PayPalMode }) {
           border: `1px solid ${sandbox ? v("successBorder") : v("border")}`,
         }}
       >
-        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 9999, background: "currentColor" }} />
+        <span
+          aria-hidden="true"
+          style={{ width: 8, height: 8, borderRadius: 9999, background: "currentColor" }}
+        />
         {sandbox ? "PayPal sandbox" : "Mock mode"}
       </span>
     </div>
@@ -339,7 +392,11 @@ function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; 
   const content = (
     <>
       <span style={{ display: "flex", flexShrink: 0 }}>{item.icon}</span>
-      {!collapsed && <span className="poi-nav-label" style={{ flex: 1 }}>{item.label}</span>}
+      {!collapsed && (
+        <span className="poi-nav-label" style={{ flex: 1 }}>
+          {item.label}
+        </span>
+      )}
       {!collapsed && item.external && <ExternalIcon size={14} className="poi-nav-label" />}
     </>
   );
@@ -347,7 +404,14 @@ function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; 
   if (!item.href) return null;
   if (item.external) {
     return (
-      <a href={item.href} target="_blank" rel="noreferrer" className="poi-nav-item" title={collapsed ? item.label : undefined} style={style}>
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noreferrer"
+        className="poi-nav-item"
+        title={collapsed ? item.label : undefined}
+        style={style}
+      >
         {content}
       </a>
     );

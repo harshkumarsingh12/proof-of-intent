@@ -19,6 +19,7 @@ import {
   type PlatformGroup,
   type StudioCheckRow,
 } from "../../../src/studio-data";
+import { useSelectedDispute } from "../../../src/studio-selection";
 import { fontStack, v } from "../../../src/theme";
 import { widgets as widgetInfo } from "../../../src/widgets";
 
@@ -135,7 +136,7 @@ function MandateDiff(props: AgWidgetParams<any>) {
   const ids = items.map(idOf);
   const { rows: raw, error } = useRows(props, items);
   const [onlyViolations, setOnlyViolations] = useState(false);
-  const [picked, setPicked] = useState<string>();
+  const [picked, setPicked] = useSelectedDispute();
 
   if (error) return <Status>{`Couldn't load the signed limits: ${error}`}</Status>;
   if (!raw) return <Status>Loading the signed limits…</Status>;
@@ -227,7 +228,7 @@ function EvidencePreview(props: AgWidgetParams<any>) {
   const items = EVIDENCE_FIELDS.map((k) => slot(props.dataMapping, k));
   const ids = items.map(idOf);
   const { rows: raw, error } = useRows(props, items);
-  const [picked, setPicked] = useState<string>();
+  const [picked, setPicked] = useSelectedDispute();
 
   if (error) return <Status>{`Couldn't load the disputes: ${error}`}</Status>;
   if (!raw) return <Status>Loading the disputes…</Status>;
@@ -264,6 +265,7 @@ function EvidencePreview(props: AgWidgetParams<any>) {
       </div>
       {hasEvidence(current.disputeClass) ? (
         <iframe
+          key={current.dispute}
           title={`Attestation PDF for ${current.dispute}`}
           src={evidencePdfPath(current.dispute)}
           style={{ flex: 1, minHeight: 240, border: `1px solid ${v("border")}`, borderRadius: 6 }}

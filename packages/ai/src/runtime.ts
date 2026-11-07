@@ -159,10 +159,12 @@ const budget = { day: "", used: 0 };
  */
 export function takeAiCall(job: string, env: NodeJS.ProcessEnv = process.env, now = new Date()): void {
   const raw = Number(env.AI_DAILY_CALL_LIMIT);
-  const limit = env.AI_DAILY_CALL_LIMIT?.trim() && Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_DAILY_CALLS;
+  const limit =
+    env.AI_DAILY_CALL_LIMIT?.trim() && Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_DAILY_CALLS;
   const day = now.toISOString().slice(0, 10);
   if (budget.day !== day) Object.assign(budget, { day, used: 0 });
-  if (budget.used >= limit) throw new AiUnavailableError(job, `daily budget of ${limit} live calls is used up`);
+  if (budget.used >= limit)
+    throw new AiUnavailableError(job, `daily budget of ${limit} live calls is used up`);
   budget.used++;
 }
 
@@ -189,9 +191,15 @@ export async function generateWithRetry<T>(
 
 // ---------- data hygiene ----------
 
-/** Removes what the model never needs: email addresses and phone-like numbers. */
+/**
+ * Removes what the model never needs: email addresses and phone-like numbers. A number only counts as a phone number
+ * when it stands alone: digits inside a longer token (a mandate hash such as `b6e1…d116f85350fade…`, an id) are left
+ * as they are, since cutting them out made the Studio chat quote a corrupted hash.
+ */
 export function redact(text: string): string {
-  return text.replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]").replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]");
+  return text
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]")
+    .replace(/(?<![\w-])\+?\d[\d\s().-]{6,}\d(?![\w-])/g, "[number]");
 }
 
 /** JSON for a delimited data block. `<` and `>` are escaped so data can't close its own tag. */

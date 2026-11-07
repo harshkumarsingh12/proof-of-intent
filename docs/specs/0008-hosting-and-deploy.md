@@ -21,7 +21,7 @@ deliver webhooks to it. The team runs it on its own server; the same Compose fil
 | HTTPS | **Decided (D6):** Dokploy's proxy with Let's Encrypt, behind Cloudflare, on `poi-api.iotkiit.in`, `poi-buyer.iotkiit.in` and `poi-dashboard.iotkiit.in` (D7). Single-level names because Cloudflare's free certificate covers one level. Caddy (profile `server`) stays for servers without Dokploy |
 | Uptime | External monitor (e.g. UptimeRobot) on the three `/healthz` URLs, alerting the team chat; Compose starts on boot |
 | Isolation | Own Docker network; only the proxy publishes ports; Postgres unreachable from outside; non-root containers |
-| Abuse | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/keys/shopper` 10/min, `/ai/studio` 10/min, 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch. The dashboard is read-only without the operator login |
+| Abuse | Per-IP rate limits (built, `apps/api/src/rate-limits.ts`): `/checkout` 30/min, `/webhooks/paypal` 300/min, `/keys/shopper` 10/min, `/ai/studio` 60/min (a chat question is several requests; the daily AI budget bounds spend), 429 `rate_limited`; `TRUST_PROXY=1` behind the proxy. AI budget kill switch. The dashboard is read-only without the operator login |
 | DNS | Containers send outside lookups to `1.1.1.1` / `8.8.8.8` (`dns:` in compose, #88) after the host resolver dropped one (`EAI_AGAIN`, Nov 6) |
 | Backups | `backup` service (server profile): `pg_dump` every 24 h, 7 days kept, atomic writes; restore in docs/SETUP.md. Nightly demo reset Dec 1–15 |
 | Secrets | Server `.env` (mode 600) outside git; GitHub Actions secrets for CI/CD |

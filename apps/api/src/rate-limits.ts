@@ -12,5 +12,7 @@ export const RATE_LIMITS = {
   /** A shopper registers one browser key; more than a few a minute from one IP is a script. */
   keys: { max: 10, timeWindow: "1 minute" },
   /** Every call costs model tokens. */
-  studio: { max: 10, timeWindow: "1 minute" },
+  // One chat question is several requests (each model turn and each tool lookup), so 10 a minute cut a single
+  // question short. The daily AI call budget, not this, is what bounds spend.
+  studio: { max: 60, timeWindow: "1 minute" },
 } as const;

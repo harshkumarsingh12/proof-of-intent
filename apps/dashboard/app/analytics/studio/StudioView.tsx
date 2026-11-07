@@ -7,10 +7,11 @@ import {
   type AgWidgetsConfig,
 } from "ag-studio";
 import { AgStudio, AgStudioProvider } from "ag-studio-react";
-import { useMemo } from "react";
-import { buildStudioAi } from "../../../src/studio-agent";
+import { useMemo, useState } from "react";
+import { createStudioAi, type StudioExamples } from "../../../src/studio-agent";
 import { dashboardStudioTheme } from "../../../src/studio-theme";
 import type { StudioCheckRow, StudioDisputeRow } from "../../../src/studio-data";
+import { fontStack, pillButton, v } from "../../../src/theme";
 import { studioWidgets } from "./studio-widgets";
 
 const modules = [AgStudioAiModule];
@@ -70,15 +71,43 @@ const initialState = {
   ],
 };
 
+type Mode = "view" | "edit";
+
+/**
+ * Studio has the AI chat only in edit mode, so "Ask the AI" turns edit mode on, with just the chat and the filters
+ * (no edit or data panels). Nothing is saved: the report lives in this browser tab, so a rearranged or emptied report
+ * comes back on reload, and the chat's tools are read-only.
+ */
+const panels = {
+  view: { right: ["filters"] },
+  edit: { right: ["ai", "filters"] },
+} as const;
+
+const tab = (active: boolean) =>
+  ({
+    ...pillButton,
+    fontFamily: fontStack,
+    padding: "8px 20px",
+    background: active ? v("navy") : v("surface"),
+    color: active ? v("surface") : v("navy"),
+  }) as const;
+
 export function StudioView({
   disputes,
   checks,
   licenseKey,
+  examples,
+  aiLive,
 }: {
   disputes: StudioDisputeRow[];
   checks: StudioCheckRow[];
   licenseKey: string;
+  examples: StudioExamples;
+  /** True when the server runs live AI; replay mode can't answer free-form questions. */
+  aiLive: boolean;
 }) {
+  const [mode, setMode] = useState<Mode>("view");
+  const ai = useMemo(() => createStudioAi(examples), [examples]);
   const data = useMemo<AgDataSourcesDefinition>(
     () => ({
       sources: [
@@ -118,18 +147,48 @@ export function StudioView({
   );
 
   return (
-    <AgStudioProvider modules={modules} licenseKey={licenseKey}>
-      <AgStudio
-        ai={buildStudioAi}
-        data={data}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom widget registry, see studio-widgets.tsx
-        widgets={((base: AgWidgetsConfig) => studioWidgets(base)) as any}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        initialState={initialState as any as AgReportState}
-        theme={theme}
-        mode="view"
-        style={style}
-      />
-    </AgStudioProvider>
+    <>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "16px 0" }}>
+        <div role="group" aria-label="Studio view" style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            aria-pressed={mode === "view"}
+            style={tab(mode === "view")}
+            onClick={() => setMode("view")}
+          >
+            Dashboard
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === "edit"}
+            style={tab(mode === "edit")}
+            onClick={() => setMode("edit")}
+          >
+            Ask the AI
+          </button>
+        </div>
+        <span style={{ color: v("textMuted"), fontSize: 13 }}>
+          {mode === "edit"
+            ? aiLive
+              ? "Ask about a dispute or ask for a buyer reply draft. The AI reads disputes; it can't take any action."
+              : "The server isn't running live AI (AI_MODE is not live), so the chat can't answer yet."
+            : "Pick a dispute in either widget and both follow. Switch to Ask the AI to chat about a dispute."}
+        </span>
+      </div>
+      <AgStudioProvider modules={modules} licenseKey={licenseKey}>
+        <AgStudio
+          ai={ai}
+          data={data}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom widget registry, see studio-widgets.tsx
+          widgets={((base: AgWidgetsConfig) => studioWidgets(base)) as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          initialState={initialState as any as AgReportState}
+          theme={theme}
+          mode={mode}
+          panels={panels as never}
+          style={style}
+        />
+      </AgStudioProvider>
+    </>
   );
 }

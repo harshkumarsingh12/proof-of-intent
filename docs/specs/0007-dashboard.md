@@ -48,6 +48,21 @@ load in an effect; `ag-studio-react` ships no overlay components; a custom widge
 `formatShape` for the widgets (the docs don't show how to build one outside Studio, and the AI harness works without it),
 cross-filtering between widgets, and the dispute selector driving the other two.
 
+**Studio chat, navigation and linked widgets, as built.** *Finding it:* "Dispute Studio" is a sidebar item under Analytics
+(shown only where Studio is enabled; the longest-matching nav item is the active one, `src/nav.ts`), and the Analytics page
+opens with a banner for it. *The two widgets follow each other:* the mandate diff and the evidence preview share one selected
+dispute (`src/studio-selection.ts`); each used to keep its own dropdown, so changing one left the other (and its PDF) behind.
+*The AI chat:* ag-studio has the chat panel only in edit mode, so a "Dashboard | Ask the AI" switch above Studio turns edit
+mode on with only the chat and filters panels. The chat opens on DisputeExplainer, not the built-in orchestrator: that prompt
+builds dashboards, starts by inspecting the page, and with the live model looped on `view_schema`/`view_report`/`view_page`
+and sent `delegate_to` arguments that failed its nested schema. DisputeExplainer has flat `{ disputeId }` tools, a short
+prompt, a glossary of the dispute classes, and starter prompts built from real dispute ids on the page. Nothing is saved
+(the report lives in the tab) and the tools are read-only. The turn handler (`packages/ai/src/studio.ts`) now: accepts tool
+arguments as an object, retries once when the model announces a step ("Let me...") or tells the user to run a tool, and ends a
+repeated identical tool call by withdrawing that tool and then forcing an answer (falling back to the tool's own result).
+`/ai/studio` allows 60 requests a minute because one question is several requests, and J4 gets the 10 s the spec gave it.
+`redact` no longer cuts digits out of hashes and ids (it had corrupted a mandate hash the chat quoted).
+
 **Theme, as built:** `src/studio-theme.ts` builds the Studio theme from `palette` (Studio wants literal colors, so it
 reads the palette, not the CSS variables), and the filters panel starts collapsed so it doesn't sit over the widgets.
 
