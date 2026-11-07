@@ -40,8 +40,8 @@ credentials in that private field. The public repository contains the steps and 
    Keep each case's order, capture and dispute ids with its result. Evidence submission and claim
    acceptance are one-shot actions, so each test needs its own case.
 8. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics). Follow **Dispute Studio** to inspect the
-   widgets and chat when enabled on the verified deployment. Use the starter prompts for that deployment's
-   actual dispute IDs. Hosted Studio verification is tracked in #123.
+   widgets and the **Ask the AI** chat (Studio and its chat panel were confirmed present on the hosted dashboard on
+   November 8). Use the starter prompts, which are built from the deployment's actual dispute IDs.
 
 The hosted cases `PP-R-OKC-10196871` and `PP-R-TZQ-10196879` have response dates of November 17 and November 26.
 Judging continues through December 15, so create fresh cases for action tests. The team will prepare another
