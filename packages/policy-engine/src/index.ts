@@ -27,14 +27,23 @@ type Rule = (input: EvaluateInput) => ReasonCode | ReasonCode[] | null;
 
 const t = (iso: string) => Date.parse(iso);
 
+/**
+ * The time rules on their own: the intent has started and hasn't expired, and the cart hasn't expired. `evaluate` runs
+ * them with everything else; stage-two approval runs just these again right before capture (#161), so the two can't
+ * disagree about what "still current" means. Reasons come out in the same order `evaluate` reports them.
+ */
+export function freshness({ intent, cart, now }: Pick<EvaluateInput, "intent" | "cart" | "now">): ReasonCode[] {
+  return [
+    ...(t(now) < t(intent.constraints.valid_from) ? (["MANDATE_NOT_YET_VALID"] as const) : []),
+    ...(t(now) >= t(intent.intent_expiry) ? (["MANDATE_EXPIRED"] as const) : []),
+    ...(t(now) >= t(cart.contents.cart_expiry) ? (["CART_EXPIRED"] as const) : []),
+  ];
+}
+
 const rules: Rule[] = [
   ({ intent, cart }) => (cart.intent_mandate_id === intent.mandate_id ? null : "MANDATE_MISMATCH"),
 
-  ({ intent, now }) => (t(now) < t(intent.constraints.valid_from) ? "MANDATE_NOT_YET_VALID" : null),
-
-  ({ intent, now }) => (t(now) >= t(intent.intent_expiry) ? "MANDATE_EXPIRED" : null),
-
-  ({ cart, now }) => (t(now) >= t(cart.contents.cart_expiry) ? "CART_EXPIRED" : null),
+  (input) => freshness(input),
 
   // Every money limit in the mandate is in one currency, and the cart has to be in it too. Otherwise the
   // checks below would compare cents of different currencies.

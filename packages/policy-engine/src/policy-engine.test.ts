@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { CartMandate, IntentMandate } from "@poi/contracts";
 import { NOW, compliantCart, greyJacketIntent, overreachingCart } from "@poi/contracts/fixtures";
-import { evaluate } from "./index";
+import { evaluate, freshness } from "./index";
 
 const run = (cart: CartMandate, intent: IntentMandate = greyJacketIntent, now = NOW) =>
   evaluate({ intent, cart, now });
@@ -240,3 +240,42 @@ describe("policy engine: everything at once", () => {
     });
   });
 });
+
+describe("freshness: the time rules stage-two approval re-runs before capture (#161)", () => {
+  // valid_from Nov 1 09:00, intent_expiry Nov 8 00:00, cart_expiry Nov 2 10:15 in the fixtures.
+  const instants = [
+    "2026-11-01T08:59:59Z",
+    "2026-11-01T09:00:00Z",
+    NOW,
+    "2026-11-02T10:15:00Z",
+    "2026-11-07T23:59:59Z",
+    "2026-11-08T00:00:00Z",
+    "2026-11-09T00:00:00Z",
+  ];
+  const timeReasons = ["MANDATE_NOT_YET_VALID", "MANDATE_EXPIRED", "CART_EXPIRED"];
+
+  test("reports exactly the time reasons evaluate reports, in the same order, at every instant", () => {
+    for (const now of instants) {
+      const mine = freshness({ intent: greyJacketIntent, cart: compliantCart, now });
+      const theirs = run(compliantCart, greyJacketIntent, now).reasons.filter((r) => timeReasons.includes(r));
+      expect(mine, now).toEqual(theirs);
+    }
+  });
+
+  test("boundaries: valid at the start instant, expired at the expiry instant", () => {
+    const fresh = (now: string) => freshness({ intent: greyJacketIntent, cart: compliantCart, now });
+    expect(fresh("2026-11-01T08:59:59Z")).toEqual(["MANDATE_NOT_YET_VALID"]);
+    expect(fresh("2026-11-01T09:00:00Z")).toEqual([]);
+    expect(fresh("2026-11-02T10:15:00Z")).toEqual(["CART_EXPIRED"]);
+    // After the cart has expired and the intent too, both are reported.
+    expect(fresh("2026-11-08T00:00:00Z")).toEqual(["MANDATE_EXPIRED", "CART_EXPIRED"]);
+  });
+
+  test("an expired intent is reported even when the cart is still valid (the cart's expiry is the agent's choice)", () => {
+    const longCart = { ...compliantCart, contents: { ...compliantCart.contents, cart_expiry: "2026-12-01T00:00:00Z" } };
+    expect(freshness({ intent: greyJacketIntent, cart: longCart, now: "2026-11-09T00:00:00Z" })).toEqual([
+      "MANDATE_EXPIRED",
+    ]);
+  });
+});
+
