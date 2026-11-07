@@ -151,7 +151,7 @@ export function StudioView({
   checks: StudioCheckRow[];
   licenseKey: string;
   examples: StudioExamples;
-  /** True when the server runs live AI; replay mode can't answer free-form questions. */
+  /** The dashboard and API must use the same mode. Replay requires recordings of the exact question and data. */
   aiLive: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("view");
@@ -229,7 +229,7 @@ export function StudioView({
           {mode === "edit"
             ? aiLive
               ? "Ask about a dispute or ask for a buyer reply draft. The AI reads disputes; it can't take any action."
-              : "The server isn't running live AI (AI_MODE is not live), so the chat can't answer yet."
+              : "Replay answers recorded questions only when their dispute data and tools still match. A missing recording gives an unavailable response. Use Dashboard to explore the data, or configure live AI for new questions."
             : "Pick a dispute in either widget and both follow. Switch to Ask the AI to chat about a dispute."}
         </span>
       </div>

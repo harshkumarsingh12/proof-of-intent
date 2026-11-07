@@ -1,6 +1,9 @@
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
+import * as runtime from "./runtime";
 import type { Generate, GenerateRequest } from "./runtime";
-import { backtickCodes, runStudioTurn, type StudioTurn } from "./studio";
+import { backtickCodes, J4_REPLAY, runStudioTurn, studioReplayKey, type StudioTurn } from "./studio";
+
+afterEach(() => vi.restoreAllMocks());
 
 const turn: StudioTurn = {
   kind: "turn",
@@ -11,6 +14,103 @@ const turn: StudioTurn = {
   ],
   tools: [{ name: "explain_dispute", description: "Reads a policy result", parameters: {} }],
 };
+
+test("Studio replays the recorded turn without a provider and refuses changed questions, data or tools", async () => {
+  const recorded = { text: "", tool: { name: "explain_dispute", arguments: '{"disputeId":"PP-D-1001"}' } };
+  const replay = vi.spyOn(runtime, "readReplay").mockReturnValue({
+    [studioReplayKey(turn)]: { label: "defended starter", output: recorded },
+  });
+  const generate = vi.fn();
+  await expect(runStudioTurn(turn, "replay", generate)).resolves.toEqual(recorded);
+  expect(replay).toHaveBeenCalledWith(J4_REPLAY);
+  expect(generate).not.toHaveBeenCalled();
+  for (const changed of [
+    { ...turn, history: [{ role: "user" as const, text: "A different question" }] },
+    { ...turn, history: [...turn.history, { role: "tool" as const, text: "Changed dispute findings" }] },
+    { ...turn, tools: [] },
+    { ...turn, instructions: "Changed instructions" },
+  ]) {
+    await expect(runStudioTurn(changed, "replay", generate)).rejects.toThrow("no recorded answer");
+  }
+  replay.mockReturnValue({ [studioReplayKey(turn)]: { label: "invalid", output: { text: 123 } } });
+  await expect(runStudioTurn(turn, "replay")).rejects.toThrow("no recorded answer");
+  replay.mockReturnValue({
+    [studioReplayKey(turn)]: {
+      label: "unavailable tool",
+      output: { text: "", tool: { name: "accept_claim", arguments: "{}" } },
+    },
+  });
+  await expect(runStudioTurn(turn, "replay")).rejects.toThrow("requested tool is unavailable");
+});
+
+test("Studio replay hashes the redacted input and retains the exact dispute facts", () => {
+  expect(studioReplayKey({ ...turn, instructions: "Email private@example.com" })).toBe(
+    studioReplayKey({ ...turn, instructions: "Email [email]" }),
+  );
+  expect(
+    studioReplayKey({ ...turn, history: [{ role: "tool", text: "PP-D-1002 AGENT_OVERREACH" }] }),
+  ).not.toBe(studioReplayKey({ ...turn, history: [{ role: "tool", text: "PP-D-1002 MANDATE_COMPLIANT" }] }));
+});
+
+test("the attention starter formats the list facts with no additional model calls", async () => {
+  const listed: StudioTurn = {
+    ...turn,
+    history: [
+      { role: "user", text: "List the disputes and tell me which ones are waiting for my response." },
+      { role: "assistant", text: "Called list_disputes with {}" },
+      {
+        role: "tool",
+        text: JSON.stringify({
+          counts: { total: 24, needResponse: 13 },
+          disputes: [
+            {
+              id: "PP-D-1002",
+              needsResponse: true,
+              class: "AGENT_OVERREACH",
+              amount: "USD 95.00",
+              respondBy: "2026-11-17T00:00:00.000Z",
+            },
+          ],
+        }),
+      },
+    ],
+  };
+  const generate = vi.fn();
+  const out = await runStudioTurn(listed, "live", generate);
+  expect(out.tool).toBeNull();
+  expect(out.text).toContain("13 of 24 loaded disputes need your response");
+  expect(out.text).toContain("`PP-D-1002` · `AGENT_OVERREACH` · USD 95.00");
+  expect(out.text).toContain("2026-11-17T00:00:00.000Z");
+  expect(out.text).toContain("Showing 1 of the 13");
+  expect(generate).not.toHaveBeenCalled();
+
+  // The real dashboard harness wraps the JSON string in ctx.success's envelope.
+  const wrappedHistory = [
+    ...listed.history.slice(0, -1),
+    {
+      role: "tool" as const,
+      text: JSON.stringify({ success: true, response: listed.history.at(-1)!.text }),
+    },
+  ];
+  await expect(runStudioTurn({ ...listed, history: wrappedHistory }, "live", generate)).resolves.toEqual(out);
+  expect(generate).not.toHaveBeenCalled();
+
+  // A different question or malformed tool result still goes through the regular live turn.
+  const model: Generate = async <T>({ schema }: GenerateRequest<T>) =>
+    schema.parse({ text: "A model answer", tool: null });
+  for (const history of [
+    [{ role: "user" as const, text: "Compare dispute amounts" }, ...listed.history.slice(1)],
+    [...listed.history.slice(0, -1), { role: "tool" as const, text: "invalid JSON" }],
+    [
+      ...listed.history.slice(0, -1),
+      { role: "tool" as const, text: '{"counts":{"total":0,"needResponse":5},"disputes":[]}' },
+    ],
+  ]) {
+    await expect(runStudioTurn({ ...listed, history }, "live", model)).resolves.toMatchObject({
+      text: "A model answer",
+    });
+  }
+});
 
 test("Studio validates a turn and never allows a model to invent a tool", async () => {
   const model: Generate = async <T>({ schema, prompt }: GenerateRequest<T>) => {

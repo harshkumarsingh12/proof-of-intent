@@ -18,7 +18,8 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 Dispute Studio is in the sidebar under Analytics and has a banner on the Analytics page. It opens on four KPI tiles, a donut
 of disputes by class (click a slice to filter everything), the agent platform cards, an AG Grid of disputes (click a row, filter,
 export CSV), and the mandate diff and evidence preview for the selected dispute. Its "Ask the AI" switch opens the chat (needs
-`AI_MODE=live`).
+live AI or matching recorded turns in replay mode). The switch explains replay's limits. Capture the three
+starters with `pnpm studio:record` and repeat against the same data before the video take.
 
 Studio (`/analytics/studio`, needs a license key, `OPERATOR_PASSWORD` and `OPERATOR_TOKEN`): three AG Studio custom widgets
 (mandate diff, evidence preview, agent platform breakdown) over two tables built from the disputes API, the Studio theme in
