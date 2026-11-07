@@ -67,6 +67,10 @@ key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/
   (ES256's raw r‖s signature is what WebCrypto returns), payload = `canonicalize` bytes.
 - `src/key-store.ts`: the `CryptoKey` objects themselves in IndexedDB, with the `kid` and shopper id from
   `POST /keys/shopper`. "Use a new key" deletes it; mandates it already signed stay valid.
+- **The limits form.** The price cap is always set (a blank or invalid price is refused at signing). Item and color can be left
+  open: the dropdowns' first choices, **Anything** and **Any color**, sign no `attributes.category` or `attributes.color`, and the
+  policy engine then checks only the limits that were signed. Picking a category changes only the category; the four demo presets
+  load, whole, from the **Quick start** buttons, so their wording (which the merchant's recorded checks are keyed on) is unchanged.
 - Intents start 5 minutes in the past (`valid_from`, `created_at`) so a browser clock a little ahead of the server
   doesn't produce `MANDATE_NOT_YET_VALID`.
 - The countersignature hashes the payload of the `cart_mandate_jws` the merchant returned, so the shopper approves

@@ -36,7 +36,8 @@ const fits = (p: Product, limits: SignedLimits) =>
 
 /** The form's description, matching the new limits (the merchant's semantic check reads it). */
 function describe(category: string, color: string, maxCents: number): string {
-  const what = [color, categoryLabel(category).toLowerCase()].filter(Boolean).join(" ");
+  // Item and color can both be left open ("Anything"), and then there is no kind to name.
+  const what = [color, categoryLabel(category).toLowerCase()].filter(Boolean).join(" ") || "anything";
   return `${what[0]!.toUpperCase()}${what.slice(1)} under $${dollarsForForm(maxCents)}.`;
 }
 
@@ -110,9 +111,10 @@ export function nearMiss(args: {
     };
   }
 
-  // Only too dear: keep the shopper's own item and color, and offer the higher cap that would have covered it.
-  const keepCategory = limits.category ?? category;
-  const keepColor = limits.category || limits.color ? (limits.color ?? "") : color;
+  // Only too dear: keep the shopper's own item and color, and offer the higher cap that would have covered it. An item or
+  // color they left open ("Anything") stays open: the hint raises the price and adds no limit they didn't choose.
+  const keepCategory = limits.category ?? "";
+  const keepColor = limits.color ?? "";
   return {
     text:
       `${title} costs ${dollars(price)} and your limit is ${dollars(limits.maxCents)}.${altText} ` +

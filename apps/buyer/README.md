@@ -32,6 +32,10 @@ the browser's key, asks the merchant for a Vault v3 setup token and sends the sh
 `human_present: false`: an approved cart is charged to that wallet with no PayPal step, a step-up charges nothing and waits under "Waiting for your approval" (listed with a signed proof, approved with the shopper's signature, no link needed), and the
 agent stops after the merchant accepts one cart. In `PAYPAL_MODE=mock` the approval returns to the shop at once.
 
+**The limits form** (`app/shop/ShopFlow.tsx`, `src/intent.ts`, spec 0001). The price cap is always signed. Item and color can be left
+open with **Anything** / **Any color**, and then only the limits that were set are checked. Picking a category changes only the
+category; **Quick start** loads a whole demo preset (price, item, color and words).
+
 **Voice ordering** (`src/voice.ts`, `app/shop/useVoice.ts`, spec 0010; off unless `BUYER_VOICE=1`). "Speak your request" fills the text
 box from the browser's Web Speech API (Chrome, Edge, Safari over HTTPS or localhost; not Firefox, where the microphone is hidden
 and typing still works; the browser vendor processes the audio). The agent drafts the limits, a **read-back card** lists exactly

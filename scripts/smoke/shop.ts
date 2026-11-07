@@ -225,6 +225,31 @@ await step("'Let the agent fill in the limits' drafts but does not sign", async 
   if (price !== "20") throw new Error(`expected 20, got ${price}`);
 });
 
+await step(
+  "quick start loads a preset, a category alone changes only the category, and item and color can be 'Anything'",
+  async () => {
+    await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
+    await page.getByText("Key id").waitFor({ timeout: 30_000 });
+    const price = () => page.locator('input[inputmode="decimal"]').inputValue();
+    await page.getByRole("button", { name: "Running socks" }).click();
+    if ((await price()) !== "20") throw new Error(`quick start should load the socks cap, got ${await price()}`);
+    if ((await page.getByLabel("Color").inputValue()) !== "white") throw new Error("quick start should load white");
+
+    // Picking a category on its own leaves the price and color alone.
+    await page.getByLabel("Category").selectOption("running-shoe");
+    if ((await price()) !== "20") throw new Error("picking a category changed the price");
+    if ((await page.getByLabel("Color").inputValue()) !== "white") throw new Error("picking a category changed the color");
+
+    // Leave item and color open and sign: the price cap is still there.
+    await page.getByLabel("Category").selectOption({ label: "Anything" });
+    await page.getByLabel("Color").selectOption({ label: "Any color" });
+    await page.getByRole("button", { name: "Sign my intent" }).click();
+    await page.getByText("Signed in your browser").waitFor({ timeout: 20_000 });
+    await page.getByRole("heading", { name: "All products" }).waitFor({ timeout: 5_000 });
+    if ((await page.locator(".product").count()) < 12) throw new Error("an open item should show the whole store");
+  },
+);
+
 await step("'Let the agent choose' proposes a cart and shows what it did", async () => {
   await freshIntent();
   await page.getByRole("button", { name: "Let the agent choose" }).click();
