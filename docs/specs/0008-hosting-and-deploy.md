@@ -36,8 +36,39 @@ Dokploy rewrites the file on deploy to attach its own network and does not resol
 inherited through the anchor looked missing to it and was replaced by Dokploy's. The recreated app containers then sat on a
 different network from `postgres` and answered `getaddrinfo ENOTFOUND postgres` (Nov 6 and Nov 7). `apps/api/src/compose.test.ts`
 fails if the anchor gets `networks` back or a service lacks its own. Checked locally by recreating the app containers while
-`postgres` kept running: all of them still resolve it. **Still to confirm on the team server with one real Dokploy redeploy**,
-because the rewrite only happens there; until then keep avoiding redeploys near judging.
+`postgres` kept running: all of them still resolve it. **Confirmed on the team server** (Nov 8, #121 closed): after a redeploy that recreated the app containers, `/readyz`,
+`/disputes` and the dashboard all worked.
+
+### Release verification (#175)
+
+The tag-release workflow used to end with `sleep 15` and one `/healthz` call on the API, and it published the GitHub Release
+even when nothing had been deployed. `/healthz` never touches Postgres, so it stays green while every route answers 500
+(the Nov 6 and Nov 7 outages). Now:
+
+- **`scripts/deploy/verify-release.sh`**, run on the server after `up -d`, checks in order and stops at the first failure,
+  naming it: `migrate` exited 0; `postgres` healthy; the API's **`/readyz`** answers 200 **with the database reachable**; the
+  shop and the dashboard answer `/healthz`; the **worker** is healthy; and, when the `backup` service runs, a dump less than 26
+  hours old exists. A service that is still starting is waited for (`VERIFY_TIMEOUT`, default 120 s each).
+- **The worker has no port**, so it leaves a heartbeat: after every *successful* poll of the dispute inbox it touches
+  `/tmp/worker-heartbeat` (`apps/worker/src/heartbeat.ts`), and its compose healthcheck fails when that file is older than a
+  minute. So "healthy" means it is polling and the database answers. A hung database query never beats, so a stuck worker
+  turns unhealthy even though its process is alive and logs nothing. Docker only *shows* `unhealthy`; it does not restart the
+  container (a restart policy acts on exit), so a stuck worker needs `docker compose restart worker`.
+- **`verify-public`** (a second job in `deploy.yml`) checks what people actually reach, from the runner: the API's `/readyz`
+  and the shop's and dashboard's `/healthz`, through the proxy and certificate. It is configured by the repository
+  **variables** `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and `PUBLIC_DASHBOARD_URL`, and runs even when nothing was deployed over
+  SSH (a Dokploy server deploys from `main`, not from the tag). When the variables are unset it passes with a loud warning
+  that nothing was checked, and says so a second time when there was no SSH deploy either.
+- **`release`** needs both jobs, so a failed check means no release is published.
+
+Limits: neither job can tell *which commit* is live, only that the live stack is healthy. On Dokploy, read the commit off its
+Deployments tab. The API image reports no version yet.
+
+_Tested against a real stack_ (the four images built from this compose file, isolated settings): healthy gives `release
+verified` in about 10 s; with the API cut off from Postgres's network the old `/healthz` check says `{"status":"ok"}` and the
+script fails at "api ready (database reachable)"; a worker cut off from Postgres stays "healthy" until its heartbeat is a minute
+old, then three failed probes mark it unhealthy and the script fails at the worker, and it recovers by itself after
+reconnecting; with the backup service running, a fresh dump passes and an impossible age limit fails.
 
 ## Interfaces
 
@@ -51,7 +82,8 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
 3. A real sandbox webhook reaches the server and is verified. _(done Nov 7, #19: `pnpm sandbox:webhook-check` raised the delivery count 100 to 101 and a repeat left it at 101; `GET /readyz` reports the count)_
 4. Uptime alert fires within 5 minutes of stopping the API. _(M2)_
    `/readyz` answers 503 when the database can't be reached. _(done, #120: `apps/api/src/api.test.ts`, and checked against a live and a dead database)_
-5. Pushing `v0.1.0-hackathon` deploys and passes the health check. _(M4)_
+5. Pushing `v0.1.0-hackathon` deploys, and the release is published only after `scripts/deploy/verify-release.sh` and (when
+   configured) the public checks pass. _(M4; the script is tested against a real stack, see Release verification, #175)_
 
 ## Open questions
 
