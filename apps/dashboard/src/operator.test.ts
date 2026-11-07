@@ -1,5 +1,38 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { POST } from "../app/api/[...path]/route";
 import { isOperator, isOperatorActionPath } from "./operator";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+test("the Studio proxy relays mode and prompt version while keeping provider and operator credentials server-side", async () => {
+  vi.stubEnv("OPERATOR_TOKEN", "test-only-token");
+  vi.stubEnv("OPERATOR_PASSWORD", "test-only-password");
+  vi.stubEnv("API_INTERNAL_URL", "http://merchant.test");
+  const fetch = vi.fn().mockResolvedValue(
+    Response.json(
+      { text: "Recorded answer", tool: null },
+      {
+        headers: { "x-poi-ai-mode": "replay", "x-poi-ai-prompt-version": "j4-v1" },
+      },
+    ),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const response = await POST(
+    new Request("http://dashboard.test/api/ai/studio", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: basic("operator", "test-only-password") },
+      body: JSON.stringify({ kind: "turn" }),
+    }),
+    { params: Promise.resolve({ path: ["ai", "studio"] }) },
+  );
+  expect(response.headers.get("x-poi-ai-mode")).toBe("replay");
+  expect(response.headers.get("x-poi-ai-prompt-version")).toBe("j4-v1");
+  expect(await response.text()).not.toContain("test-only-token");
+  expect(fetch.mock.calls[0]?.[1].headers.authorization).toBe("Bearer test-only-token");
+});
 
 const basic = (user: string, pass: string) => `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
 

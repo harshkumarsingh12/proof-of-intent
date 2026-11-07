@@ -1,4 +1,4 @@
-import { isAiUnavailable, runStudioTurn, StudioTurn } from "@poi/ai";
+import { isAiUnavailable, J4_PROMPT_VERSION, runStudioTurn, StudioTurn } from "@poi/ai";
 import { DisputeClass, ReasonCode } from "@poi/contracts";
 import { PayPalError } from "@poi/paypal";
 import type { FastifyPluginAsync } from "fastify";
@@ -63,7 +63,11 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           .send({ error: "invalid_request", message: "Unknown Studio operation or invalid arguments" });
       const body = parsed.data;
       try {
-        if (body.kind === "turn") return await runStudioTurn(body, deps.aiMode ?? "replay");
+        if (body.kind === "turn") {
+          reply.header("x-poi-ai-mode", deps.aiMode ?? "replay");
+          reply.header("x-poi-ai-prompt-version", J4_PROMPT_VERSION);
+          return await runStudioTurn(body, deps.aiMode ?? "replay");
+        }
         if (body.tool === "list_disputes" && deps.db) {
           // Our own table, so the chat can say which disputes need a response and why (and it works in mock mode,
           // where PayPal's list is empty). Counts first, then the ones needing a response soonest-first, then the
@@ -134,7 +138,10 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           req.log.warn({ reason: (error as Error).message }, "Studio AI unavailable");
           return reply.code(503).send({
             error: "studio_ai_unavailable",
-            message: "Studio AI is unavailable. The Analytics and Disputes views are still available.",
+            message:
+              deps.aiMode === "live"
+                ? "Studio AI is unavailable. The Analytics and Disputes views are still available."
+                : "Replay has no valid recorded answer for this question and dispute data. Use Analytics or Disputes, or ask the team to record the starter prompts.",
           });
         }
         if (error instanceof PayPalError && error.status === 404) {

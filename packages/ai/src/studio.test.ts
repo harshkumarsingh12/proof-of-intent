@@ -1,6 +1,17 @@
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
+import * as runtime from "./runtime";
 import type { Generate, GenerateRequest } from "./runtime";
-import { backtickCodes, runStudioTurn, type StudioTurn } from "./studio";
+import {
+  ATTENTION_STARTER_PROMPT,
+  backtickCodes,
+  J4_REPLAY,
+  recordableAnswer,
+  runStudioTurn,
+  studioReplayKey,
+  type StudioTurn,
+} from "./studio";
+
+afterEach(() => vi.restoreAllMocks());
 
 const turn: StudioTurn = {
   kind: "turn",
@@ -11,6 +22,103 @@ const turn: StudioTurn = {
   ],
   tools: [{ name: "explain_dispute", description: "Reads a policy result", parameters: {} }],
 };
+
+test("Studio replays the recorded turn without a provider and refuses changed questions, data or tools", async () => {
+  const recorded = { text: "", tool: { name: "explain_dispute", arguments: '{"disputeId":"PP-D-1001"}' } };
+  const replay = vi.spyOn(runtime, "readReplay").mockReturnValue({
+    [studioReplayKey(turn)]: { label: "defended starter", output: recorded },
+  });
+  const generate = vi.fn();
+  await expect(runStudioTurn(turn, "replay", generate)).resolves.toEqual(recorded);
+  expect(replay).toHaveBeenCalledWith(J4_REPLAY);
+  expect(generate).not.toHaveBeenCalled();
+  for (const changed of [
+    { ...turn, history: [{ role: "user" as const, text: "A different question" }] },
+    { ...turn, history: [...turn.history, { role: "tool" as const, text: "Changed dispute findings" }] },
+    { ...turn, tools: [] },
+    { ...turn, instructions: "Changed instructions" },
+  ]) {
+    await expect(runStudioTurn(changed, "replay", generate)).rejects.toThrow("no recorded answer");
+  }
+  replay.mockReturnValue({ [studioReplayKey(turn)]: { label: "invalid", output: { text: 123 } } });
+  await expect(runStudioTurn(turn, "replay")).rejects.toThrow("no recorded answer");
+  replay.mockReturnValue({
+    [studioReplayKey(turn)]: {
+      label: "unavailable tool",
+      output: { text: "", tool: { name: "accept_claim", arguments: "{}" } },
+    },
+  });
+  await expect(runStudioTurn(turn, "replay")).rejects.toThrow("requested tool is unavailable");
+});
+
+test("Studio replay hashes the redacted input and retains the exact dispute facts", () => {
+  expect(studioReplayKey({ ...turn, instructions: "Email private@example.com" })).toBe(
+    studioReplayKey({ ...turn, instructions: "Email [email]" }),
+  );
+  expect(
+    studioReplayKey({ ...turn, history: [{ role: "tool", text: "PP-D-1002 AGENT_OVERREACH" }] }),
+  ).not.toBe(studioReplayKey({ ...turn, history: [{ role: "tool", text: "PP-D-1002 MANDATE_COMPLIANT" }] }));
+});
+
+test("the attention starter formats the list facts with no additional model calls", async () => {
+  const listed: StudioTurn = {
+    ...turn,
+    history: [
+      { role: "user", text: "List the disputes and tell me which ones are waiting for my response." },
+      { role: "assistant", text: "Called list_disputes with {}" },
+      {
+        role: "tool",
+        text: JSON.stringify({
+          counts: { total: 24, needResponse: 13 },
+          disputes: [
+            {
+              id: "PP-D-1002",
+              needsResponse: true,
+              class: "AGENT_OVERREACH",
+              amount: "USD 95.00",
+              respondBy: "2026-11-17T00:00:00.000Z",
+            },
+          ],
+        }),
+      },
+    ],
+  };
+  const generate = vi.fn();
+  const out = await runStudioTurn(listed, "live", generate);
+  expect(out.tool).toBeNull();
+  expect(out.text).toContain("13 of 24 loaded disputes need your response");
+  expect(out.text).toContain("`PP-D-1002` · `AGENT_OVERREACH` · USD 95.00");
+  expect(out.text).toContain("respond by 2026-11-17 00:00 UTC");
+  expect(out.text).toContain("Showing 1 of the 13");
+  expect(generate).not.toHaveBeenCalled();
+
+  // The real dashboard harness wraps the JSON string in ctx.success's envelope.
+  const wrappedHistory = [
+    ...listed.history.slice(0, -1),
+    {
+      role: "tool" as const,
+      text: JSON.stringify({ success: true, response: listed.history.at(-1)!.text }),
+    },
+  ];
+  await expect(runStudioTurn({ ...listed, history: wrappedHistory }, "live", generate)).resolves.toEqual(out);
+  expect(generate).not.toHaveBeenCalled();
+
+  // A different question or malformed tool result still goes through the regular live turn.
+  const model: Generate = async <T>({ schema }: GenerateRequest<T>) =>
+    schema.parse({ text: "A model answer", tool: null });
+  for (const history of [
+    [{ role: "user" as const, text: "Compare dispute amounts" }, ...listed.history.slice(1)],
+    [...listed.history.slice(0, -1), { role: "tool" as const, text: "invalid JSON" }],
+    [
+      ...listed.history.slice(0, -1),
+      { role: "tool" as const, text: '{"counts":{"total":0,"needResponse":5},"disputes":[]}' },
+    ],
+  ]) {
+    await expect(runStudioTurn({ ...listed, history }, "live", model)).resolves.toMatchObject({
+      text: "A model answer",
+    });
+  }
+});
 
 test("Studio validates a turn and never allows a model to invent a tool", async () => {
   const model: Generate = async <T>({ schema, prompt }: GenerateRequest<T>) => {
@@ -195,4 +303,131 @@ test("codes in the chat answer are wrapped in backticks so markdown keeps their 
     text: "The class is `MANDATE_COMPLIANT`.",
     tool: null,
   });
+});
+
+// Two seeded databases hold the same disputes but differ in every mandate hash (the seed makes a new shopper key
+// each run) and in every deadline (relative to when it ran). A recording must answer on both.
+const HASH_A = "a".repeat(64);
+const HASH_B = "b".repeat(64);
+const explainTurn = (hash: string, respondBy: string): StudioTurn => ({
+  ...turn,
+  history: [
+    { role: "user", text: "Explain dispute PP-D-1001 and cite the available mandate evidence." },
+    { role: "assistant", text: "Called explain_dispute with PP-D-1001" },
+    {
+      role: "tool",
+      text: JSON.stringify({ id: "PP-D-1001", class: "MANDATE_COMPLIANT", mandateHash: hash, respondBy }),
+    },
+  ],
+});
+
+test("a recording is keyed on the facts, not on the hashes and timestamps that change per seeded database", () => {
+  const a = explainTurn(HASH_A, "2026-11-07T12:00:00.000Z");
+  const b = explainTurn(HASH_B, "2026-11-07T15:00:00.000Z");
+  expect(studioReplayKey(a)).toBe(studioReplayKey(b));
+  // ...while a changed fact still misses, including a different class, a different id and a different structure.
+  const changed = (text: string) => ({
+    ...a,
+    history: [...a.history.slice(0, 2), { role: "tool" as const, text }],
+  });
+  expect(studioReplayKey(a)).not.toBe(
+    studioReplayKey(
+      changed(
+        JSON.stringify({
+          id: "PP-D-1001",
+          class: "AGENT_OVERREACH",
+          mandateHash: HASH_A,
+          respondBy: "2026-11-07T12:00:00.000Z",
+        }),
+      ),
+    ),
+  );
+  expect(studioReplayKey(a)).not.toBe(
+    studioReplayKey(
+      changed(
+        JSON.stringify({
+          id: "PP-D-1009",
+          class: "MANDATE_COMPLIANT",
+          mandateHash: HASH_A,
+          respondBy: "2026-11-07T12:00:00.000Z",
+        }),
+      ),
+    ),
+  );
+  // Two different hashes stay distinct from one repeated hash: placeholders keep the structure.
+  expect(studioReplayKey(changed(`${HASH_A} ${HASH_B}`))).not.toBe(
+    studioReplayKey(changed(`${HASH_A} ${HASH_A}`)),
+  );
+});
+
+test("a recorded answer shows the current database's own hash and times, including a hash the model shortened", async () => {
+  const a = explainTurn(HASH_A, "2026-11-07T12:00:00.000Z");
+  const live = {
+    text: `PP-D-1001 is defended. Mandate \`${HASH_A}\` (short form ${HASH_A.slice(0, 12)}…), respond by 2026-11-07T12:00:00.000Z.`,
+    tool: null,
+  };
+  const stored = recordableAnswer(a, live);
+  expect(stored.text).not.toContain(HASH_A.slice(0, 8));
+  expect(stored.text).not.toContain("2026-11-07");
+
+  vi.spyOn(runtime, "readReplay").mockReturnValue({
+    [studioReplayKey(a)]: { label: "defended", output: stored },
+  });
+  const b = explainTurn(HASH_B, "2026-11-07T15:00:00.000Z");
+  const out = await runStudioTurn(b, "replay", vi.fn());
+  expect(out.text).toContain(`\`${HASH_B}\``);
+  expect(out.text).toContain(`${HASH_B.slice(0, 12)}…`);
+  expect(out.text).toContain("respond by 2026-11-07T15:00:00.000Z");
+  expect(out.text).not.toContain(HASH_A.slice(0, 8));
+  // The same database gets exactly what was said.
+  expect((await runStudioTurn(a, "replay", vi.fn())).text).toContain(`\`${HASH_A}\``);
+});
+
+test("a recording that needs a value the data doesn't have is unavailable, not a guess", async () => {
+  const a = explainTurn(HASH_A, "2026-11-07T12:00:00.000Z");
+  vi.spyOn(runtime, "readReplay").mockReturnValue({
+    [studioReplayKey(a)]: { label: "x", output: { text: "Mandate ⟦9⟧", tool: null } },
+  });
+  await expect(runStudioTurn(a, "replay", vi.fn())).rejects.toThrow("needs a value this data lacks");
+});
+
+test("the attention starter answers in replay mode with no recording, from the current data's own deadlines", async () => {
+  const history = (respondBy: string): StudioTurn["history"] => [
+    { role: "user", text: ATTENTION_STARTER_PROMPT },
+    { role: "assistant", text: "Called list_disputes with {}" },
+    {
+      role: "tool",
+      text: JSON.stringify({
+        counts: { total: 24, needResponse: 1 },
+        disputes: [
+          {
+            id: "PP-D-1001",
+            needsResponse: true,
+            class: "MANDATE_COMPLIANT",
+            amount: "USD 74.00",
+            respondBy,
+          },
+        ],
+      }),
+    },
+  ];
+  vi.spyOn(runtime, "readReplay").mockReturnValue({}); // nothing recorded
+  const generate = vi.fn();
+  const early = await runStudioTurn(
+    { ...turn, history: history("2026-11-07T12:00:00.000Z") },
+    "replay",
+    generate,
+  );
+  const late = await runStudioTurn(
+    { ...turn, history: history("2026-12-01T09:30:00.000Z") },
+    "replay",
+    generate,
+  );
+  expect(early.text).toContain("respond by 2026-11-07 12:00 UTC");
+  expect(late.text).toContain("respond by 2026-12-01 09:30 UTC");
+  expect(generate).not.toHaveBeenCalled();
+  // Any other question still needs a recording in replay mode.
+  await expect(
+    runStudioTurn({ ...turn, history: [{ role: "user", text: "Something unrecorded" }] }, "replay", generate),
+  ).rejects.toThrow("no recorded answer");
 });

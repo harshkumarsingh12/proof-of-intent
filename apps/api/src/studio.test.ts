@@ -27,7 +27,10 @@ test("Studio authenticates the operator and projects only read-only PayPal field
       tools: [],
     });
     expect(turn.statusCode).toBe(503);
+    expect(turn.headers["x-poi-ai-mode"]).toBe("replay");
+    expect(turn.headers["x-poi-ai-prompt-version"]).toBe("j4-v1");
     expect(turn.json().error).toBe("studio_ai_unavailable");
+    expect(turn.json().message).toContain("Replay has no valid recorded answer");
     expect(paypal.disputeActions).toEqual([]);
   } finally {
     await app.close();
