@@ -30,8 +30,9 @@ Against the sandbox: `DATABASE_URL=… pnpm sandbox:checkout-smoke` runs journey
 ## POST /checkout/:id/approve
 
 Human present, from PayPal's `onApprove`: `{ approval_jws }` (the shopper's `CartApproval` countersignature) →
-authorize, re-check, then `{ status: "CAPTURED", capture_id }` or `{ status: "VOIDED", reasons }`. 409 if the shopper
-hasn't approved on PayPal yet; 502 if PayPal fails (retry is safe). Details in spec 0003 §Stage 2.
+check the signature (403 `approval_invalid` with reason codes, nothing sent to PayPal), then authorize and
+`{ status: "CAPTURED", capture_id }`, or `{ status: "VOIDED", reasons }` when a genuine approval arrives too late. 409 if
+the shopper hasn't approved on PayPal yet; 502 if PayPal fails (retry is safe). Details in spec 0003 §Stage 2.
 
 ## POST /webhooks/paypal
 

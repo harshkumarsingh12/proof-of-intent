@@ -24,6 +24,23 @@ const match = async (): Promise<SemanticFit> => ({
   conflicting_attributes: [],
 });
 
+/** Spies on the three PayPal calls that move money or holds, to prove a refused approval never reaches them. */
+const watch = (p: PayPalClient) => ({
+  authorize: vi.spyOn(p, "authorizeOrder"),
+  capture: vi.spyOn(p, "captureAuthorization"),
+  void: vi.spyOn(p, "voidAuthorization"),
+});
+const expectUntouched = (w: ReturnType<typeof watch>) => {
+  expect(w.authorize).not.toHaveBeenCalled();
+  expect(w.capture).not.toHaveBeenCalled();
+  expect(w.void).not.toHaveBeenCalled();
+};
+const refused = (reasons: string[]) => ({
+  error: "approval_invalid",
+  message: expect.any(String),
+  reasons,
+});
+
 /** A human-present order created through POST /checkout, ready for the shopper to approve. */
 async function orderedApp(opts: { paypal?: PayPalClient; now?: string } = {}) {
   const mem = memoryDb();
@@ -86,38 +103,100 @@ describe("POST /checkout/:id/approve", () => {
     expect((await s.mem.db.mandateLedger("0192f3a0-0000-7000-8000-000000000001")).capturedTotal).toBe(7400);
   });
 
-  test("a countersignature over a different cart voids the authorization", async () => {
+  test("a countersignature over a different cart is refused, and PayPal is never contacted", async () => {
     const s = await orderedApp();
-    const voided = vi.spyOn(s.paypal, "voidAuthorization");
+    const paypal = watch(s.paypal);
     const res = await s.approve(await s.approval(shopper, { cart_mandate_hash: "f".repeat(64) }));
-    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["MANDATE_MISMATCH"] });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(refused(["MANDATE_MISMATCH"]));
+    expectUntouched(paypal);
+    expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("CREATED");
+  });
+
+  test("an approval naming another order is refused and changes nothing", async () => {
+    const s = await orderedApp();
+    const paypal = watch(s.paypal);
+    const res = await s.approve(await s.approval(shopper, { order_id: "ord_other" }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(refused(["MANDATE_MISMATCH"]));
+    expectUntouched(paypal);
+  });
+
+  test("a genuine approval of one order can't be replayed to void another", async () => {
+    const s = await orderedApp();
+    const second = await signedCheckout({ shopper, agent });
+    const other = (await s.app.inject({ method: "POST", url: "/checkout", payload: second.body })).json();
+    expect(other.order_id).toBeTruthy();
+    const paypal = watch(s.paypal);
+    // The shopper's real, valid approval of the first order, sent against the second.
+    const res = await s.approve(await s.approval(), other.order_id);
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(refused(["MANDATE_MISMATCH"]));
+    expectUntouched(paypal);
+    expect((await s.mem.db.getOrder(other.order_id))?.status).toBe("CREATED");
+    // And the first order is still approvable.
+    expect((await s.approve(await s.approval())).json().status).toBe("CAPTURED");
+  });
+
+  test("an invalid signature never reaches PayPal and doesn't use up the order", async () => {
+    const s = await orderedApp();
+    const paypal = watch(s.paypal);
+    const real = await s.approval();
+    const tampered = `${real.slice(0, -4)}AAAA`;
+    for (const bad of ["aaa.bbb.ccc", tampered]) {
+      const res = await s.approve(bad);
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual(refused(["SIGNATURE_INVALID"]));
+    }
+    expectUntouched(paypal);
+    expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("CREATED");
+    expect((await s.approve(real)).json().status).toBe("CAPTURED");
+  });
+
+  test("an expired cart is voided without calling PayPal: nothing was held", async () => {
+    const s = await orderedApp();
+    const paypal = watch(s.paypal);
+    s.setClock("2026-11-02T10:15:00Z"); // cart_expiry in the fixture
+    const res = await s.approve(await s.approval());
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["CART_EXPIRED"] });
+    expectUntouched(paypal);
+    expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("VOIDED");
+  });
+
+  test("an approval that arrives too late voids a hold we already took (a capture had failed)", async () => {
+    const mock = createMockClient();
+    let fail = true;
+    const paypal: PayPalClient = {
+      ...mock,
+      captureAuthorization: async (id) => {
+        if (fail) throw new Error("ECONNRESET");
+        return mock.captureAuthorization(id);
+      },
+    };
+    const s = await orderedApp({ paypal });
+    expect((await s.approve(await s.approval())).statusCode).toBe(502); // authorized, capture failed
+    fail = false;
+    const voided = vi.spyOn(paypal, "voidAuthorization");
+    s.setClock("2026-11-02T10:15:00Z");
+    const res = await s.approve(await s.approval());
+    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["CART_EXPIRED"] });
     expect(voided).toHaveBeenCalledTimes(1);
     expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("VOIDED");
   });
 
-  test("an approval naming another order voids", async () => {
+  test("only the key that signed the intent can approve: anyone else is refused", async () => {
     const s = await orderedApp();
-    const res = await s.approve(await s.approval(shopper, { order_id: "ord_other" }));
-    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["MANDATE_MISMATCH"] });
-  });
-
-  test("an expired cart voids", async () => {
-    const s = await orderedApp();
-    s.setClock("2026-11-02T10:15:00Z"); // cart_expiry in the fixture
-    const res = await s.approve(await s.approval());
-    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["CART_EXPIRED"] });
-  });
-
-  test("only the key that signed the intent can approve: anyone else voids", async () => {
-    const s = await orderedApp();
+    const paypal = watch(s.paypal);
     const res = await s.approve(await s.approval(await party("someone-else")));
-    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["UNKNOWN_KEY"] });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(refused(["UNKNOWN_KEY"]));
     // The agent's key is registered, but it isn't the shopper.
     const s2 = await orderedApp();
-    expect((await s2.approve(await s2.approval(agent))).json()).toEqual({
-      status: "VOIDED",
-      reasons: ["UNKNOWN_KEY"],
-    });
+    const res2 = await s2.approve(await s2.approval(agent));
+    expect(res2.statusCode).toBe(403);
+    expect(res2.json()).toEqual(refused(["UNKNOWN_KEY"]));
+    expectUntouched(paypal);
   });
 
   test("a retry after capture returns the same capture and charges nothing twice", async () => {

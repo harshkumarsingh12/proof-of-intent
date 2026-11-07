@@ -1,11 +1,16 @@
 /**
- * Checkout stage 2 (docs/specs/0003), human present only: the shopper approved on PayPal, we authorize,
- * re-check, and then capture or void. Owner: @harshkumarsingh12.
+ * Checkout stage 2 (docs/specs/0003), human present only: the shopper approved on PayPal; we check their
+ * countersignature, then authorize and capture. Owner: @harshkumarsingh12.
  *
- * Re-checks after authorizing (so a failure voids the hold instead of leaving money held):
- *   - the countersignature verifies with the key that signed the Intent Mandate      → SIGNATURE_INVALID / UNKNOWN_KEY
- *   - it names this order and the exact Cart Mandate we signed                       → MANDATE_MISMATCH
- *   - the cart hasn't expired                                                        → CART_EXPIRED
+ * Nothing is sent to PayPal until the approval has been checked (#160), so a caller with no valid signature changes
+ * nothing there and can't void anyone's order:
+ *   1. the countersignature verifies with the key that signed the Intent Mandate      → 403 approval_invalid
+ *        (SIGNATURE_INVALID / UNKNOWN_KEY / SCHEMA_INVALID)
+ *   2. it names this order and the exact Cart Mandate we signed                       → 403 approval_invalid
+ *        (MANDATE_MISMATCH): a genuine signature for another order can't void this one either
+ *   3. the cart hasn't expired                                                        → 200 VOIDED (CART_EXPIRED)
+ *        any authorization we already hold is voided; with none, nothing was held and PayPal isn't called
+ *   4. authorize (409 if the shopper hasn't approved at PayPal yet), then capture
  */
 import { CartApproval, CartMandate, type ApproveResponse, type ReasonCode } from "@poi/contracts";
 import type { Db, StoredOrder } from "@poi/db";
@@ -21,6 +26,7 @@ export interface ApproveDeps {
 
 export type ApproveResult =
   | { status: 200; body: ApproveResponse }
+  | { status: 403; body: { error: string; message: string; reasons: ReasonCode[] } }
   | { status: 404 | 409 | 502; body: { error: string; message: string } };
 
 const AWAITING = new Set(["CREATED", "APPROVED", "AUTHORIZED"]);
@@ -49,7 +55,24 @@ export async function approveOrder(
     };
   }
 
-  // 1. Authorize (PayPal refuses if the shopper hasn't approved yet).
+  // 1. Is this the shopper's own approval of this order and this exact cart? Before PayPal is contacted at all.
+  const invalid = await checkApproval(order, approvalJws, deps);
+  if (invalid.length > 0) {
+    return {
+      status: 403,
+      body: {
+        error: "approval_invalid",
+        message: "The approval was not signed by the shopper for this order and cart",
+        reasons: invalid,
+      },
+    };
+  }
+
+  // 2. Still within what the shopper authorized? If not, release any hold we have and stop.
+  const stale = await staleReasons(order, deps);
+  if (stale.length > 0) return release(order, stale, deps);
+
+  // 3. Authorize (PayPal refuses if the shopper hasn't approved yet), then capture.
   let authorizationId = order.authorizationId;
   if (!authorizationId) {
     try {
@@ -71,37 +94,27 @@ export async function approveOrder(
       requestBody: { authorizationId },
     });
   }
-
-  // 2. Re-check, then capture or void.
-  const reasons = await recheck(order, approvalJws, deps);
   try {
-    if (reasons.length === 0) {
-      const { captureId } = await deps.paypal.captureAuthorization(authorizationId);
-      const capturedAt = deps.now();
-      await deps.db.updateOrder(order.id, { status: "CAPTURED", captureId, capturedAt });
-      await deps.db.appendAudit({
-        actor: "api",
-        action: "paypal.capture",
-        subjectId: order.id,
-        requestBody: { authorizationId, captureId, approvalJws },
-      });
-      return { status: 200, body: { status: "CAPTURED", capture_id: captureId } };
-    }
-    await deps.paypal.voidAuthorization(authorizationId);
-    await deps.db.updateOrder(order.id, { status: "VOIDED" });
+    const { captureId } = await deps.paypal.captureAuthorization(authorizationId);
+    const capturedAt = deps.now();
+    await deps.db.updateOrder(order.id, { status: "CAPTURED", captureId, capturedAt });
     await deps.db.appendAudit({
       actor: "api",
-      action: "paypal.void",
+      action: "paypal.capture",
       subjectId: order.id,
-      requestBody: { authorizationId, reasons },
+      requestBody: { authorizationId, captureId, approvalJws },
     });
-    return { status: 200, body: { status: "VOIDED", reasons } };
+    return { status: 200, body: { status: "CAPTURED", capture_id: captureId } };
   } catch (err) {
-    return paypalDown(deps, order, reasons.length === 0 ? "capture" : "void", err);
+    return paypalDown(deps, order, "capture", err);
   }
 }
 
-async function recheck(order: StoredOrder, approvalJws: string, deps: ApproveDeps): Promise<ReasonCode[]> {
+/**
+ * The shopper's countersignature: signed by the key that signed the intent, and naming this order and the exact Cart
+ * Mandate we signed. Any failure is the caller's, not the order's: it is refused and nothing changes.
+ */
+async function checkApproval(order: StoredOrder, approvalJws: string, deps: ApproveDeps): Promise<ReasonCode[]> {
   const intent = await deps.db.getMandate(order.intentMandateHash);
   const cartRow = await deps.db.getMandate(order.cartMandateHash);
   if (!intent || !cartRow) return ["MANDATE_MISMATCH"];
@@ -114,15 +127,40 @@ async function recheck(order: StoredOrder, approvalJws: string, deps: ApproveDep
   });
   if (!sig.ok) return [sig.reason];
   const approval = CartApproval.safeParse(sig.payload);
-  if (
-    !approval.success ||
-    approval.data.order_id !== order.id ||
-    approval.data.cart_mandate_hash !== order.cartMandateHash
-  ) {
+  if (!approval.success) return ["SCHEMA_INVALID"];
+  if (approval.data.order_id !== order.id || approval.data.cart_mandate_hash !== order.cartMandateHash) {
     return ["MANDATE_MISMATCH"];
   }
+  return [];
+}
+
+/** What changed since checkout that makes this approval too late. Only run for a genuine approval. */
+async function staleReasons(order: StoredOrder, deps: ApproveDeps): Promise<ReasonCode[]> {
+  const cartRow = await deps.db.getMandate(order.cartMandateHash);
+  if (!cartRow) return ["MANDATE_MISMATCH"];
   const cart = CartMandate.parse(JSON.parse(cartRow.canonical));
   return Date.parse(deps.now()) >= Date.parse(cart.contents.cart_expiry) ? ["CART_EXPIRED"] : [];
+}
+
+/**
+ * A genuine approval that arrived too late. If we already authorized the order (an earlier capture failed), the hold is
+ * voided so the shopper's money isn't left held; if not, nothing was held and PayPal isn't called.
+ */
+async function release(order: StoredOrder, reasons: ReasonCode[], deps: ApproveDeps): Promise<ApproveResult> {
+  const { authorizationId } = order;
+  try {
+    if (authorizationId) await deps.paypal.voidAuthorization(authorizationId);
+  } catch (err) {
+    return paypalDown(deps, order, "void", err);
+  }
+  await deps.db.updateOrder(order.id, { status: "VOIDED" });
+  await deps.db.appendAudit({
+    actor: "api",
+    action: authorizationId ? "paypal.void" : "checkout.voided",
+    subjectId: order.id,
+    requestBody: { authorizationId, reasons },
+  });
+  return { status: 200, body: { status: "VOIDED", reasons } };
 }
 
 async function paypalDown(
