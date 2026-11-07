@@ -280,8 +280,23 @@ and keeps 7 days. A failed dump is logged as `backup FAILED` and never replaces 
 
 ```bash
 docker compose exec -T postgres psql -U poi -d postgres -c "create database poi_restore"
-gunzip -c backups/poi-<time>.sql.gz | docker compose exec -T postgres psql -U poi -d poi_restore
+gunzip -c backups/poi-<time>.sql.gz | docker compose exec -T postgres psql -U poi -d poi_restore -v ON_ERROR_STOP=1 -q
 # check it, then point DATABASE_URL at poi_restore (or rename the databases) and restart api and worker
 ```
+
+`-v ON_ERROR_STOP=1` matters: without it `psql` swallows a SQL error and still exits 0, so a damaged dump looks like a success.
+
+**Prove a backup restores (a drill, #175).** A backup nobody has restored is a guess. `scripts/deploy/restore-drill.sh` (the
+newest dump, or the file you give it) restores into a scratch database beside the live one, never touching live data, prints
+each table's restored and live row count, and drops the scratch database again. It stops, saying why, on a missing or
+corrupt file, any SQL error during the restore, or a restored database with no tables or migrations; it only *reports* that
+a restored table is behind live (a dump is up to 24 hours old) or missing (the dump predates a migration). Run it after
+setting up backups, and again whenever you change them. A dump holds everything the database holds: treat it as a secret.
+
+**Backups on Dokploy.** Dokploy does not start the `backup` service, so the dumps above do not exist there until you either
+split the service out of the `server` profile or set up Dokploy's scheduled backups. Either way, confirm it **yourself**,
+because nothing in this repository can see the server: (1) note the schedule and where the dumps go; (2) wait for one run,
+or trigger one; (3) copy the newest dump to a machine with the stack and run the drill on it. The drill reads a plain
+`pg_dump | gzip` file; a custom-format dump needs `pg_restore` instead.
 
 `audit_log` is append-only by trigger, so a demo reset means dropping and recreating the database, not deleting rows.

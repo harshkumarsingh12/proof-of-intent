@@ -70,6 +70,24 @@ script fails at "api ready (database reachable)"; a worker cut off from Postgres
 old, then three failed probes mark it unhealthy and the script fails at the worker, and it recovers by itself after
 reconnecting; with the backup service running, a fresh dump passes and an impossible age limit fails.
 
+### Restore drill (#175)
+
+A backup nobody has restored is a guess. `scripts/deploy/restore-drill.sh` restores a dump into a scratch database beside the
+live one (never touching live data), compares table by table, and drops the scratch database. It uses `psql -v
+ON_ERROR_STOP=1`: the restore command that SETUP.md used to give has no such flag, so a dump with a SQL error in it still
+exits 0. It fails on a missing or corrupt file, any restore error, and a restored database with no tables or migrations; it
+reports (without failing) a restored table that is behind live or missing.
+
+_Run for real_ against a stack built from this compose file, after seeding the demo data (300 orders, 24 disputes, 600
+mandates): the backup service's own 193 KB dump restored in under a second, 13 tables and 1,227 rows, every count equal to
+live, five migrations, scratch database dropped, live data untouched. Refused as intended: a truncated file, a dump with one bad
+statement (the old command exits 0 on it), an empty dump, and a scratch database left behind by an earlier drill. An older dump
+taken before the data existed restores cleanly and the report shows `600 newer in live`.
+
+**Not confirmed, and not something the repository can confirm:** that the *hosted* server takes backups on a schedule. The
+`backup` service is in the `server` profile, which Dokploy does not start, so unless Dokploy's scheduled backups are set up there
+may be none. See SETUP.md, "Backups on Dokploy", for the three steps to check it, and #38.
+
 ## Interfaces
 
 Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`, optional
