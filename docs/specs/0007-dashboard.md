@@ -16,8 +16,8 @@ or harness.
 
 ## Design
 
-Setup: `ag-studio`, `ag-studio-react` with the 45-day trial key (renewal key requested **Nov 25**, judging ends
-Dec 15). Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
+Setup: `ag-studio`, `ag-studio-react` with a trial key that expires **Dec 21**, after judging ends
+Dec 15, so no renewal is needed for judging. Start from `paypaldev/hackathon-paypal-ag-grid-boilerplate`.
 
 | Page | Content | Data |
 |---|---|---|

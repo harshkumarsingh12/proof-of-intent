@@ -13,8 +13,8 @@ of every `ci` run.
 | Public HTTPS and webhook endpoint (D6, D7)                 | Harsh           | ✅ HTTPS live on `poi-*.iotkiit.in`; sandbox webhook points at `https://poi-api.iotkiit.in/webhooks/paypal` (Nov 5)                                                                                                  |
 | PayPal sandbox app and accounts (incl. judge accounts)     | Harsh           | ✅ US merchant app with Disputes and Vault enabled, 4 US shopper accounts (2 for judges), webhook with 8 events (Nov 5)                                                                                              |
 | `PAYPAL_MODE=mock`                                         | Harsh           | ✅ Done                                                                                                                                                                                                              |
-| All four registered on Devpost; Representative named       | Sumedha         | Pending                                                                                                                                                                                                              |
-| AG Studio trial key and watermark check                    | Sikruti         | ✅ Key in use (45-day trial, ends about Dec 13; renewal is #51). With no key or an invalid one Studio still renders and the console logs "Invalid License Key"; the page needs a key to be offered at all (SETUP.md) |
+| All four registered on Devpost; Representative named       | Sumedha         | All four registered and the team is created (Nov 7); Representative still to be named |
+| AG Studio trial key and watermark check                    | Sikruti         | ✅ Key in use (the license expires Dec 21, after judging ends Dec 15, so no renewal is needed for judging; #51). With no key or an invalid one Studio still renders and the console logs "Invalid License Key"; the page needs a key to be offered at all (SETUP.md) |
 | LLM provider chosen (D1)                                   | Sumedha         | ✅ NVIDIA `nemotron-3.5-lightning-30b-a3b`, thinking off (spec 0006)                                                                                                                                                 |
 | Repo, CI/CD, contracts, mandate crypto, policy engine core | Harsh, Sristee  | ✅ Done                                                                                                                                                                                                              |
 | Server in sandbox mode (PayPal keys, merchant signing key) | Harsh           | ✅ Done; `/readyz` reports `paypalMode: sandbox` (Nov 5)                                                                                                                                                             |
@@ -100,16 +100,16 @@ opens on DisputeExplainer (checked in Chrome with the real key and the live mode
 (#114, #115). A redeploy left the hosted API without a route to Postgres for a while; Stop then Deploy fixed it, and the
 cause and a permanent fix are tracked in #120 and #121. Still open before submission: the hosted check of the new Studio and
 the AI variables (#123), judge disputes that expire before Dec 15 (#122), the chat in replay mode (#124), Studio follow-ups
-(#125), credential rotation (#126), dark mode as a stretch (#127), and the older M4 items below.
+(#125), dark mode as a stretch (#127), and the older M4 items below.
 
 **Status (Nov 7, night):** the AI upgrades are merged behind switches, all default off or degrading to plain answers:
 voice ordering (`BUYER_VOICE=1`: speak, read back, a separate "confirm" signs; #140), the shop assistant
 (`BUYER_CHAT=1`, answers from the store's data, can't sign or buy; #143), provider hardening with a Groq backup
 (`AI_FALLBACK_*`, `pnpm ai:check`; #141, #142), a deterministic planner for the Studio chat so common questions are right,
 read-only and fast with no recordings in replay mode (`pnpm smoke:studio`; #144, so #124 is resolved for them), and near-miss
-suggestions after a refusal (what would have fit, one button that refills the limits and still needs a new signature; #145). Still
-to do on your side: set the switches and Groq lines in Dokploy, rotate the exposed NVIDIA and AG Studio keys (#126), and
-run the hosted checks (#36, #123, voice and chat in Chrome and Safari over HTTPS). Not started: a clarifying question in intent
+suggestions after a refusal (what would have fit, one button that refills the limits and still needs a new signature; #145). The
+switches and the Groq lines are now set in Dokploy, and the NVIDIA and AG Studio keys are confirmed safe, so #126 needs no
+rotation. Still to do on your side: run the hosted checks (#36, #123, voice and chat in Chrome and Safari over HTTPS). Not started: a clarifying question in intent
 drafting and a `platform_summary` Studio tool.
 
 ## M4 Submission (Nov 11)
@@ -122,6 +122,6 @@ drafting and a `platform_summary` Studio tool.
 | Tag `v0.1.0-hackathon`, deployed, monitored  | Harsh    | Pending |
 | Devpost submission with testing instructions | Sumedha  | Pending |
 | Prize split agreed                           | everyone | Pending |
-| AG Studio renewal key installed (Nov 25)     | Sikruti  | Pending |
+| AG Studio license covers judging             | Sikruti  | ✅ Expires Dec 21, after judging ends Dec 15; no renewal needed |
 
 **Done when:** submitted on Devpost with a public video, public repo with license, and a live hosted demo.
