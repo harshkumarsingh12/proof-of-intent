@@ -44,6 +44,11 @@ A line that lacks a constrained attribute fails, since it can't show the shopper
 
 **Address:** a cart without `shipping_address_hash` fails when the mandate has one.
 
+**Freshness:** the three time rules (`MANDATE_NOT_YET_VALID`, `MANDATE_EXPIRED`, `CART_EXPIRED`) are also exported on their
+own as `freshness({ intent, cart, now })`. `evaluate` runs them with everything else, in the same order; stage-two
+approval (spec 0003) re-runs just these right before capture, so checkout and capture can't disagree about what "still
+current" means.
+
 **Ledger rules:** a missing ledger means no prior captures. `budget_cap` fails when captured total + this cart is
 over the cap, and its currency joins `amount_max` in the currency check. `recurrence` counts captures in
 `(now - window_days, now]` plus this order; captures after `now` are ignored, so a replay at capture time sees

@@ -54,12 +54,17 @@ PayPal is not contacted until the approval has been checked (#160), so a caller 
 nothing there and cannot void anyone's order. In order:
 
 1. The countersignature (`CartApproval { order_id, cart_mandate_hash, approved_at }`, see spec 0001) verifies with
-   **the key that signed the Intent Mandate** and names this order and the exact Cart Mandate we signed. Any failure
+   **the key that signed the Intent Mandate** (and that key has not been retired as of the server's clock now: the
+   approval is a new signature, so it is not judged by the `approved_at` the signer wrote) and names this order and the
+   exact Cart Mandate we signed. Any failure
    (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `SCHEMA_INVALID`, `MANDATE_MISMATCH`) is **403 `approval_invalid`** with the
    reason codes, and nothing changes: no PayPal call, the order stays as it was and can still be approved properly.
    This includes a *genuine* signature that names a different order or cart, so a shopper's real approval of one order
    cannot be replayed to void another.
-2. The cart hasn't expired (else `CART_EXPIRED`). A genuine approval that arrives too late answers
+2. The shopper's authority is still current (#161): the **intent** has started and hasn't expired and the cart hasn't
+   expired, by the same `freshness` rules checkout ran (else `MANDATE_NOT_YET_VALID`, `MANDATE_EXPIRED`,
+   `CART_EXPIRED`). The cart's expiry is the agent's choice, so before this check a cart could outlive the intent and a
+   capture could succeed after the shopper's authority had expired. A genuine approval that arrives too late answers
    `{ status: "VOIDED", reasons }`: a hold we already took (an earlier capture failed) is voided so the shopper's
    money isn't left held; with no hold, nothing was held and PayPal is not called.
 3. Authorize the PayPal order (PayPal refuses with `ORDER_NOT_APPROVED` → 409 `shopper_has_not_approved`), then

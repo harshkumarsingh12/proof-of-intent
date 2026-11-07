@@ -4,18 +4,22 @@
  *
  * Nothing is sent to PayPal until the approval has been checked (#160), so a caller with no valid signature changes
  * nothing there and can't void anyone's order:
- *   1. the countersignature verifies with the key that signed the Intent Mandate      → 403 approval_invalid
+ *   1. the countersignature verifies with the key that signed the Intent Mandate, and
+ *        that key hasn't been retired as of now                                        → 403 approval_invalid
  *        (SIGNATURE_INVALID / UNKNOWN_KEY / SCHEMA_INVALID)
  *   2. it names this order and the exact Cart Mandate we signed                       → 403 approval_invalid
  *        (MANDATE_MISMATCH): a genuine signature for another order can't void this one either
- *   3. the cart hasn't expired                                                        → 200 VOIDED (CART_EXPIRED)
- *        any authorization we already hold is voided; with none, nothing was held and PayPal isn't called
+ *   3. the authority is still current (#161): the intent has started and hasn't expired and
+ *        the cart hasn't expired, by the same rules checkout used                      → 200 VOIDED
+ *        (MANDATE_NOT_YET_VALID / MANDATE_EXPIRED / CART_EXPIRED); any authorization we already
+ *        hold is voided; with none, nothing was held and PayPal isn't called
  *   4. authorize (409 if the shopper hasn't approved at PayPal yet), then capture
  */
-import { CartApproval, CartMandate, type ApproveResponse, type ReasonCode } from "@poi/contracts";
+import { CartApproval, CartMandate, IntentMandate, type ApproveResponse, type ReasonCode } from "@poi/contracts";
 import type { Db, StoredOrder } from "@poi/db";
-import { verifyMandate } from "@poi/mandates";
+import { keyValidAt, verifyMandate } from "@poi/mandates";
 import { PayPalError, type PayPalClient } from "@poi/paypal";
+import { freshness } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
 
 export interface ApproveDeps {
@@ -68,7 +72,7 @@ export async function approveOrder(
     };
   }
 
-  // 2. Still within what the shopper authorized? If not, release any hold we have and stop.
+  // 2. Still within what the shopper authorized, as of now? If not, release any hold we have and stop.
   const stale = await staleReasons(order, deps);
   if (stale.length > 0) return release(order, stale, deps);
 
@@ -119,11 +123,14 @@ async function checkApproval(order: StoredOrder, approvalJws: string, deps: Appr
   const cartRow = await deps.db.getMandate(order.cartMandateHash);
   if (!intent || !cartRow) return ["MANDATE_MISMATCH"];
 
-  // Only the key that signed the intent may approve the cart bought under it.
+  // Only the key that signed the intent may approve the cart bought under it, and only while that key is still in
+  // good standing: the approval is a new signature made now, so it is judged by the server's clock, not by the
+  // `approved_at` the signer wrote (spec 0001; the same rule step-up approval applies).
   const sig = await verifyMandate(approvalJws, async (kid) => {
     if (kid !== intent.kid) return undefined;
     const key = await deps.db.findKey("shopper", kid);
-    return key ? (importJWK(key.publicJwk as unknown as JWK, "ES256") as Promise<CryptoKey>) : undefined;
+    if (!key || !keyValidAt(key, deps.now())) return undefined;
+    return importJWK(key.publicJwk as unknown as JWK, "ES256") as Promise<CryptoKey>;
   });
   if (!sig.ok) return [sig.reason];
   const approval = CartApproval.safeParse(sig.payload);
@@ -134,12 +141,21 @@ async function checkApproval(order: StoredOrder, approvalJws: string, deps: Appr
   return [];
 }
 
-/** What changed since checkout that makes this approval too late. Only run for a genuine approval. */
+/**
+ * What changed since checkout that makes this approval too late: the intent's own start and expiry as well as the
+ * cart's, judged by the same `freshness` rules checkout ran (#161). The intent used to be left out here, so a
+ * capture could succeed after the shopper's authority had expired as long as the cart (which the agent picks) hadn't.
+ * Only run for a genuine approval.
+ */
 async function staleReasons(order: StoredOrder, deps: ApproveDeps): Promise<ReasonCode[]> {
-  const cartRow = await deps.db.getMandate(order.cartMandateHash);
-  if (!cartRow) return ["MANDATE_MISMATCH"];
+  const [intentRow, cartRow] = await Promise.all([
+    deps.db.getMandate(order.intentMandateHash),
+    deps.db.getMandate(order.cartMandateHash),
+  ]);
+  if (!intentRow || !cartRow) return ["MANDATE_MISMATCH"];
+  const intent = IntentMandate.parse(JSON.parse(intentRow.canonical));
   const cart = CartMandate.parse(JSON.parse(cartRow.canonical));
-  return Date.parse(deps.now()) >= Date.parse(cart.contents.cart_expiry) ? ["CART_EXPIRED"] : [];
+  return freshness({ intent, cart, now: deps.now() });
 }
 
 /**

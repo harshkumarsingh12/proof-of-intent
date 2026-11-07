@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { SemanticFit } from "@poi/ai";
-import { MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
+import { compliantCart, greyJacketIntent, MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
 import { generateSigningKeyPair, mandateHash, signMandate } from "@poi/mandates";
 import { createMockClient, PayPalError, type PayPalClient } from "@poi/paypal";
 import { buildApp } from "./app";
@@ -42,7 +42,9 @@ const refused = (reasons: string[]) => ({
 });
 
 /** A human-present order created through POST /checkout, ready for the shopper to approve. */
-async function orderedApp(opts: { paypal?: PayPalClient; now?: string } = {}) {
+async function orderedApp(
+  opts: { paypal?: PayPalClient; now?: string; signed?: Partial<Parameters<typeof signedCheckout>[0]> } = {},
+) {
   const mem = memoryDb();
   mem.keys.set(shopper.kid, {
     kind: "shopper",
@@ -65,7 +67,7 @@ async function orderedApp(opts: { paypal?: PayPalClient; now?: string } = {}) {
     semanticFit: match,
     now: () => clock,
   });
-  const { body, cart } = await signedCheckout({ shopper, agent });
+  const { body, cart } = await signedCheckout({ shopper, agent, ...opts.signed });
   const created = (await app.inject({ method: "POST", url: "/checkout", payload: body })).json();
   const approval = (signer: Party = shopper, override: Record<string, unknown> = {}) =>
     signMandate(
@@ -183,6 +185,75 @@ describe("POST /checkout/:id/approve", () => {
     expect(res.json()).toEqual({ status: "VOIDED", reasons: ["CART_EXPIRED"] });
     expect(voided).toHaveBeenCalledTimes(1);
     expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("VOIDED");
+  });
+
+  // The cart's expiry is the agent's choice, so a cart can outlive the shopper's own authority (#161).
+  const longLived = () => ({
+    intent: { ...greyJacketIntent, intent_expiry: "2026-11-02T10:30:00Z" },
+    cart: { ...compliantCart, contents: { ...compliantCart.contents, cart_expiry: "2026-11-02T12:00:00Z" } },
+  });
+
+  test("an intent that expired after checkout stops the capture, even though the cart is still valid", async () => {
+    const s = await orderedApp({ signed: longLived() });
+    const paypal = watch(s.paypal);
+    s.setClock("2026-11-02T11:00:00Z"); // intent expired 10:30; cart good until 12:00
+    const res = await s.approve(await s.approval());
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: "VOIDED", reasons: ["MANDATE_EXPIRED"] });
+    expectUntouched(paypal);
+    expect((await s.mem.db.getOrder(s.created.order_id))?.status).toBe("VOIDED");
+  });
+
+  test("with the intent and the cart both expired, both are reported", async () => {
+    const s = await orderedApp({ signed: longLived() });
+    s.setClock("2026-11-02T12:30:00Z");
+    expect((await s.approve(await s.approval())).json()).toEqual({
+      status: "VOIDED",
+      reasons: ["MANDATE_EXPIRED", "CART_EXPIRED"],
+    });
+  });
+
+  test("an intent that is still valid at approval time still captures", async () => {
+    const s = await orderedApp({ signed: longLived() });
+    s.setClock("2026-11-02T10:29:59Z");
+    expect((await s.approve(await s.approval())).json().status).toBe("CAPTURED");
+  });
+
+  test("the intent expiring while we hold an authorization voids that hold (a capture had failed)", async () => {
+    const mock = createMockClient();
+    let fail = true;
+    const paypal: PayPalClient = {
+      ...mock,
+      captureAuthorization: async (id) => {
+        if (fail) throw new Error("ECONNRESET");
+        return mock.captureAuthorization(id);
+      },
+    };
+    const s = await orderedApp({ paypal, signed: longLived() });
+    expect((await s.approve(await s.approval())).statusCode).toBe(502);
+    fail = false;
+    const voided = vi.spyOn(paypal, "voidAuthorization");
+    s.setClock("2026-11-02T11:00:00Z");
+    expect((await s.approve(await s.approval())).json()).toEqual({ status: "VOIDED", reasons: ["MANDATE_EXPIRED"] });
+    expect(voided).toHaveBeenCalledTimes(1);
+  });
+
+  test("a signing key retired before approval can't approve: the key's current standing counts", async () => {
+    const s = await orderedApp();
+    const paypal = watch(s.paypal);
+    const key = s.mem.keys.get(shopper.kid)!;
+    s.mem.keys.set(shopper.kid, { ...key, retiredAt: "2026-11-02T10:05:00Z" });
+    s.setClock("2026-11-02T10:10:00Z");
+    // The signer's own `approved_at` can't talk its way around it: the server's clock decides.
+    const res = await s.approve(await s.approval(shopper, { approved_at: "2026-11-02T10:00:00Z" }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(refused(["UNKNOWN_KEY"]));
+    expectUntouched(paypal);
+    // A retirement that hasn't happened yet doesn't matter.
+    const s2 = await orderedApp();
+    s2.mem.keys.set(shopper.kid, { ...s2.mem.keys.get(shopper.kid)!, retiredAt: "2026-11-02T10:12:00Z" });
+    s2.setClock("2026-11-02T10:10:00Z");
+    expect((await s2.approve(await s2.approval())).json().status).toBe("CAPTURED");
   });
 
   test("only the key that signed the intent can approve: anyone else is refused", async () => {
