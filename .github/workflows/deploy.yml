@@ -3,7 +3,9 @@ name: deploy
 # Release a tag to the team server. Never runs on pull requests, so code from forks can't reach it.
 #   git tag v0.1.0-hackathon && git push origin v0.1.0-hackathon
 # Needs repository secrets: SERVER_HOST, SERVER_USER, SERVER_SSH_KEY (and optional SERVER_PORT, SERVER_DIR).
-# Spec: docs/specs/0008-hosting-and-deploy.md
+# Optional repository variables, to check the public endpoints too (for a server deployed another way, such as
+# Dokploy): PUBLIC_API_URL, PUBLIC_SHOP_URL, PUBLIC_DASHBOARD_URL, each without a trailing path.
+# A release is only published after every configured check passes (#175). Spec: docs/specs/0008-hosting-and-deploy.md
 
 on:
   push:
@@ -52,6 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
+    outputs:
+      deployed: ${{ steps.check.outputs.skip != 'true' }}
     steps:
       - name: Check server secrets
         id: check
@@ -77,11 +81,50 @@ jobs:
             export IMAGE_TAG="${{ github.ref_name }}" GHCR_OWNER="${{ github.repository_owner }}"
             docker compose --profile server pull
             docker compose --profile server up -d
-            sleep 15
-            docker compose exec -T api wget -qO- http://127.0.0.1:3000/healthz
+            # Not a sleep and one /healthz: wait for each part, and fail naming the one that is not up.
+            scripts/deploy/verify-release.sh
+
+  # The server job checks inside the stack. This checks what people reach: the proxy, the certificate and the routes.
+  # It runs even when nothing was deployed over SSH (a Dokploy server deploys from main, not from the tag), and says
+  # so loudly when the variables are not set, instead of passing silently.
+  verify-public:
+    needs: server
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check the public endpoints
+        env:
+          API_URL: ${{ vars.PUBLIC_API_URL }}
+          SHOP_URL: ${{ vars.PUBLIC_SHOP_URL }}
+          DASHBOARD_URL: ${{ vars.PUBLIC_DASHBOARD_URL }}
+          DEPLOYED: ${{ needs.server.outputs.deployed }}
+        run: |
+          if [ -z "$API_URL$SHOP_URL$DASHBOARD_URL" ]; then
+            echo "::warning::PUBLIC_API_URL, PUBLIC_SHOP_URL and PUBLIC_DASHBOARD_URL are not set, so the public endpoints were NOT checked."
+            [ "$DEPLOYED" = true ] || echo "::warning::Nothing was deployed over SSH either (no SERVER_HOST): this release was not verified at all."
+            exit 0
+          fi
+          fail=0
+          # check <name> <url> <text the answer must contain>: the stack may still be starting, so retry for two minutes.
+          check() {
+            [ -n "$2" ] || { echo "::warning::$1: no URL set, skipped"; return; }
+            for _ in $(seq 1 12); do
+              if body=$(curl -fsS --max-time 15 "$2" 2>/dev/null) && [[ $body == *"$3"* ]]; then
+                echo "ok    $1 ($2)"
+                return
+              fi
+              sleep 10
+            done
+            echo "::error::$1 failed: $2 did not answer 200 with $3"
+            fail=1
+          }
+          check "api ready, database reachable" "${API_URL:+${API_URL%/}/readyz}" '"database":"configured"'
+          check "shop" "${SHOP_URL:+${SHOP_URL%/}/healthz}" '"status":"ok"'
+          check "dashboard" "${DASHBOARD_URL:+${DASHBOARD_URL%/}/healthz}" '"status":"ok"'
+          exit $fail
 
   release:
-    needs: server
+    needs: [server, verify-public]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

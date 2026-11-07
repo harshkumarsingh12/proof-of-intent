@@ -232,6 +232,7 @@ On the server: `curl -fsS http://127.0.0.1:3100/healthz` (the API's host port fr
 | After approving a wallet on PayPal the shopper lands on `localhost`, or a step-up link opens `localhost`                                         | `BUYER_PUBLIC_URL` is missing from the Environment tab, so the API uses its local default (the API logs `BUYER_PUBLIC_URL is not set` at start in sandbox mode)                                    | Set `BUYER_PUBLIC_URL=https://poi-buyer.iotkiit.in` and redeploy; wallets saved before the fix are unaffected                                                                                                                                                        |
 | Studio says "Studio is unavailable on this deployment"                                                                                           | Any of: no `AG_STUDIO_LICENSE_KEY`, no `OPERATOR_PASSWORD` or `OPERATOR_TOKEN`, or the dashboard can't reach the API (check the "Sample data" banner on `/disputes`)                               | Set the three variables in the dashboard environment, fix the API connection, redeploy                                                                                                                                                                               |
 | Ask the AI says the chat can't answer, or answers "Studio AI is unavailable"                                                                     | `AI_MODE` is not `live` on the dashboard or API, the `AI_*` variables are missing, the daily call budget is used up, or the model timed out (the API logs `Studio AI unavailable` with the reason) | Set the variables on both containers; raise `AI_DAILY_CALL_LIMIT`; retry                                                                                                                                                                                             |
+| `docker compose ps` shows the `worker` as `unhealthy` | It has not completed a poll of the dispute inbox for over a minute: Postgres is unreachable or a query is hung, or the process is stuck. It logs nothing when a query hangs. | `docker compose logs worker`; fix the link to Postgres, then `docker compose restart worker` (Docker marks it unhealthy but does not restart it by itself). It recovers on its own when the connection comes back, which can take a couple of minutes |
 | JSON `Route GET:/ not found` on the API domain                                                                                                   | Working as intended                                                                                                                                                                                | Use `/healthz`                                                                                                                                                                                                                                                       |
 
 **Why `ENOTFOUND postgres` happened, and what changed (#121).** Dokploy rewrites `docker-compose.yml` on every deploy to attach
@@ -255,8 +256,17 @@ git tag v0.1.0-hackathon && git push origin v0.1.0-hackathon   # deploy.yml pull
 ```
 
 Repository secrets for `deploy.yml`: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY` (optional `SERVER_PORT`,
-`SERVER_DIR`). Without them the workflow pushes images and skips the deploy step. Its health check runs inside the
-`api` container, so it doesn't depend on the host port.
+`SERVER_DIR`). Without them the workflow pushes images and skips the deploy step.
+
+**Verifying a release (#175).** After `up -d` the workflow runs `scripts/deploy/verify-release.sh` on the server, and you can
+run it yourself any time from the compose directory: it checks that `migrate` finished, Postgres is healthy, the API's
+`/readyz` answers with the database reachable (not just `/healthz`), the shop and the dashboard answer, the worker is
+polling the dispute inbox, and, if the `backup` service is running, that a dump less than 26 hours old exists. It stops at the
+first failure and says which one. A second job, `verify-public`, checks the public URLs from outside; set the repository
+**variables** `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and `PUBLIC_DASHBOARD_URL` (for example `https://poi-api.iotkiit.in`) to
+turn it on. Until you do, it passes with a warning that nothing public was checked, and the GitHub Release is only
+published when both jobs pass. On Dokploy, which deploys from `main`, set the variables and tag after the deploy finishes, and
+read the commit off Dokploy's Deployments tab: these checks prove the stack is healthy, not which commit it runs.
 
 Server `.env` beyond the defaults: `PAYPAL_MODE=sandbox` with the PayPal variables, `MERCHANT_SIGNING_KEY`
 (`pnpm keys:gen`; the API refuses to start in sandbox mode without it), and `TRUST_PROXY=1` because a proxy

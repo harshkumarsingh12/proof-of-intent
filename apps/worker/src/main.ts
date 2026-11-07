@@ -1,6 +1,7 @@
 import { parseAiMode } from "@poi/ai";
 import { createDb } from "@poi/db";
 import { createPayPalClient, parseMode } from "@poi/paypal";
+import { beat } from "./heartbeat";
 import { processDisputeEvents, syncDisputes } from "./inbox";
 
 const url = process.env.DATABASE_URL;
@@ -26,6 +27,7 @@ const timer = setInterval(async () => {
       const synced = await syncDisputes({ db, aiMode, paypal });
       if (synced) console.log(`worker: synced ${synced} dispute(s) from list_disputes`);
     }
+    beat(); // only reached when the poll worked: this is what the compose healthcheck reads
   } catch (err) {
     console.error(`worker: inbox poll failed (${(err as Error).message}); retrying`);
   } finally {
