@@ -35,6 +35,7 @@ export function memoryDb() {
   const page = <T>(rows: T[], p: { limit: number; offset: number }) =>
     rows.slice(p.offset, p.offset + p.limit);
   const db: Db = {
+    ping: async () => {},
     claimNonce: async (n) => (nonces.has(n) ? false : (nonces.add(n), true)),
     appendAudit: async (e) => void audit.push(e),
     // Row order stands in for time: ids and timestamps both increase with insertion.
