@@ -36,7 +36,7 @@ import {
   type SigningKey,
 } from "@poi/mandates";
 import { PayPalError, type PayPalClient } from "@poi/paypal";
-import { evaluate } from "@poi/policy-engine";
+import { evaluate, type EvaluateInput } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
 
 export interface Merchant {
@@ -172,7 +172,7 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
 
   // 5. Hard rules, and the merchant's own facts. Both are reported together, so an agent that gets one wrong and also
   //    breaks a limit hears about both.
-  const ledger = await deps.db.mandateLedger(intent.mandate_id);
+  const ledger = await deps.db.activeLedger(intent.mandate_id, now);
   const rules = evaluate({ intent, cart, now, ledger });
   const misses = catalogMismatches(cart.contents.lines, deps.catalog);
   if (misses.length > 0) {
@@ -277,6 +277,14 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
   });
 }
 
+/**
+ * The two rules that depend on what else the intent has spent. They are what a reservation re-checks inside its lock,
+ * and what approval re-checks before capture; every other rule already passed for this cart.
+ */
+export function aggregateReasons(input: EvaluateInput): ReasonCode[] {
+  return evaluate(input).reasons.filter((r) => r === "BUDGET_EXCEEDED" || r === "RECURRENCE_EXCEEDED");
+}
+
 export interface OrderToPlace {
   intent: IntentMandate;
   intentHash: string;
@@ -349,20 +357,44 @@ export async function placeOrder(
       requestBody: { cartHash },
     });
   } else {
-    await deps.db.createOrder({
-      id: orderId,
-      intentMandateId: intent.mandate_id,
-      intentMandateHash: intentHash,
-      cartMandateHash: cartHash,
-      customId: pointer,
-      paypalIntent,
-      status: "PENDING",
-      totalValue: cart.contents.total.value,
-      currency: cart.contents.total.currency,
-      shopperId: o.shopperId,
-      agentPlatform: o.agentPlatform,
-      humanPresent: o.humanPresent,
-    });
+    // Reserve the amount and create the order in one step, before PayPal is contacted (#155). The check above saw the
+    // ledger a moment ago; this one sees it inside the reservation, so two carts created at the same time cannot both
+    // fit under a cap that only one fits.
+    const reservation = await deps.db.reserveOrder(
+      {
+        id: orderId,
+        intentMandateId: intent.mandate_id,
+        intentMandateHash: intentHash,
+        cartMandateHash: cartHash,
+        customId: pointer,
+        paypalIntent,
+        status: "PENDING",
+        totalValue: cart.contents.total.value,
+        currency: cart.contents.total.currency,
+        shopperId: o.shopperId,
+        agentPlatform: o.agentPlatform,
+        humanPresent: o.humanPresent,
+        reservedUntil: cart.contents.cart_expiry,
+      },
+      now,
+      (ledger) => aggregateReasons({ intent, cart, now, ledger }),
+    );
+    if (!reservation.ok) {
+      const refused = reservation.reasons as ReasonCode[];
+      await deps.db.recordVerdict({
+        intentMandateId: intent.mandate_id,
+        cartId: cart.contents.cart_id,
+        outcome: "REJECT",
+        reasons: refused,
+      });
+      await deps.db.appendAudit({
+        actor: "api",
+        action: "checkout.verdict",
+        subjectId: intent.mandate_id,
+        requestBody: { cartId: cart.contents.cart_id, outcome: "REJECT", reasons: refused },
+      });
+      return reject(refused);
+    }
     await deps.db.recordVerdict({
       intentMandateId: intent.mandate_id,
       cartId: cart.contents.cart_id,

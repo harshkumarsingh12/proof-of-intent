@@ -34,6 +34,22 @@ export function memoryDb() {
   const vaultSetups = new Map<string, { shopperId: string; claimed: boolean }>();
   const page = <T>(rows: T[], p: { limit: number; offset: number }) =>
     rows.slice(p.offset, p.offset + p.limit);
+  const activeLedger = (intentMandateId: string, now: string, excludeOrderId?: string) => {
+    const held = [...orders.values()].filter(
+      (o) =>
+        o.intentMandateId === intentMandateId &&
+        o.id !== excludeOrderId &&
+        (o.capturedAt ||
+          o.status === "UNKNOWN_OUTCOME" ||
+          (["PENDING", "CREATED", "APPROVED", "AUTHORIZED"].includes(o.status) &&
+            o.reservedUntil !== undefined &&
+            o.reservedUntil > now)),
+    );
+    return {
+      capturedTotal: held.reduce((s, o) => s + o.totalValue, 0),
+      capturedOrderTimes: held.map((o) => o.capturedAt ?? o.createdAt!),
+    };
+  };
   const db: Db = {
     ping: async () => {},
     claimNonce: async (n) => (nonces.has(n) ? false : (nonces.add(n), true)),
@@ -108,6 +124,14 @@ export function memoryDb() {
         capturedTotal: captured.reduce((s, o) => s + o.totalValue, 0),
         capturedOrderTimes: captured.map((o) => o.capturedAt!),
       };
+    },
+    activeLedger: async (intentMandateId, now, excludeOrderId) => activeLedger(intentMandateId, now, excludeOrderId),
+    reserveOrder: async (o, now, check) => {
+      // No await between the check and the insert, so this is as atomic as the Postgres advisory lock.
+      const reasons = check(activeLedger(o.intentMandateId, now));
+      if (reasons.length > 0) return { ok: false, reasons };
+      orders.set(o.id, { ...o, createdAt: now });
+      return { ok: true };
     },
     recordVerdict: async (v) => void verdicts.push(v),
     createOrder: async (o) => {

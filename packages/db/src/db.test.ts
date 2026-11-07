@@ -54,6 +54,7 @@ describe.runIf(ADMIN_URL)("db", () => {
       "0003_stepups.sql",
       "0004_vault_setups.sql",
       "0005_shared_vault_id.sql",
+      "0006_reservations.sql",
     ]);
     expect(await db.migrate()).toEqual([]);
   });
@@ -273,6 +274,34 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect(await db.unknownOutcomeOrders("m-other")).toEqual([]);
     await db.updateOrder("ord_rt3", { status: "COMPLETED", captureId: "CAP-RT3" });
     expect(await db.unknownOutcomeOrders("m-rt")).toEqual([]);
+
+    // Reservations (#155). ord_rt and ord_rt2 are captured; a pending order counts only until its reserved_until.
+    const t0 = "2026-11-02T10:00:00.000Z";
+    const until = "2026-11-02T10:15:00.000Z";
+    const reserve = (id: string) =>
+      db.reserveOrder({ ...order, id, totalValue: 1000, reservedUntil: until }, t0, (l) =>
+        l.capturedTotal + 1000 > 16000 ? ["BUDGET_EXCEEDED"] : [],
+      );
+    const before = (await db.activeLedger("m-rt", t0)).capturedTotal;
+    expect(before).toBe(14800); // captured only: nothing pending yet
+    expect(await reserve("ord_res1")).toEqual({ ok: true });
+    expect((await db.activeLedger("m-rt", t0)).capturedTotal).toBe(15800);
+    expect((await db.activeLedger("m-rt", t0, "ord_res1")).capturedTotal).toBe(14800); // not counted against itself
+    // Concurrent reservations are serialized: only one of two that each need the last 1000 gets it.
+    const racers = await Promise.all([reserve("ord_res2"), reserve("ord_res3")]);
+    expect(racers.filter((r) => r.ok)).toHaveLength(0); // 15800 + 1000 > 16000: neither fits
+    expect(racers.map((r) => !r.ok && r.reasons)).toEqual([["BUDGET_EXCEEDED"], ["BUDGET_EXCEEDED"]]);
+    expect(await db.getOrder("ord_res2")).toBeNull(); // a refusal creates nothing
+    // Past reserved_until, voided and failed orders stop counting; an unknown outcome never does.
+    expect((await db.activeLedger("m-rt", until)).capturedTotal).toBe(14800);
+    await db.updateOrder("ord_res1", { status: "VOIDED" });
+    expect((await db.activeLedger("m-rt", t0)).capturedTotal).toBe(14800);
+    await db.updateOrder("ord_res1", { status: "UNKNOWN_OUTCOME" });
+    expect((await db.activeLedger("m-rt", until)).capturedTotal).toBe(15800);
+    await db.updateOrder("ord_res1", { status: "PAYPAL_FAILED" });
+    expect((await db.activeLedger("m-rt", t0)).capturedTotal).toBe(14800);
+    const room = await Promise.all(["ord_res4", "ord_res5"].map((id) => reserve(id)));
+    expect(room.filter((r) => r.ok)).toHaveLength(1); // 14800 + 1000 fits once; the second would be 16800
   });
 
   test("dispute events form the worker's inbox until marked processed", async () => {

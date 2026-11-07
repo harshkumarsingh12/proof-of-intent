@@ -79,7 +79,17 @@ export interface OrderRecord {
   shopperId?: string;
   agentPlatform: string;
   humanPresent: boolean;
+  /** The cart's expiry. Until then a pending order holds its amount against the intent's budget and recurrence (#155). */
+  reservedUntil?: string;
 }
+
+/** What an intent has already spent or set aside, for budget_cap and recurrence. Integer minor units. */
+export interface SpendLedger {
+  capturedTotal: number;
+  capturedOrderTimes: string[];
+}
+
+export type Reservation = { ok: true } | { ok: false; reasons: string[] };
 
 export interface OrderPatch {
   status: string;
@@ -209,10 +219,19 @@ export interface Db {
    * Prior captures under an intent mandate, for budget_cap and recurrence. Integer minor units.
    * With asOfOrderId: only captures that existed when that order was created, which is what its checkout saw.
    */
-  mandateLedger(
-    intentMandateId: string,
-    asOfOrderId?: string,
-  ): Promise<{ capturedTotal: number; capturedOrderTimes: string[] }>;
+  mandateLedger(intentMandateId: string, asOfOrderId?: string): Promise<SpendLedger>;
+  /**
+   * What the intent has spent or set aside as of `now` (#155): captured orders, orders whose PayPal result is unknown, and
+   * pending orders whose reservation (the cart's expiry) has not passed. Voided and failed orders do not count. With
+   * `excludeOrderId`, that order is left out, so an order's own reservation is not counted against itself.
+   */
+  activeLedger(intentMandateId: string, now: string, excludeOrderId?: string): Promise<SpendLedger>;
+  /**
+   * Creates the order and reserves its amount in one step. Concurrent reservations under the same intent are serialized, and
+   * `check` sees the ledger as it is inside that step, so two pending orders cannot both fit under a cap that only one
+   * fits. `check` returns the reasons to refuse (none to accept); a refusal creates nothing.
+   */
+  reserveOrder(o: OrderRecord, now: string, check: (ledger: SpendLedger) => string[]): Promise<Reservation>;
   recordVerdict(v: VerdictRecord): Promise<void>;
   createOrder(o: OrderRecord): Promise<void>;
   getOrder(id: string): Promise<StoredOrder | null>;
@@ -446,25 +465,33 @@ export function createDb(databaseUrl: string): Db {
     },
 
     async createOrder(o) {
-      await pool.query(
-        `insert into orders (id, intent_mandate_id, intent_mandate_hash, cart_mandate_hash, custom_id, paypal_intent,
-                             status, total_value, currency, shopper_id, agent_platform, human_present)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [
-          o.id,
-          o.intentMandateId,
-          o.intentMandateHash,
-          o.cartMandateHash,
-          o.customId,
-          o.paypalIntent,
-          o.status,
-          o.totalValue,
-          o.currency,
-          o.shopperId ?? null,
-          o.agentPlatform,
-          o.humanPresent,
-        ],
-      );
+      await insertOrder(pool, o);
+    },
+
+    async activeLedger(intentMandateId, now, excludeOrderId) {
+      return activeLedgerOf(pool, intentMandateId, now, excludeOrderId);
+    },
+
+    async reserveOrder(o, now, check) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        // One reservation at a time per intent: the lock is released at commit or rollback.
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [o.intentMandateId]);
+        const reasons = check(await activeLedgerOf(client, o.intentMandateId, now));
+        if (reasons.length > 0) {
+          await client.query("rollback");
+          return { ok: false, reasons };
+        }
+        await insertOrder(client, o);
+        await client.query("commit");
+        return { ok: true };
+      } catch (err) {
+        await client.query("rollback").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
     },
 
     async getOrder(id) {
@@ -724,6 +751,53 @@ export function createDb(databaseUrl: string): Db {
 type Row = Record<string, unknown>;
 const iso = (v: unknown) => (v as Date).toISOString();
 
+type Queryable = Pick<pg.Pool, "query">;
+
+async function insertOrder(db: Queryable, o: OrderRecord): Promise<void> {
+  await db.query(
+    `insert into orders (id, intent_mandate_id, intent_mandate_hash, cart_mandate_hash, custom_id, paypal_intent,
+                         status, total_value, currency, shopper_id, agent_platform, human_present, reserved_until)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    [
+      o.id,
+      o.intentMandateId,
+      o.intentMandateHash,
+      o.cartMandateHash,
+      o.customId,
+      o.paypalIntent,
+      o.status,
+      o.totalValue,
+      o.currency,
+      o.shopperId ?? null,
+      o.agentPlatform,
+      o.humanPresent,
+      o.reservedUntil ?? null,
+    ],
+  );
+}
+
+/** Orders that count against an intent right now: see Db.activeLedger. */
+async function activeLedgerOf(
+  db: Queryable,
+  intentMandateId: string,
+  now: string,
+  excludeOrderId?: string,
+): Promise<SpendLedger> {
+  const res = await db.query<{ total_value: string; at: Date }>(
+    `select total_value, coalesce(captured_at, created_at) as at from orders
+      where intent_mandate_id = $1 and ($3::text is null or id <> $3)
+        and (captured_at is not null
+             or status = 'UNKNOWN_OUTCOME'
+             or (status in ('PENDING', 'CREATED', 'APPROVED', 'AUTHORIZED') and reserved_until > $2))
+      order by at`,
+    [intentMandateId, now, excludeOrderId ?? null],
+  );
+  return {
+    capturedTotal: res.rows.reduce((sum, r) => sum + Number(r.total_value), 0),
+    capturedOrderTimes: res.rows.map((r) => r.at.toISOString()),
+  };
+}
+
 function toOrder(r: Row): StoredOrder {
   return {
     id: r.id as string,
@@ -743,6 +817,7 @@ function toOrder(r: Row): StoredOrder {
     ...(r.capture_id ? { captureId: r.capture_id as string } : {}),
     ...(r.captured_at ? { capturedAt: iso(r.captured_at) } : {}),
     ...(r.created_at ? { createdAt: iso(r.created_at) } : {}),
+    ...(r.reserved_until ? { reservedUntil: iso(r.reserved_until) } : {}),
   };
 }
 

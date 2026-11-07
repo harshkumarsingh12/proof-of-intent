@@ -10,8 +10,10 @@
  *   2. it names this order and the exact Cart Mandate we signed                       → 403 approval_invalid
  *        (MANDATE_MISMATCH): a genuine signature for another order can't void this one either
  *   3. the authority is still current (#161): the intent has started and hasn't expired and
- *        the cart hasn't expired, by the same rules checkout used                      → 200 VOIDED
- *        (MANDATE_NOT_YET_VALID / MANDATE_EXPIRED / CART_EXPIRED); any authorization we already
+ *        the cart hasn't expired, by the same rules checkout used, and the order's reservation
+ *        still fits the intent's budget and recurrence (#155)                          → 200 VOIDED
+ *        (MANDATE_NOT_YET_VALID / MANDATE_EXPIRED / CART_EXPIRED / BUDGET_EXCEEDED /
+ *        RECURRENCE_EXCEEDED); any authorization we already
  *        hold is voided; with none, nothing was held and PayPal isn't called
  *   4. authorize (409 if the shopper hasn't approved at PayPal yet), then capture
  */
@@ -20,6 +22,7 @@ import type { Db, StoredOrder } from "@poi/db";
 import { keyValidAt, verifyMandate } from "@poi/mandates";
 import { PayPalError, type PayPalClient } from "@poi/paypal";
 import { freshness } from "@poi/policy-engine";
+import { aggregateReasons } from "./checkout";
 import { importJWK, type JWK } from "jose";
 
 export interface ApproveDeps {
@@ -155,7 +158,13 @@ async function staleReasons(order: StoredOrder, deps: ApproveDeps): Promise<Reas
   if (!intentRow || !cartRow) return ["MANDATE_MISMATCH"];
   const intent = IntentMandate.parse(JSON.parse(intentRow.canonical));
   const cart = CartMandate.parse(JSON.parse(cartRow.canonical));
-  return freshness({ intent, cart, now: deps.now() });
+  const now = deps.now();
+  const late = freshness({ intent, cart, now });
+  if (late.length > 0) return late;
+  // The reservation is still good only if the intent's other holds still leave room for this order (#155): the order's
+  // own hold is left out, and what remains is what everything else under the intent has spent or set aside.
+  const others = await deps.db.activeLedger(order.intentMandateId, now, order.id);
+  return aggregateReasons({ intent, cart, now, ledger: others });
 }
 
 /**

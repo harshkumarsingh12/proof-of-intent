@@ -28,7 +28,7 @@ Checks run in this order and stop at the first stage that fails (built in `apps/
    platform; the cart points at the intent; the cart's `merchant_id` is ours (`MERCHANT_ID`).
 4. Replay: the **Payment Mandate id** is claimed in a unique-indexed table → `NONCE_REPLAYED`. Not the intent's
    nonce: one intent legitimately backs several attempts (journey B's retry after a rejection).
-5. Hard rules: `evaluate()` (spec 0002) with the intent's capture ledger, **and the merchant's own facts** (#158): every
+5. Hard rules: `evaluate()` (spec 0002) with the intent's active ledger (captured **and reserved**, see §Reservation), **and the merchant's own facts** (#158): every
    cart line's SKU, title, attributes and unit price (value and currency) must equal what the merchant's catalog says for
    that SKU, exactly (no extra attributes; quantity is the shopper's and isn't compared) → `CATALOG_MISMATCH`. The agent
    proposes the cart and the merchant signs it, so without this the price was whatever the agent wrote: a real SKU at one
@@ -66,6 +66,24 @@ identifier and PayPal's `PayPal-Request-Id`:
 - A step-up link whose charge ended unknown stays usable; opening it again confirms the same order.
   The order row (status `PENDING`) and its verdict are written before the PayPal call, so a crash never leaves a
   PayPal order we have no record of.
+
+### Reservation (#155)
+
+A signed `budget_cap` or `recurrence` is an aggregate limit, so it has to hold for orders that are **pending at the same
+time**, not only for captured ones. Spending authority is reserved when the order is created, before PayPal is contacted:
+
+- `Db.reserveOrder` creates the order and checks the aggregate rules in one step, under a per-intent lock
+  (`pg_advisory_xact_lock` on the intent id). The check sees the ledger as it is inside that step, so two carts created
+  together cannot both fit under a cap that only one fits. A refusal creates no order and no PayPal call: a `REJECT`
+  verdict with `BUDGET_EXCEEDED` / `RECURRENCE_EXCEEDED`. The earlier check in step 5 only turns away the obvious case
+  sooner.
+- A reservation is the order itself (`orders.reserved_until` = the cart's expiry). `Db.activeLedger` counts, for an intent:
+  captured orders (committed, they never stop counting), `UNKNOWN_OUTCOME` orders (they may have charged), and
+  `PENDING` / `CREATED` / `APPROVED` / `AUTHORIZED` orders until `reserved_until`. A `VOIDED` or `PAYPAL_FAILED` order is
+  released at once, and a pending one is released when its cart expires.
+- Stage-two approval re-checks it (below), and step-up approval runs the rules with the same active ledger and then
+  reserves through the same `placeOrder`.
+- Dispute replays still use `mandateLedger(intent, asOfOrderId)`: captures that existed when the order was created.
 
 ### Stage 2, before capture (human present only)
 
@@ -113,7 +131,7 @@ and the agent's response carries no link.
   410 `stepup_expired` and creates nothing. An agent that wants the full day sets `cart_expiry` accordingly.
 - **At approval:** check the signature (403 `approval_invalid` with reason codes, and the link stays usable). Then
   claim the row (`PENDING → APPROVING`, so exactly one request goes on) and run the hard rules again with the
-  current capture ledger, because budget may have been spent since the link was sent (409
+  current active ledger (captured and reserved), because budget may have been spent since the link was sent (409
   `stepup_no_longer_valid`). Then require a vaulted wallet (409 `no_vaulted_wallet`, and the link stays usable).
   Finally, sign the Cart Mandate and create the order with intent `CAPTURE` against the vault id, through the same
   `placeOrder` as checkout. The order's verdict is `STEP_UP`. A retry after success returns the same answer.
