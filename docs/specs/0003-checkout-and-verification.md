@@ -111,7 +111,7 @@ refuses a second cart once the merchant has accepted one (`already_proposed`) in
 The agent returns a trace (each search, each cart with its reason and the merchant's answer) that `/shop` shows.
 `request_checkout` skips products that break the signed price, category or color (`OUT_OF_LIMITS`, shown, merchant not
 asked) so the shopper's words can't talk the model past their own limits; the merchant still checks everything.
-`create_intent_mandate` can't set `user_cart_confirmation_required`. `pnpm agent:eval` (docs/evals/README.md) measures it live.
+`create_intent_mandate` can't set `user_cart_confirmation_required`. It drafts only what the shopper stated: a color or item they didn't name is left open (`""`, shown as Anything / Any color) rather than guessed. The price cap is the exception, because one is always signed: with no price in the words the draft carries a proposed cap (the named item's usual cap, else $100) with `priceDefaulted: true`, and the shop says so next to the form. `pnpm agent:eval` (docs/evals/README.md) measures it live.
 
 ### Jobs
 
