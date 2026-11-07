@@ -80,7 +80,10 @@ export async function checkEndpoint(e: Endpoint, fetchImpl?: typeof fetch): Prom
             },
           }),
         },
-        maxSteps: 3,
+        // Forced: one step. `required` applies to every step, so a model that answers in text once the tool has returned
+        // (the right behavior; Groq rejects it with HTTP 400) would otherwise fail, while one that keeps calling the tool
+        // in a loop would pass. Auto: room for the tool call and the answer.
+        maxSteps: forced ? 1 : 3,
         ...(forced ? { toolChoice: "required" as const } : {}),
         temperature: 0,
         maxRetries: 0,
@@ -93,7 +96,7 @@ export async function checkEndpoint(e: Endpoint, fetchImpl?: typeof fetch): Prom
         throw new Error(
           `it answered without the tool${forced ? "" : " (it would be guessing)"}: ${text.replace(/\s+/g, " ").slice(0, 60)}`,
         );
-      return `called the tool ${called} time${called === 1 ? "" : "s"}`;
+      return `called the tool${called > 1 ? ` ${called} times` : ""}`;
     });
   const tools = await toolCheck(true);
   const autoTools = await toolCheck(false);
