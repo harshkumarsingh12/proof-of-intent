@@ -243,6 +243,12 @@ now lists `networks: [poi]` directly and the anchor carries none, and `apps/api/
 Keep it that way when you add a service. If you ever see the symptom again, Stop then Deploy still recovers it, and `/readyz`
 (which now answers 503) is the signal to watch.
 
+**Uptime monitoring (#38).** Nothing watched the demo from outside until now. `docs/MONITORING.md` sets up a dedicated monitor
+(keyword checks on `/readyz` for the API and `/healthz` for the shop and dashboard) and turns on the free in-repo one
+(`.github/workflows/uptime.yml`, which needs the repository variables `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and
+`PUBLIC_DASHBOARD_URL`, and optionally the secret `UPTIME_WEBHOOK_URL` for chat messages). It also says how to prove an alert reaches
+the team chat without stopping the real API.
+
 **Without Dokploy** (plain Compose and Caddy on a server you manage):
 
 ```bash
