@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { CartApproval, CartMandate, IntentMandate, PaymentMandate } from "@poi/contracts";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { CartApproval, CartMandate, IntentMandate, PaymentMandate, VaultProof } from "@poi/contracts";
 import {
   compliantCart,
   greyJacketIntent,
@@ -10,10 +10,11 @@ import {
 } from "@poi/contracts/fixtures";
 import { createKeyRegistry, keyIdFor, mandateHash, publicEs256Jwk, verifyMandate } from "@poi/mandates";
 import { evaluate } from "@poi/policy-engine";
-import { intentFromJws } from "./agent-server";
+import { agentCheckout, intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
 import { canApprove, isStepUpToken, stepUpApproval } from "./stepup";
+import { isSetupTokenId, isShopperKid, saveProof, setupProof, setupTokenFromQuery } from "./wallet";
 import { buildIntent, CLOCK_SKEW_MS, dollarsToCents, type IntentForm } from "./intent";
 import {
   generateShopperKey,
@@ -279,5 +280,66 @@ describe("step-up approval page (#35)", () => {
     expect(isStepUpToken("A".repeat(43))).toBe(true);
     for (const bad of ["", "short", "../keys/agent", "a b c d e f g h i j k l", "x".repeat(200)])
       expect(isStepUpToken(bad)).toBe(false);
+  });
+});
+
+describe("saving a PayPal wallet (#17)", () => {
+  test("the browser's proofs are VaultProofs the merchant verifies with the shopper's key", async () => {
+    const { key, kid, registry } = await registeredShopper();
+    const resolve = (k: string) => registry.resolve(k, NOW);
+    const now = new Date(NOW);
+
+    const setup = await verifyMandate(await signCompact(setupProof(now), key.privateKey, kid), resolve);
+    expect(setup.ok && VaultProof.parse(setup.payload)).toEqual({
+      purpose: "vault.setup",
+      issued_at: now.toISOString(),
+    });
+
+    const save = await verifyMandate(
+      await signCompact(saveProof("SETUP-1", now), key.privateKey, kid),
+      resolve,
+    );
+    expect(save.ok && VaultProof.parse(save.payload)).toEqual({
+      purpose: "vault.save",
+      setup_token_id: "SETUP-1",
+      issued_at: now.toISOString(),
+    });
+  });
+
+  test("only an id-shaped approval_token_id from PayPal's return URL is used", () => {
+    expect(setupTokenFromQuery("?approval_token_id=4GR23151KU3803621&approval_session_id=x")).toBe(
+      "4GR23151KU3803621",
+    );
+    expect(setupTokenFromQuery("?approval_token_id=")).toBeUndefined();
+    expect(setupTokenFromQuery("")).toBeUndefined();
+    expect(setupTokenFromQuery("?approval_token_id=../../etc/passwd")).toBeUndefined();
+    expect(isSetupTokenId("a b")).toBe(false);
+    expect(isShopperKid("shp_" + "A".repeat(43))).toBe(true);
+    expect(isShopperKid("agt_" + "A".repeat(43))).toBe(false);
+    expect(isShopperKid("shp_../x")).toBe(false);
+  });
+});
+
+describe("agent paying alone", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function paymentSentFor(humanPresent?: boolean) {
+    const { key, kid } = await registeredShopper();
+    const jws = await signCompact(intentFor(kid), key.privateKey, kid);
+    let sent: { payment_mandate_jws: string } | undefined;
+    vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      sent = JSON.parse(init.body);
+      return Response.json({ verdict: { outcome: "REJECT", reasons: [] } });
+    });
+    await (humanPresent === undefined
+      ? agentCheckout(jws, CATALOG[0]!.line.sku)
+      : agentCheckout(jws, CATALOG[0]!.line.sku, humanPresent));
+    return PaymentMandate.parse(JSON.parse(jwsPayloadText(sent!.payment_mandate_jws)));
+  }
+
+  test("the Payment Mandate says whether the shopper is present: yes by default, no when the agent buys alone", async () => {
+    expect((await paymentSentFor()).human_present).toBe(true);
+    expect((await paymentSentFor(true)).human_present).toBe(true);
+    expect((await paymentSentFor(false)).human_present).toBe(false);
   });
 });

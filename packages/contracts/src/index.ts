@@ -150,6 +150,8 @@ export const CheckoutResponse = z.object({
   paypal_order_id: z.string().optional(),
   /** Human present: where the shopper approves with PayPal. */
   approval_url: z.string().url().optional(),
+  /** Agent alone: the vaulted wallet was charged at once, so the capture already exists. */
+  capture_id: z.string().optional(),
 });
 export type CheckoutResponse = z.infer<typeof CheckoutResponse>;
 

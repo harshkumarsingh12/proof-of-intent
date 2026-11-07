@@ -365,6 +365,7 @@ export async function placeOrder(
       cart_mandate_jws: cartJws,
       paypal_order_id: created.id,
       ...(created.approvalUrl ? { approval_url: created.approvalUrl } : {}),
+      ...(created.captureId ? { capture_id: created.captureId } : {}),
     },
   };
 }

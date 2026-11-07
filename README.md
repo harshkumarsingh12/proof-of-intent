@@ -30,7 +30,7 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 | PayPal surface | How we use it |
 |---|---|
 | Orders v2 | The shop authorizes then captures or voids an order after the shopper approves the exact cart |
-| Vault v3 | Planned wallet onboarding for the agent-alone checkout path |
+| Vault v3 | The shopper saves a PayPal wallet (signed proof, setup token, payment token); the agent can then pay alone from it, only for carts that pass the checks |
 | Webhooks | Signed dispute and capture events, verified, persisted, idempotent |
 | Disputes API | Provide evidence, send message, escalate (operator clicks); sandbox test harness |
 | Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |

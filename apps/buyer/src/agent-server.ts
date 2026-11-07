@@ -88,8 +88,16 @@ export interface AgentCheckout {
   body: CheckoutResponse | { error: string; message: string };
 }
 
-/** Propose `sku` under the signed intent and ask the merchant for a verdict (POST /checkout). Human present. */
-export async function agentCheckout(intentJws: string, sku: string): Promise<AgentCheckout> {
+/**
+ * Propose `sku` under the signed intent and ask the merchant for a verdict (POST /checkout). With the shopper
+ * present (the default) PayPal asks them to approve; `humanPresent: false` is the agent paying alone from the
+ * wallet the shopper saved with Vault v3: an APPROVE charges it at once, a STEP_UP only sends a link.
+ */
+export async function agentCheckout(
+  intentJws: string,
+  sku: string,
+  humanPresent = true,
+): Promise<AgentCheckout> {
   const intent = intentFromJws(intentJws);
   const a = await getAgent();
   const now = new Date();
@@ -101,7 +109,7 @@ export async function agentCheckout(intentJws: string, sku: string): Promise<Age
   const payment = paymentMandate(intent, cart, {
     agentKid: a.kid,
     platform: a.platform,
-    humanPresent: true,
+    humanPresent,
     now,
     id: randomUUID(),
   });
@@ -135,11 +143,11 @@ export async function agentCheckout(intentJws: string, sku: string): Promise<Age
 }
 
 /** The agent picks the item itself under the signed intent and proposes up to three carts (src/agent.ts). */
-export function agentChoose(intentJws: string): Promise<ChooseResult> {
+export function agentChoose(intentJws: string, humanPresent = true): Promise<ChooseResult> {
   return runChoose({
     intent: intentFromJws(intentJws),
     mode: parseAgentMode(process.env.AI_MODE),
-    checkout: (sku) => agentCheckout(intentJws, sku),
+    checkout: (sku) => agentCheckout(intentJws, sku, humanPresent),
   });
 }
 
