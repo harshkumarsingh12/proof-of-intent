@@ -6,6 +6,7 @@ import { readReplay, replayPath, type ReplayFile } from "../../packages/ai/src/r
 import {
   J4_PROMPT_VERSION,
   J4_REPLAY,
+  recordableAnswer,
   StudioAnswer,
   StudioTurn,
   studioReplayKey,
@@ -51,7 +52,7 @@ try {
           )
             throw new Error(`The API must run ${expectedMode} mode with this checkout's J4 prompt version.`);
           const output = StudioAnswer.parse(await res.json());
-          entries[studioReplayKey(parsed.data)] = { label, output };
+          entries[studioReplayKey(parsed.data)] = { label, output: recordableAnswer(parsed.data, output) };
           turns++;
           if (!output.tool && output.text.trim()) finalAnswer = true;
         })().catch((error: unknown) => {

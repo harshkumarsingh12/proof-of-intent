@@ -37,7 +37,7 @@ dashboard, with `AI_PROVIDER`, `AI_MODEL` and `AI_API_KEY` in the API environmen
 to explain chat availability. In replay mode the chat answers only recorded questions with
 matching dispute facts and tools. An unrecorded turn gives a clear unavailable response. Capture all three
 starters with `pnpm studio:record` on the live stack, review the answers, then repeat with both servers in replay
-mode against the same database. [Recording steps and timings](evals/README.md#studio-starter-recordings). Studio's
+mode. [Recording steps and timings](evals/README.md#studio-starter-recordings). Studio's
 report lives in the browser tab and nothing is saved; the chat's tools are read-only.
 
 **The shop** (http://localhost:3001/shop) runs journey A: your browser makes a key and keeps it, you sign an

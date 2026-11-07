@@ -38,8 +38,11 @@ offered tools, tool choice and output format. Recorded tool calls use the same v
 execute the existing read-only lookups again. Changed dispute results miss the recording instead of showing
 an older explanation. `pnpm studio:record` captures the real dashboard adapter requests for the three starters,
 writes their validated responses only after all three finish and records elapsed time and turn count in
-`docs/evals/studio-<date>.md`. The operator reviews the replies and repeats against the same database in replay
-mode. The switch and unavailable response explain the limits before a judge asks an unrecorded question.
+`docs/evals/studio-<date>.md`. The operator reviews the replies and repeats in replay mode. The key ignores
+64-hex hashes and ISO timestamps in tool results and a stored answer holds placeholders for them (restored on replay from
+the current data), because every demo seed makes a new shopper key and dates deadlines from when it ran: a recording made
+on one database answers on another, and never shows the first one's values. The attention starter needs no
+recording: its answer is formatted locally from the list tool in both modes. The switch and unavailable response explain the limits before a judge asks an unrecorded question.
 In live mode, the attention starter formats the validated list-tool counts and due-date rows locally after
 tool selection, removing a summarizing model call. Other questions keep the usual model path.
 

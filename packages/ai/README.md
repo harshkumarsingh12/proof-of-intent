@@ -15,7 +15,7 @@
   stubs. Callers hand the decision to a person.
 - J4 replay uses `j4-studio.json`, keyed by the versioned turn including instructions, tools and dispute results.
   `pnpm studio:record` captures the three starters through the running live dashboard and writes a timing report.
-  Review the answers and repeat in replay mode against the same data. [Recording steps](../../docs/evals/README.md#studio-starter-recordings)
+  Review the answers and repeat in replay mode (recordings carry across seeded databases). [Recording steps](../../docs/evals/README.md#studio-starter-recordings)
 - After changing a prompt (bump its `version`), run `pnpm ai:record` from the repo root. Cases live in
   `src/j1-cases.ts`. This command currently records J1. The J2/J3 replay files contain hand-authored demo
   responses. The full live eval and recordings are tracked in #43.

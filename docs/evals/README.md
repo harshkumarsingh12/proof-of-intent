@@ -21,15 +21,26 @@ Keep credentials in the team's secret store.
 
 The dated `studio-<date>.md` report measures each starter's elapsed time and adapter-turn count. Review the
 captured text against the dispute findings. Set both servers to `AI_MODE=replay`, then run
-`pnpm studio:record --verify-replay` against the same database to repeat all three starters without rewriting
-the recordings. The command checks the API's mode and prompt version, so a mixed-mode deployment fails the
+`pnpm studio:record --verify-replay` to repeat all three starters without rewriting the recordings. It can
+be the team's database or a freshly seeded one (`pnpm demo:seed`): see "Recordings across databases" below. The command checks the API's mode and prompt version, so a mixed-mode deployment fails the
 check. Questions, instructions, offered tools and tool results are
 part of the recording key. Changed facts or an unrecorded question produce a clear unavailable response.
 Only the captured answers and hashes are saved. Credentials and HTTP headers are excluded.
 
-The attention starter formats the list tool's counts and response deadlines locally after the first model
-tool selection. This removes the summarizing model call and its possible loop. Measure the complete live
-starter with the capture command to compare against #124's observed 15–25 seconds.
+**Recordings across databases.** Every `pnpm demo:seed` makes a new shopper key (so every mandate hash differs) and
+dates deadlines from when it ran, so two seeded databases hold the same disputes with different hashes and
+deadlines. The replay key therefore ignores 64-hex hashes and ISO timestamps in tool results (masking them in order
+of appearance), and a recorded answer stores placeholders for them, including a hash the model shortened (8 or more
+leading characters). On replay the placeholders are filled with the current database's own values, so a recording made
+on the team's database answers on a judge's freshly seeded one and never shows the other database's hash. Everything
+else in the tool results (ids, classes, reasons, check names, amounts) is still part of the key, so a changed fact misses.
+Review the captured answers for dates or hashes written in another form (for example "Nov 17"): those cannot be
+restored and would show the capture database's values. The explain and reply starters' tool results carry no dates.
+
+The attention starter ("What needs my attention?") is formatted locally from the list tool's counts and response
+deadlines, in live and in replay mode, with no model call and no recording: it always shows the current database's own
+deadlines. This removes the summarizing model call and its possible loop. Measure the complete live starter with the
+capture command to compare against #124's observed 15–25 seconds.
 
 The three live captures, their reviewed answers and the replay repeat are required evidence for #124.
 The repository has no J4 recordings until that configured run is supplied.
