@@ -51,7 +51,7 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 8. **Agent alone.** Under "Your signing key" click **Save a PayPal wallet**, approve as the judge sandbox shopper on PayPal, and
    come back to the shop. Tick **Let the agent pay alone from my saved wallet** (it is signed into the intent), sign, and propose the grey USD 74
    jacket: there is no PayPal step, and **Paid by your agent** shows the capture. The red USD 95 jacket is still refused with
-   nothing charged, and a cart the merchant isn't sure about (the grey USD 79 rain shell) is held under **Waiting for your approval** instead of charged: click **Approve and pay from my wallet** to sign it and pay. (Checked on the mock stack
+   nothing charged, and, under a freshly signed intent (one intent covers one purchase), a cart the merchant isn't sure about (the grey USD 79 rain shell) is held under **Waiting for your approval** instead of charged: click **Approve and pay from my wallet** to sign it and pay. (Checked on the mock stack
    and in the browser smoke test, and on the hosted sandbox shop for the wallet and the agent-alone payment; the held-cart approval and the wallet removal are mock-stack only so far.)
 9. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
    mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**

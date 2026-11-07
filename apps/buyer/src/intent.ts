@@ -43,6 +43,22 @@ export function dollarsToCents(text: string): number {
   return cents;
 }
 
+const usd = (cents: number) => `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+
+/**
+ * What the signed intent lets the agent buy, in the words the shop shows after signing (#156). An intent with no budget
+ * and no order count authorizes one purchase; more than that is only what the shopper signed.
+ */
+export function describePermission(intent: IntentMandate): string {
+  const { amount_max, budget_cap, recurrence } = intent.constraints;
+  const each = amount_max ? `, at most ${usd(amount_max.value)} each` : "";
+  if (budget_cap)
+    return `Your agent may spend up to ${usd(budget_cap.value)} in total${each}, over as many orders as fit.`;
+  if (recurrence)
+    return `Your agent may place up to ${recurrence.max_orders} orders every ${recurrence.window_days} days${each}.`;
+  return `Your agent may make one purchase${amount_max ? ` of at most ${usd(amount_max.value)}` : ""}. A second purchase needs a new signed intent.`;
+}
+
 export function buildIntent(form: IntentForm, ctx: IntentContext): IntentMandate {
   const description = form.description.trim();
   if (!description) throw new Error("Say what you want the agent to buy");

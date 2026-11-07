@@ -25,7 +25,7 @@ import {
   type Product,
 } from "../../src/catalog";
 import type { TraceStep } from "../../src/agent";
-import { buildIntent, type IntentForm } from "../../src/intent";
+import { buildIntent, describePermission, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
 import { nearMiss } from "../../src/near-miss";
 import { REASON_TEXT } from "../../src/reasons";
@@ -765,6 +765,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
               Mandate <code>{signed.intent.mandate_id}</code> · hash <code>{short(signed.hash)}</code> ·
               expires {new Date(signed.intent.intent_expiry).toLocaleDateString()}
             </p>
+            <p className="meta">{describePermission(signed.intent)}</p>
           </div>
         )}
       </section>

@@ -28,6 +28,9 @@ Checks run in this order and stop at the first stage that fails (built in `apps/
    platform; the cart points at the intent; the cart's `merchant_id` is ours (`MERCHANT_ID`).
 4. Replay: the **Payment Mandate id** is claimed in a unique-indexed table → `NONCE_REPLAYED`. Not the intent's
    nonce: one intent legitimately backs several attempts (journey B's retry after a rejection).
+   Several attempts, but by default one purchase (#156): an intent that signs neither a `budget_cap` nor a `recurrence`
+   authorizes one successful order, and a later cart is `INTENT_ALREADY_USED` (spec 0002). The shop shows what the
+   signed intent allows right after signing.
 5. Hard rules: `evaluate()` (spec 0002) with the intent's active ledger (captured **and reserved**, see §Reservation), **and the merchant's own facts** (#158): every
    cart line's SKU, title, attributes and unit price (value and currency) must equal what the merchant's catalog says for
    that SKU, exactly (no extra attributes; quantity is the shopper's and isn't compared) → `CATALOG_MISMATCH`. The agent

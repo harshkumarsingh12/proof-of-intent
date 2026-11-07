@@ -33,6 +33,7 @@ a table; every failing rule adds its reason code; `pass` is true only with zero 
 | `shipping_address_hash`                           | `ADDRESS_MISMATCH`      | built  |
 | `budget_cap` vs ledger captured total + this cart | `BUDGET_EXCEEDED`       | built  |
 | `recurrence` (max orders per window) vs ledger    | `RECURRENCE_EXCEEDED`   | built  |
+| no `budget_cap` and no `recurrence`: one purchase | `INTENT_ALREADY_USED`   | built  |
 
 Signature, key and nonce failures (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `NONCE_REPLAYED`, `SCHEMA_INVALID`) are
 produced by the verification pipeline before the engine runs (spec 0003). `CATALOG_MISMATCH` (a cart line the merchant's
@@ -49,6 +50,11 @@ A line that lacks a constrained attribute fails, since it can't show the shopper
 own as `freshness({ intent, cart, now })`. `evaluate` runs them with everything else, in the same order; stage-two
 approval (spec 0003) re-runs just these right before capture, so checkout and capture can't disagree about what "still
 current" means.
+
+**One purchase by default (#156):** an intent that signs neither a `budget_cap` nor a `recurrence` authorizes exactly one
+successful purchase: once the ledger holds a prior order, a further cart is `INTENT_ALREADY_USED`. Several purchases need
+that permission signed, as a budget (spend up to a total) or an order count (`recurrence.max_orders` in `window_days`).
+Rejected attempts create no order, so the retry after a refusal still works; only a purchase that was made counts.
 
 **Ledger rules:** a missing ledger means no prior captures. `budget_cap` fails when captured total + this cart is
 over the cap, and its currency joins `amount_max` in the currency check. `recurrence` counts captures in

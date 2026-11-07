@@ -39,6 +39,8 @@ export const ReasonCode = z.enum([
   "QUANTITY_EXCEEDS_MAX",
   "ADDRESS_MISMATCH",
   "RECURRENCE_EXCEEDED",
+  // an intent that signs no budget and no recurrence authorizes one purchase, and it has been made (docs/specs/0002, #156)
+  "INTENT_ALREADY_USED",
   // the merchant's own facts: a cart line that its catalog doesn't back (docs/specs/0003, #158)
   "CATALOG_MISMATCH",
   // the agent pays without the shopper present, and the shopper's signed intent didn't allow it (docs/specs/0003, #157)

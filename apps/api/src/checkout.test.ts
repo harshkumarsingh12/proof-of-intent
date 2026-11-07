@@ -651,6 +651,63 @@ describe("POST /checkout: the shopper's signed permission to pay without them (#
   });
 });
 
+describe("POST /checkout: one purchase per default intent (#156)", () => {
+  const nth = (n: number) => ({
+    ...compliantCart,
+    contents: { ...compliantCart.contents, cart_id: `cart-${n}` },
+  });
+
+  test("a second purchase under the default intent is refused with INTENT_ALREADY_USED, and nothing is created", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const first = await s.checkout(
+      (await signedCheckout({ shopper, agent, cart: nth(1), humanPresent: false })).body,
+    );
+    expect(first.json().verdict.outcome).toBe("APPROVE"); // charged at once
+    const second = await s.checkout(
+      (await signedCheckout({ shopper, agent, cart: nth(2), humanPresent: false })).body,
+    );
+    expect(second.json().verdict).toEqual({ outcome: "REJECT", reasons: ["INTENT_ALREADY_USED"] });
+    expect(s.createOrder).toHaveBeenCalledTimes(1);
+    expect(s.mem.orders.size).toBe(1);
+  });
+
+  test("the same holds for a shopper who is present, once the first order is captured", async () => {
+    const s = setup();
+    const first = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(1) })).body);
+    await s.mem.db.updateOrder(first.json().order_id, { status: "CAPTURED", capturedAt: NOW });
+    const second = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(2) })).body);
+    expect(second.json().verdict.reasons).toEqual(["INTENT_ALREADY_USED"]);
+  });
+
+  test("a refused attempt is not a purchase: the retry after a rejection still works", async () => {
+    const s = setup();
+    const rejected = await s.checkout(
+      (await signedCheckout({ shopper, agent, cart: overreachingCart })).body,
+    );
+    expect(rejected.json().verdict.outcome).toBe("REJECT");
+    const retry = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(2) })).body);
+    expect(retry.json().verdict.outcome).toBe("APPROVE");
+  });
+
+  test("more than one needs signed permission: an order count lets a second purchase through", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const intent = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, recurrence: { max_orders: 2, window_days: 30 } },
+    };
+    for (const n of [1, 2]) {
+      const res = await s.checkout(
+        (await signedCheckout({ shopper, agent, intent, cart: nth(n), humanPresent: false })).body,
+      );
+      expect(res.json().verdict.outcome).toBe("APPROVE");
+    }
+    const third = await s.checkout(
+      (await signedCheckout({ shopper, agent, intent, cart: nth(3), humanPresent: false })).body,
+    );
+    expect(third.json().verdict.reasons).toEqual(["RECURRENCE_EXCEEDED"]);
+  });
+});
+
 describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", () => {
   /** PayPal completes the order and charges the wallet, but the answer never reaches us (once). */
   function losesFirstAnswer(inner: PayPalClient, failure: Error = new Error("socket hang up")) {

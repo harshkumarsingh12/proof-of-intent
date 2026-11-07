@@ -32,7 +32,11 @@ const t = (iso: string) => Date.parse(iso);
  * them with everything else; stage-two approval runs just these again right before capture (#161), so the two can't
  * disagree about what "still current" means. Reasons come out in the same order `evaluate` reports them.
  */
-export function freshness({ intent, cart, now }: Pick<EvaluateInput, "intent" | "cart" | "now">): ReasonCode[] {
+export function freshness({
+  intent,
+  cart,
+  now,
+}: Pick<EvaluateInput, "intent" | "cart" | "now">): ReasonCode[] {
   return [
     ...(t(now) < t(intent.constraints.valid_from) ? (["MANDATE_NOT_YET_VALID"] as const) : []),
     ...(t(now) >= t(intent.intent_expiry) ? (["MANDATE_EXPIRED"] as const) : []),
@@ -117,6 +121,14 @@ const rules: Rule[] = [
     const start = end - r.window_days * DAY_MS;
     const inWindow = (ledger?.capturedOrderTimes ?? []).filter((iso) => t(iso) > start && t(iso) <= end);
     return inWindow.length + 1 > r.max_orders ? "RECURRENCE_EXCEEDED" : null;
+  },
+  // An intent that signs neither a budget_cap nor a recurrence authorizes exactly one successful purchase (#156): the
+  // shopper said "buy this", not "keep buying". More than one needs that permission signed (a budget or an order count).
+  // Refused attempts are not purchases, so the retry after a rejection is unaffected. No ledger means no prior purchase.
+  ({ intent, ledger }) => {
+    const { budget_cap, recurrence } = intent.constraints;
+    if (budget_cap || recurrence) return null;
+    return (ledger?.capturedOrderTimes.length ?? 0) >= 1 ? "INTENT_ALREADY_USED" : null;
   },
 ];
 
