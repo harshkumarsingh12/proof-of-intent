@@ -31,9 +31,13 @@ item under Analytics) needs all of: `AG_STUDIO_LICENSE_KEY` (an AI-enabled key; 
 `https://www.ag-grid.com/studio/react/enterprise-licence/#request-a-45-day-trial-licence`), `OPERATOR_PASSWORD` and
 `OPERATOR_TOKEN` in the dashboard's environment, and an API the dashboard can reach (`API_INTERNAL_URL`). If any is missing
 the page says "Studio is unavailable on this deployment". Put the key on one line in `.env` with no quotes; it is a secret
-like the PayPal secret. With no key or an invalid one Studio still renders and the console logs "Invalid License Key" (no visible watermark was seen in that state, but AG Grid's docs say a licence is needed to remove the watermark and console warnings, so use a valid key for the demo); with a valid key the console is quiet. The **Ask the AI** chat also needs `AI_MODE=live`
-with `AI_PROVIDER`, `AI_MODEL` and `AI_API_KEY` in **both** the API environment (it makes the model calls) and the
-dashboard's (it tells you whether the chat is ready); in replay mode the page says the chat can't answer yet. Studio's
+like the PayPal secret. With an invalid key Studio renders with an "Invalid License Key" console warning.
+Use the team's valid AI-enabled key for the demo. For new questions, set `AI_MODE=live` on both the API and
+dashboard, with `AI_PROVIDER`, `AI_MODEL` and `AI_API_KEY` in the API environment. The dashboard reads the mode
+to explain chat availability. In replay mode the chat answers only recorded questions with
+matching dispute facts and tools. An unrecorded turn gives a clear unavailable response. Capture all three
+starters with `pnpm studio:record` on the live stack, review the answers, then repeat with both servers in replay
+mode. [Recording steps and timings](evals/README.md#studio-starter-recordings). Studio's
 report lives in the browser tab and nothing is saved; the chat's tools are read-only.
 
 **The shop** (http://localhost:3001/shop) runs journey A: your browser makes a key and keeps it, you sign an

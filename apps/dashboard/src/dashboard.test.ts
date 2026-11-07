@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { tools } from "./studio-agent";
+import { ATTENTION_STARTER_PROMPT, tools } from "./studio-agent";
+// The AI package is server code, so the dashboard doesn't depend on it; a relative import is fine for a test.
+import { ATTENTION_STARTER_PROMPT as ANSWERED_LOCALLY } from "../../../packages/ai/src/studio";
 import { customWidgetDefinitions } from "../app/analytics/studio/studio-widgets";
 import { widgets } from "./widgets";
 
@@ -45,5 +47,12 @@ describe("dashboard", () => {
       "get_dispute",
     ]);
     expect(tools.every((t) => t.readOnly)).toBe(true);
+  });
+});
+
+describe("Studio starters", () => {
+  it("the attention starter asks the exact question the AI package answers locally", () => {
+    // If someone rewords the starter, the fast path and the replay answer would silently stop applying.
+    expect(ATTENTION_STARTER_PROMPT).toBe(ANSWERED_LOCALLY);
   });
 });
