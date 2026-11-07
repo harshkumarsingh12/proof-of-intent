@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadShopper } from "../../../src/key-store";
 import { signCompact } from "../../../src/signing";
-import { saveProof, setupTokenFromQuery } from "../../../src/wallet";
+import { isNotApprovedYet, saveProof, setupTokenFromQuery } from "../../../src/wallet";
 
 type State = { kind: "working" } | { kind: "saved" } | { kind: "failed"; message: string };
 
@@ -44,7 +44,7 @@ export default function WalletReturn() {
       };
       if (!res.ok) {
         throw new Error(
-          body.issue === "SETUP_TOKEN_NOT_APPROVED"
+          isNotApprovedYet(body.issue)
             ? "PayPal doesn't have your approval yet. Go back and approve the wallet."
             : (body.message ?? `The shop answered ${res.status}`),
         );

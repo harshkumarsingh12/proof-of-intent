@@ -6,7 +6,7 @@
 //
 // After you approve, PayPal sends the browser to VAULT_RETURN_URL (default: the hosted shop's /shop/wallet, which
 // harmlessly refuses a setup token it never issued). The script doesn't wait for a keypress: it polls PayPal until
-// the setup token is approved (up to 10 minutes), so it can also run in the background.
+// the setup token is approved (up to VAULT_WAIT_MINUTES, default 10), so it can also run in the background.
 //
 // PayPal credentials come from .env. The full run needs a human for one step, the approval on PayPal, and then
 // proves what agent-alone checkout relies on: a vaulted wallet charges with no shopper present.
@@ -30,7 +30,8 @@ if (process.argv.includes("--setup-only")) {
 console.log(
   "\nOpen the link, log in as a sandbox shopper and approve. Waiting for PayPal to see the approval…",
 );
-const deadline = Date.now() + 10 * 60_000;
+const waitMinutes = Number(process.env.VAULT_WAIT_MINUTES ?? 10);
+const deadline = Date.now() + waitMinutes * 60_000;
 let vaultId: string | undefined;
 while (!vaultId) {
   try {
