@@ -29,7 +29,7 @@ import { keyValidAt, mandateHash, verifyMandate } from "@poi/mandates";
 import type { PayPalClient } from "@poi/paypal";
 import { evaluate } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
-import { placeOrder, stepUpTokenHash, type Merchant } from "./checkout";
+import { ledgerFor, placeOrder, stepUpTokenHash, type Merchant } from "./checkout";
 import { checkProof, isFailure, type Failure as ProofFailure } from "./vault";
 
 export interface StepUpDeps {
@@ -183,7 +183,12 @@ async function approveFound(
   }
 
   // 4. The hard rules again: the link may be hours old and the budget spent in the meantime.
-  const rules = evaluate({ intent, cart, now, ledger: await deps.db.activeLedger(intent.mandate_id, now) });
+  const rules = evaluate({
+    intent,
+    cart,
+    now,
+    ledger: await ledgerFor(deps.db, intent.mandate_id, st.cartMandateHash, false, now),
+  });
   if (!rules.pass) {
     await deps.db.recordVerdict({
       intentMandateId: st.intentMandateId,

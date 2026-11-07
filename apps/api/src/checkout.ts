@@ -172,7 +172,7 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
 
   // 5. Hard rules, and the merchant's own facts. Both are reported together, so an agent that gets one wrong and also
   //    breaks a limit hears about both.
-  const ledger = await deps.db.activeLedger(intent.mandate_id, now);
+  const ledger = await ledgerFor(deps.db, intent.mandate_id, cartHash, payment.human_present, now);
   const rules = evaluate({ intent, cart, now, ledger });
   const misses = catalogMismatches(cart.contents.lines, deps.catalog);
   // Paying without the shopper is something the shopper signed, not something the agent declares (#157).
@@ -283,6 +283,24 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
     reasons,
     semantic,
   });
+}
+
+/**
+ * What the intent has spent or set aside, for judging this cart. An unattended cart whose earlier charge has an unknown
+ * outcome (#159) is being retried, not bought a second time: that order is left out, so the retry does not count against
+ * itself (and a default intent's one purchase is not "already used" by the very order being confirmed).
+ */
+export async function ledgerFor(
+  db: Db,
+  intentMandateId: string,
+  cartHash: string,
+  humanPresent: boolean,
+  now: string,
+) {
+  const resumable = humanPresent
+    ? undefined
+    : (await db.unknownOutcomeOrders(intentMandateId)).find((u) => u.cartMandateHash === cartHash);
+  return db.activeLedger(intentMandateId, now, resumable?.id);
 }
 
 /**
