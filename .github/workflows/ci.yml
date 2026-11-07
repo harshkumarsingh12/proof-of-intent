@@ -55,6 +55,14 @@ jobs:
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+      # Fails on a NEW high or critical advisory in production dependencies. The three highs that were reviewed and
+      # accepted are in package.json (pnpm.auditConfig.ignoreGhsas), with the reasons in SECURITY.md (#167). It does not
+      # block a merge for now: an advisory someone else publishes should not stop an unrelated change days before the
+      # deadline. After the hackathon, delete `continue-on-error` so it does.
+      - name: Dependency audit (production)
+        if: always()
+        continue-on-error: true
+        run: pnpm audit --prod --audit-level=high
 
   docker:
     name: docker

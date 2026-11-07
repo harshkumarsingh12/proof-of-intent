@@ -29,6 +29,7 @@ repository (Security → Report a vulnerability) or contact @harshkumarsingh12. 
 | Near-miss hint   | After a refusal for price or kind, the shop says what would have fit using plain code over the catalog and the signed limits (no model); its one button only refills the limits form, drops the old signed intent and needs a new signature; a cap is never lowered and voice never applies it | `apps/buyer/src/near-miss.ts`, `near-miss.test.ts`, `scripts/smoke/shop.ts` |
 | Waiting carts    | The shop lists a shopper's held carts and approves them only with signatures from the key that signed the intent (a 5-minute list proof, then a CartApproval for that step-up and cart); the agent never holds that key; a token is never returned                                                                                                                                                                                                                                      | `apps/api/src/stepup.test.ts`                                          |
 | Replay           | Nonces stored with a unique index; carts expire after 15 minutes                                                                                                                                                                                                                                                                                                                                                                                                                        | `NONCE_REPLAYED`, `CART_EXPIRED` tests                                 |
+| Dependencies     | `pnpm audit --prod` runs in CI (`--audit-level=high`, not yet blocking); the highs that were reviewed and accepted are explicit in `package.json`, with a reachability note for each in the section below | CI, SECURITY.md §Dependency advisories |
 | Cart facts       | The agent proposes the cart, the merchant signs it: every line's SKU, title, attributes and price must equal the merchant's catalog or the checkout is rejected with `CATALOG_MISMATCH` (no order, no Cart Mandate); the audit log names the differing fact | `packages/contracts/src/catalog.test.ts`, `apps/api/src/checkout.test.ts` |
 | Audit integrity  | The audit log stores the exact canonical bytes and signature that were verified, never a re-serialized copy                                                                                                                                                                                                                                                                                                                                                                             | evidence-integrity script                                              |
 | Webhooks         | Verified with PayPal's verify-signature call before any processing; unverified → 400                                                                                                                                                                                                                                                                                                                                                                                                    | webhook tests                                                          |
@@ -37,6 +38,40 @@ repository (Security → Report a vulnerability) or contact @harshkumarsingh12. 
 | LLM input        | Never receives emails, vault ids, keys or full addresses; a redaction step runs before every call                                                                                                                                                                                                                                                                                                                                                                                       | `packages/ai` tests                                                    |
 | Prompt injection | Buyer-supplied text is delimited data; "ignore the budget" style strings must fail safe                                                                                                                                                                                                                                                                                                                                                                                                 | J1/J2 injection fixtures                                               |
 | Public demo      | Rate limits on `/checkout`, `/webhooks/paypal`, `/keys/shopper`, `/vault/setup`, `/vault/save`, `/vault/remove`, `/ai/studio`; daily AI budget kill switch; without the operator login the dashboard is read-only                                                                                                                                                                                                                                                                       | spec 0008                                                              |
+
+## Dependency advisories
+
+Audited Nov 8, 2026 with `pnpm audit --prod` (#167). It reported **21 advisories (2 critical, 8 high, 9 moderate, 2 low)**.
+After the changes below, **10 remain: none critical, 3 high, 5 moderate, 2 low.** A count alone does not say what an attacker
+can reach, so each group says whether the vulnerable code is even loaded. I checked that by importing what the API imports
+(`@paypal/agent-toolkit/ai-sdk`, `ai`) and listing the modules Node loaded.
+
+**Fixed (12):**
+
+| What | Change | Checked |
+|---|---|---|
+| `vitest` and `tinypool` (**both criticals**) and `@vitest/mocker` (5) | `packages/ledger` declared `vitest` only as a *peer* dependency, which pnpm installs as a production dependency of the ledger. It is now also a `devDependency`. | `pnpm audit --prod` no longer lists them; they are test tooling and never ship |
+| `postcss` via Next (2 high, 2 moderate) | `pnpm.overrides`: `postcss ^8.5.23`. It only processes our own CSS at build time. | Both Next apps build |
+| `mathjs` via the PayPal toolkit (2 high) | `pnpm.overrides`: `mathjs ^15.2.0`. The toolkit calls only `round(x, 2)`, never the expression parser the advisories are about. | The toolkit loads and `round` is correct |
+| `@langchain/core` via the toolkit (1 high) | `pnpm.overrides`: `0.3.80` (same minor line). It is not loaded by anything we import. | n/a (not loaded) |
+
+**Accepted, with the reason (10):** the three highs are listed in `package.json` under `pnpm.auditConfig.ignoreGhsas`, so CI
+fails on a *new* high or critical and not on these.
+
+| Package (advisories) | Why it is not reachable | What would fix it |
+|---|---|---|
+| `langsmith` (1 high, 3 moderate), `uuid` (1 moderate), via `@langchain/core` | Not loaded when the API starts (`@langchain/core`, `langsmith` and `uuid` are absent from the loaded modules). The advisories need LangSmith prompt pulls or LangChain deserialization, which we never call. | A toolkit that updates LangChain: the newest `@paypal/agent-toolkit` (1.11.0) pins `@langchain/core` exactly |
+| `jsondiffpatch` (1 high, 1 moderate), via `ai@4.3.19` | Used only by `ai/rsc` (React Server Components), which we do not import; not loaded. | `ai` 5, or `jsondiffpatch` 0.7 (`ai` pins 0.6.0 exactly) |
+| `zod` (1 high) | The advisory is in zod's **v4** array validation. We and our dependencies use the v3 API; `zod/v4` is not imported or loaded. Request bodies also have size limits. | zod 4.6.6, a major migration |
+| `ai` (1 low), `@ai-sdk/provider-utils` (1 low) | File-type allowlist and resource-use issues in features we do not use. | `ai` 5 |
+
+**Dev tooling only** (a full `pnpm audit`, which is not gated): `vitest`/`tinypool` 3.x (2 critical, 3 moderate) and `minimatch`
+via `typescript-eslint` (1 moderate). The test runner needs an attacker who can already pollute the prototype inside the
+process, and only runs in development and CI. Fixing them is a major `vitest` upgrade.
+
+**Next:** after the hackathon, move to `ai` 5 and zod 4 and remove the matching `ignoreGhsas` entries, and delete
+`continue-on-error` on the CI audit step so a new advisory blocks the merge. Re-run `pnpm audit --prod` whenever dependencies
+change and update this section.
 
 ## Pre-submission checklist (owner: @srshriv, Nov 10)
 
