@@ -19,10 +19,11 @@ deliberate act by the shopper.
 
 1. **Voice is an input method only.** A transcript fills the text box. It is untrusted text, like typing: it goes through
    `/api/agent/draft-intent` (redaction, delimited data block, 500-character cap) and nothing else.
-2. **Signing needs a separate confirmation.** After the agent drafts the limits, the shop shows a **read-back card** built
-   from the structured form (never from model prose): price cap, item, color, validity, confirm-each-cart. The shopper
-   confirms by tapping **Confirm and sign** or by saying "confirm" in a **new** recognition session started after the
-   card is visible. Only then does the browser sign, exactly the form that was read back.
+2. **A request only fills in the limits; signing is the shopper's own click.** Whether typed or spoken, the request is drafted
+   into the limits form and nothing more happens: there is no read-back card and no spoken confirmation step. The shopper can
+   edit any limit, or speak or type again to replace them all, and signs by clicking **Sign my intent**. Nothing is signed,
+   proposed or bought from a sentence. _(Changed Nov 8 at the owner's request: this used to be a read-back card plus a separate
+   "confirm". The signature is still a deliberate act, and the form the shopper sees is exactly what the browser signs.)_
 3. **Voice never changes how the order is paid.** "Agent pays alone" stays a deliberate checkbox. With it on and a wallet
    saved, an approved cart is paid with no PayPal step; otherwise the PayPal button still appears.
 4. **The chat is read-only.** It has no tool that signs, buys, proposes a checkout, saves or removes a wallet. It never
@@ -32,20 +33,17 @@ deliberate act by the shopper.
 
 ## Voice design
 
-State machine (`apps/buyer/src/voice.ts`, pure and unit-tested):
-`idle → listening → drafting → readback → confirmed → signing → choosing → done`, with `failed` reachable from any
-working state and **Cancel** from every state.
+State machine (`apps/buyer/src/voice.ts`, pure and unit-tested): `idle → listening → drafting → idle`, with `failed`
+reachable from `listening` and `drafting`, and **Cancel** from every state. Speaking again from `idle` or `failed` starts over.
 
 - Speech heard while `listening` is only ever text. It is never parsed as a command, so "buy a grey jacket and confirm"
-  fills the box and shows the card; it does not sign.
-- `parseConfirmation` accepts only a whole short utterance: `confirm`, `i confirm`, `confirm it`, `yes confirm`
-  (cancel: `cancel`, `stop`, `no`, `never mind`). A bare "yes" is not a confirmation, and anything over four words is ignored.
-- A confirmation arriving less than 700 ms after the card appears is ignored (a stray tap or echo); the read-back expires
-  after 60 s; editing the form while the card is up discards it (what is signed must be what was read back).
-- Text-to-speech read-back is optional (off by default). Recognition is stopped while the shop speaks, so it cannot hear
-  itself say "confirm".
+  fills the box and the limits like any other request; it does not sign. In every other phase speech is not looked at.
+- The same drafting happens when the shopper presses **Enter** in the request box (Shift+Enter is a new line) or clicks
+  **Fill in the limits from my words**. Drafting never turns "ask me before every purchase" on or off: that is the shopper's switch.
+- There is no text-to-speech read-back any more (it existed only to support the confirmation step), and no
+  `parseConfirmation`, read-back card, timeout or "edited" rule.
 - Browser support: the Web Speech API (Chrome, Edge, Safari; HTTPS or localhost; not Firefox). The microphone is hidden
-  where it is missing, and typing always works. The browser vendor processes the audio; the card says so.
+  where it is missing, and typing always works. The browser vendor processes the audio; the form says so.
 - Switch: `BUYER_VOICE=1` on the buyer app (runtime, default off).
 
 ## Interfaces
@@ -54,9 +52,10 @@ No API or contract changes. Buyer app only: `src/voice.ts`, `app/shop/useVoice.t
 
 ## Acceptance criteria
 
-1. "buy X and confirm" in one utterance shows the read-back and signs nothing. _(unit + browser smoke)_
-2. A confirmation outside the read-back, inside the first 700 ms, or after 60 s is ignored. _(unit)_
-3. Editing the form during the read-back discards it; Cancel works from every state. _(unit)_
+1. "buy X and confirm" in one utterance fills the box and the limits and signs nothing. _(unit + browser smoke)_
+2. A spoken or typed request fills the limits with no confirmation step; speaking or typing again replaces them, and the
+   shopper can edit them before signing with one click. _(unit + browser smoke)_
+3. Cancel works from every state; speech outside `listening` is ignored. _(unit)_
 4. Voice code never touches the "agent pays alone" setting. _(unit + browser smoke)_
 5. Without speech recognition the microphone is hidden and the shop still works. _(browser smoke)_
 

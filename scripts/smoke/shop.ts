@@ -213,16 +213,26 @@ if (!hosted) {
   );
 }
 
-await step("'Let the agent fill in the limits' drafts but does not sign", async () => {
+await step("the button and the Enter key fill in the limits from the words, and neither signs", async () => {
   await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
   await page.getByText("Key id").waitFor({ timeout: 30_000 });
   await page.locator("textarea").fill("I want white socks under $20 please");
-  await page.getByRole("button", { name: /Let the agent fill in the limits/ }).click();
+  await page.getByRole("button", { name: "Fill in the limits from my words" }).click();
   await page.getByText(/filled in the limits below/).waitFor({ timeout: 30_000 });
   if (await page.getByText("Signed in your browser").count())
     throw new Error("the agent signed for the shopper");
   const price = await page.locator('input[inputmode="decimal"]').inputValue();
   if (price !== "20") throw new Error(`expected 20, got ${price}`);
+
+  // Enter does the same (Shift+Enter would be a new line), and the shopper's edit is then replaced by the new words.
+  await page.locator("textarea").fill("a grey running jacket under $55");
+  await page.locator("textarea").press("Enter");
+  await page.waitForFunction(
+    () => (document.querySelector("input[inputmode=decimal]") as HTMLInputElement | null)?.value === "55",
+    undefined,
+    { timeout: 30_000 },
+  );
+  if (await page.getByText("Signed in your browser").count()) throw new Error("Enter signed for the shopper");
 });
 
 await step("'Let the agent choose' proposes a cart and shows what it did", async () => {
@@ -277,85 +287,48 @@ if (process.env.VOICE === "1") {
     return p;
   };
   const speak = (p: Page) => p.getByRole("button", { name: "Speak your request" }).click();
-  const readback = (p: Page) => p.getByRole("region", { name: "Check before signing" });
   const signedBanner = (p: Page) => p.getByText("Signed in your browser");
   const aloneChecked = (p: Page) => p.getByLabel(/Let the agent pay alone/).isChecked();
+  const priceBox = (p: Page) => p.getByLabel("Spend at most (USD)");
+  const filledNote = (p: Page) => p.getByText(/filled in the limits below/);
 
   await step(
-    "voice: a request and 'confirm' in one breath fills the box and shows the read-back, and signs nothing",
+    "voice: a spoken request fills the box and the limits, with no confirmation, and signs nothing",
     async () => {
       const p = await voiceShop(true);
+      // A request that happens to contain "confirm" is only text: it fills the form like any other.
       await say(p, "buy a grey running jacket under $80 and confirm");
       await speak(p);
-      await readback(p).waitFor({ timeout: 30_000 });
-      const text = await readback(p).innerText();
-      for (const line of ["Spend at most $80.00", "Item: Running jackets", "Color: grey"])
-        if (!text.includes(line)) throw new Error(`read-back is missing "${line}"`);
-      if (!/Nothing is signed yet/.test(text)) throw new Error("the card doesn't say nothing is signed");
+      await filledNote(p).waitFor({ timeout: 30_000 });
       if ((await p.locator("textarea").inputValue()) !== "buy a grey running jacket under $80 and confirm")
-        throw new Error("the transcript isn't in the text box");
-      await p.waitForTimeout(1_500); // longer than the guard: if the request could confirm itself, it would have by now
-      if (await signedBanner(p).count()) throw new Error("a request containing 'confirm' signed by itself");
+        throw new Error("the transcript did not fill the box");
+      if ((await priceBox(p).inputValue()) !== "80") throw new Error("the limits were not filled in from the words");
+      if (await p.getByRole("region", { name: "Check before signing" }).count())
+        throw new Error("a read-back card is still asking for confirmation");
+      await p.waitForTimeout(1_500); // long enough that anything that could sign by itself would have
+      if (await signedBanner(p).count()) throw new Error("a spoken request signed by itself");
       if (await aloneChecked(p)) throw new Error("voice ticked 'agent pays alone'");
       await p.context().close();
     },
   );
 
-  await step(
-    "voice: tapping Confirm signs what was read back and the agent shops, without touching 'pays alone'",
-    async () => {
-      const p = await voiceShop(true);
-      await say(p, "buy a grey running jacket under $80");
-      await speak(p);
-      await readback(p).waitFor({ timeout: 30_000 });
-      await p.getByRole("button", { name: "Confirm and sign" }).click();
-      await signedBanner(p).waitFor({ timeout: 30_000 });
-      await p
-        .locator(".verdict", { hasText: /Fits what you signed|please confirm/ })
-        .first()
-        .waitFor({ timeout: 90_000 });
-      if (await aloneChecked(p)) throw new Error("voice ticked 'agent pays alone'");
-      await p.context().close();
-    },
-  );
-
-  await step(
-    "voice: saying 'confirm' after the card signs; other words don't; Cancel takes the card down",
-    async () => {
-      const p = await voiceShop(true);
-      await say(p, "buy a grey running jacket under $80");
-      await speak(p);
-      await readback(p).waitFor({ timeout: 30_000 });
-      await p.waitForTimeout(1_000); // past the first 700 ms, when a confirmation is ignored
-      await say(p, "buy it and confirm");
-      await p.getByRole("button", { name: "Say “confirm”" }).click();
-      await p.waitForTimeout(800);
-      if (await signedBanner(p).count()) throw new Error("'buy it and confirm' counted as a confirmation");
-      await say(p, "confirm");
-      await p.getByRole("button", { name: "Say “confirm”" }).click();
-      await signedBanner(p).waitFor({ timeout: 30_000 });
-      await p.context().close();
-
-      const q = await voiceShop(true);
-      await say(q, "buy a grey running jacket under $80");
-      await speak(q);
-      await readback(q).waitFor({ timeout: 30_000 });
-      await q.getByRole("button", { name: "Cancel" }).click();
-      await readback(q).waitFor({ state: "detached", timeout: 5_000 });
-      if (await signedBanner(q).count()) throw new Error("cancel still signed");
-      await q.context().close();
-    },
-  );
-
-  await step("voice: editing the limits while the card is up discards it", async () => {
+  await step("voice: speaking again replaces the limits, and the shopper can edit them and sign", async () => {
     const p = await voiceShop(true);
-    await say(p, "buy a grey running jacket under $80");
+    await say(p, "a grey running jacket under $80");
     await speak(p);
-    await readback(p).waitFor({ timeout: 30_000 });
-    await p.locator('input[inputmode="decimal"]').fill("95");
-    await readback(p).waitFor({ state: "detached", timeout: 5_000 });
-    await p.getByText(/read-back no longer applies/).waitFor({ timeout: 5_000 });
-    if (await signedBanner(p).count()) throw new Error("an edited form was signed");
+    await filledNote(p).waitFor({ timeout: 30_000 });
+    if ((await priceBox(p).inputValue()) !== "80") throw new Error("first fill missing");
+    await say(p, "a grey running jacket under $60");
+    await speak(p);
+    await p.waitForFunction(
+      () => (document.querySelector("input[inputmode=decimal]") as HTMLInputElement | null)?.value === "60",
+      undefined,
+      { timeout: 30_000 },
+    );
+    await priceBox(p).fill("65"); // the shopper edits what was filled in
+    await p.getByRole("button", { name: "Sign my intent" }).click();
+    await signedBanner(p).waitFor({ timeout: 20_000 });
+    if (await aloneChecked(p)) throw new Error("voice ticked 'agent pays alone'");
     await p.context().close();
   });
 

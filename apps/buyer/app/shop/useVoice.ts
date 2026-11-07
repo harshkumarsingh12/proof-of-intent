@@ -61,38 +61,26 @@ export interface Speech {
   ready: boolean;
   /** Speech recognition exists in this browser. False on the server render and until mounted. */
   supported: boolean;
-  /** Speaking the read-back aloud is possible. */
-  canSpeak: boolean;
   /** One recognition session: it ends by itself after the shopper stops talking. Replaces a running one. */
   listen: (handlers: ListenHandlers) => void;
   stop: () => void;
-  /** Reads `text` aloud, with the microphone off meanwhile (so the shop can't hear its own "confirm"), then `onDone`. */
-  speak: (text: string, onDone: () => void) => void;
 }
 
 export function useSpeech(): Speech {
   const [ready, setReady] = useState(false);
   const [supported, setSupported] = useState(false);
-  const [canSpeak, setCanSpeak] = useState(false);
   const active = useRef<Recognition | null>(null);
 
   // Feature-detect after mount, so the server render and the first client render agree.
   useEffect(() => {
     setSupported(recognitionConstructor() !== undefined);
     setReady(true);
-    setCanSpeak(
-      typeof window.speechSynthesis !== "undefined" && typeof SpeechSynthesisUtterance !== "undefined",
-    );
-    return () => {
-      active.current?.abort();
-      if (typeof window.speechSynthesis !== "undefined") window.speechSynthesis.cancel();
-    };
+    return () => active.current?.abort();
   }, []);
 
   const stop = useCallback(() => {
     active.current?.abort();
     active.current = null;
-    if (typeof window.speechSynthesis !== "undefined") window.speechSynthesis.cancel();
   }, []);
 
   const listen = useCallback((handlers: ListenHandlers) => {
@@ -132,20 +120,5 @@ export function useSpeech(): Speech {
     }
   }, []);
 
-  const speak = useCallback((text: string, onDone: () => void) => {
-    if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
-      onDone();
-      return;
-    }
-    active.current?.abort();
-    active.current = null;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.onend = onDone;
-    utterance.onerror = onDone;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }, []);
-
-  return { ready, supported, canSpeak, listen, stop, speak };
+  return { ready, supported, listen, stop };
 }
