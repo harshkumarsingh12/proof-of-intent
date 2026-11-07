@@ -10,6 +10,12 @@ export interface StudioWidget {
 
 export const widgets: StudioWidget[] = [
   {
+    id: "dispute-grid",
+    name: "Disputes",
+    aiDescription:
+      "An AG Grid of every dispute with its copilot class, platform, status, amount, recommended action and time left to respond. Clicking a row selects that dispute for the mandate diff and evidence preview, and the grid filters and exports to CSV.",
+  },
+  {
     id: "mandate-diff",
     name: "Mandate Diff",
     aiDescription:
@@ -19,7 +25,7 @@ export const widgets: StudioWidget[] = [
     id: "evidence-preview",
     name: "Evidence Preview",
     aiDescription:
-      "Renders the drafted dispute attestation PDF and cover note for operator verification prior to PayPal submission.",
+      "Renders the drafted dispute attestation PDF with its cover note for operator verification prior to PayPal submission, with a link to the full dispute.",
   },
   {
     id: "agent-platform",

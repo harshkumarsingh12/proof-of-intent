@@ -7,21 +7,41 @@
  * agent platform breakdown. Each reads its data through Studio's data engine (so Studio's filters and cross filters
  * apply) and draws with the dashboard's own theme tokens. The pure shaping lives in src/studio-data.ts.
  */
+import {
+  AllCommunityModule,
+  ModuleRegistry,
+  type CellStyle,
+  type ColDef,
+  type GridApi,
+} from "ag-grid-community";
+import { AgGridReact } from "ag-grid-react";
 import type { AgWidgetField, AgWidgetParams } from "ag-studio";
 import { createWidgets } from "ag-studio-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { gridTheme } from "../../../src/grid-theme";
 import {
+  actionLabel,
   cells,
   diffView,
+  disputePath,
+  dueLabel,
   evidencePdfPath,
   hasEvidence,
+  isUrgent,
+  NO_MANDATE_LABEL,
   platformCards,
+  statusLabel,
+  urgency,
+  type GridDispute,
   type PlatformGroup,
   type StudioCheckRow,
 } from "../../../src/studio-data";
+import { useFilterRevision } from "../../../src/studio-filters";
 import { useSelectedDispute } from "../../../src/studio-selection";
-import { fontStack, v } from "../../../src/theme";
+import { fontStack, palette, v } from "../../../src/theme";
 import { widgets as widgetInfo } from "../../../src/widgets";
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 const info = (id: string) => {
   const w = widgetInfo.find((x) => x.id === id);
@@ -68,6 +88,8 @@ function useRows(
 ): { rows?: Record<string, unknown>[]; error?: string } {
   const [state, setState] = useState<{ rows?: Record<string, unknown>[]; error?: string }>({});
   const key = JSON.stringify(fields.map((f) => [idOf(f), f.aggregation]));
+  // Studio gives a custom widget no event for a cross filter, so the Studio view publishes one (studio-filters.ts).
+  const filters = useFilterRevision();
   useEffect(() => {
     let live = true;
     widgetApi.getData({ fields } as any).then(
@@ -78,8 +100,8 @@ function useRows(
     return () => {
       live = false;
     };
-    // `fields` is covered by `key`; `config` changes when Studio's filters do.
-  }, [widgetApi, config, key]);
+    // `fields` is covered by `key`; `config` and `filters` change when Studio's filters do.
+  }, [widgetApi, config, key, filters]);
   return state;
 }
 
@@ -169,6 +191,11 @@ function MandateDiff(props: AgWidgetParams<any>) {
             ))}
           </select>
         </label>
+        {view.selected && (
+          <a href={disputePath(view.selected)} style={{ fontSize: 13 }}>
+            Open in dispute detail
+          </a>
+        )}
         <label style={{ fontSize: 13 }}>
           <input
             type="checkbox"
@@ -222,7 +249,7 @@ function MandateDiff(props: AgWidgetParams<any>) {
 
 // ---------- evidence preview ----------
 
-const EVIDENCE_FIELDS = ["dispute", "disputeClass"] as const;
+const EVIDENCE_FIELDS = ["dispute", "disputeClass", "coverNote"] as const;
 
 function EvidencePreview(props: AgWidgetParams<any>) {
   const items = EVIDENCE_FIELDS.map((k) => slot(props.dataMapping, k));
@@ -233,8 +260,8 @@ function EvidencePreview(props: AgWidgetParams<any>) {
   if (error) return <Status>{`Couldn't load the disputes: ${error}`}</Status>;
   if (!raw) return <Status>Loading the disputes…</Status>;
   const rows = raw.map((row: Record<string, unknown>) => {
-    const [dispute = "", disputeClass = ""] = cells(row, ids).map((x) => String(x ?? ""));
-    return { dispute, disputeClass };
+    const [dispute = "", disputeClass = "", coverNote = ""] = cells(row, ids).map((x) => String(x ?? ""));
+    return { dispute, disputeClass, coverNote };
   });
   if (rows.length === 0) return <NoData />;
   const current = rows.find((r: { dispute: string }) => r.dispute === picked) ?? rows[0];
@@ -262,7 +289,18 @@ function EvidencePreview(props: AgWidgetParams<any>) {
             Open the PDF in a new tab
           </a>
         )}
+        <a href={disputePath(current.dispute)} style={{ fontSize: 13 }}>
+          Open in dispute detail
+        </a>
       </div>
+      {current.coverNote && (
+        <details style={{ fontSize: 13 }} open>
+          <summary style={{ cursor: "pointer", fontWeight: 600, color: v("heading") }}>
+            Cover note submitted with the PDF
+          </summary>
+          <p style={{ margin: "6px 0 0", color: v("text"), lineHeight: "20px" }}>{current.coverNote}</p>
+        </details>
+      )}
       {hasEvidence(current.disputeClass) ? (
         <iframe
           key={current.dispute}
@@ -321,6 +359,11 @@ function AgentPlatform(props: AgWidgetParams<any>) {
               }}
             >
               <div style={{ color: v("heading"), fontWeight: 700, lineHeight: "20px" }}>{c.platform}</div>
+              {c.platform === NO_MANDATE_LABEL && (
+                <div style={{ fontSize: 12, lineHeight: "16px", color: v("textMuted") }}>
+                  not an agent order
+                </div>
+              )}
               <div style={{ fontSize: 13, lineHeight: "18px", color: v("textMuted") }}>
                 {c.disputes} disputes
               </div>
@@ -342,6 +385,196 @@ function AgentPlatform(props: AgWidgetParams<any>) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- disputes grid ----------
+
+const GRID_FIELDS = [
+  "dispute",
+  "disputeClass",
+  "platform",
+  "status",
+  "amount",
+  "action",
+  "dueAt",
+  "hoursToDue",
+] as const;
+
+const CLASS_CHIP: Record<string, { fg: string; bg: string }> = {
+  MANDATE_COMPLIANT: { fg: palette.success, bg: palette.successBg },
+  AGENT_OVERREACH: { fg: palette.danger, bg: palette.dangerBg },
+  INTENT_MISREAD: { fg: palette.warning, bg: palette.warningBg },
+  NO_MANDATE: { fg: palette.textMuted, bg: palette.surfaceMuted },
+};
+
+const money = (n: number) =>
+  `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function DisputeGrid(props: AgWidgetParams<any>) {
+  const items = GRID_FIELDS.map((k) => slot(props.dataMapping, k));
+  const ids = items.map(idOf);
+  const { rows: raw, error } = useRows(props, items);
+  const [selected, setSelected] = useSelectedDispute();
+  const [quick, setQuick] = useState("");
+  const api = useRef<GridApi<GridDispute>>(null);
+
+  const rows = useMemo<GridDispute[]>(
+    () =>
+      (raw ?? []).map((row) => {
+        const [
+          id = "",
+          disputeClass = "",
+          platform = "",
+          status = "",
+          amount = 0,
+          action = "",
+          dueAt = "",
+          hours = 0,
+        ] = cells(row, ids);
+        return {
+          id: String(id),
+          disputeClass: String(disputeClass),
+          platform: String(platform),
+          status: String(status),
+          amount: Number(amount),
+          action: String(action),
+          dueAt: String(dueAt),
+          hoursToDue: Number(hours),
+        };
+      }),
+    [raw],
+  );
+
+  // Repaint the rows when the shared selection changes (rows are styled from it).
+  useEffect(() => {
+    api.current?.redrawRows();
+  }, [selected]);
+
+  const columns = useMemo<ColDef<GridDispute>[]>(
+    () => [
+      {
+        field: "id",
+        headerName: "Dispute",
+        minWidth: 130,
+        cellStyle: { fontFamily: "ui-monospace, monospace", fontSize: 12 } as CellStyle,
+      },
+      {
+        field: "disputeClass",
+        headerName: "Class",
+        minWidth: 150,
+        cellStyle: { display: "flex", alignItems: "center" } as CellStyle,
+        cellRenderer: ({ value }: { value: string }) => {
+          const tone = CLASS_CHIP[value] ?? CLASS_CHIP.NO_MANDATE!;
+          return (
+            <span
+              style={{
+                ...chip(tone.bg, tone.fg, tone.bg),
+                fontFamily: "ui-monospace, monospace",
+                fontSize: 11,
+              }}
+            >
+              {value}
+            </span>
+          );
+        },
+      },
+      { field: "platform", headerName: "Platform", minWidth: 120 },
+      {
+        field: "status",
+        headerName: "Status",
+        minWidth: 150,
+        valueFormatter: ({ value }) => statusLabel(String(value ?? "")),
+      },
+      {
+        field: "amount",
+        headerName: "Amount",
+        type: "rightAligned",
+        minWidth: 110,
+        valueFormatter: ({ value }) => money(Number(value ?? 0)),
+      },
+      {
+        field: "action",
+        headerName: "Recommended",
+        minWidth: 170,
+        valueFormatter: ({ value }) => actionLabel(String(value ?? "")),
+      },
+      {
+        colId: "respondBy",
+        headerName: "Respond in",
+        minWidth: 130,
+        sort: "asc",
+        valueGetter: ({ data }) => (data ? urgency(data) : 0),
+        valueFormatter: ({ data }) => (data ? dueLabel(data) : ""),
+        cellStyle: ({ data }) =>
+          data && isUrgent(data) ? { color: palette.danger, fontWeight: 700 } : undefined,
+        tooltipValueGetter: ({ data }) => (data?.dueAt ? new Date(data.dueAt).toLocaleString() : ""),
+      },
+    ],
+    [],
+  );
+
+  if (error) return <Status>{`Couldn't load the disputes: ${error}`}</Status>;
+  if (!raw) return <Status>Loading the disputes…</Status>;
+  if (rows.length === 0) return <NoData />;
+
+  return (
+    <div style={{ ...frame, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+      <WidgetTitle format={props.format} fallback="Disputes: pick one to see its limits and evidence" />
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          aria-label="Filter disputes"
+          placeholder="Filter disputes"
+          value={quick}
+          onChange={(e) => setQuick(e.target.value)}
+          style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${v("border")}`, minWidth: 200 }}
+        />
+        <button
+          type="button"
+          onClick={() => api.current?.exportDataAsCsv({ fileName: "disputes.csv" })}
+          style={{
+            padding: "6px 14px",
+            borderRadius: 999,
+            border: `1px solid ${v("navy")}`,
+            background: v("surface"),
+            color: v("navy"),
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Export CSV
+        </button>
+        <span style={{ color: v("textMuted"), fontSize: 13 }}>
+          {rows.length} disputes. Click a row to see its limits and PDF below.
+        </span>
+      </div>
+      <div style={{ flex: 1, minHeight: 200 }}>
+        <AgGridReact<GridDispute>
+          theme={gridTheme}
+          rowData={rows}
+          columnDefs={columns}
+          defaultColDef={{ flex: 1, minWidth: 90, resizable: true }}
+          quickFilterText={quick}
+          getRowId={({ data }) => data.id}
+          onGridReady={(e) => {
+            api.current = e.api;
+          }}
+          onRowClicked={(e) => e.data && setSelected(e.data.id)}
+          onCellKeyDown={(e) => {
+            const key = (e.event as KeyboardEvent | undefined)?.key;
+            if (key === "Enter" && e.data) setSelected(e.data.id);
+          }}
+          getRowStyle={({ data }) =>
+            data?.id === (selected ?? rows[0]?.id)
+              ? { background: palette.navHoverBg, fontWeight: 600 }
+              : undefined
+          }
+          rowStyle={{ cursor: "pointer" }}
+          tooltipShowDelay={300}
+          animateRows={false}
+        />
       </div>
     </div>
   );
@@ -379,6 +612,43 @@ const definition = (
 
 export const customWidgetDefinitions: any[] = [
   definition(
+    "dispute-grid",
+    {
+      dispute: aiField(
+        "The dispute id; one row per dispute. Clicking a row selects it for the other widgets.",
+        ["category"],
+      ),
+      disputeClass: aiField(
+        "The copilot's class: MANDATE_COMPLIANT, AGENT_OVERREACH, INTENT_MISREAD or NO_MANDATE.",
+        ["category"],
+      ),
+      platform: aiField("The agent platform, or No mandate when the order had no signed mandate.", [
+        "category",
+      ]),
+      status: aiField("PayPal's dispute status, such as WAITING_FOR_SELLER_RESPONSE or RESOLVED.", [
+        "category",
+      ]),
+      amount: aiField("The disputed amount in US dollars.", ["numeric"]),
+      action: aiField("The copilot's recommended PayPal action, such as PROVIDE_EVIDENCE or ACCEPT_CLAIM.", [
+        "category",
+      ]),
+      dueAt: aiField("When the seller's response is due, as an ISO date.", ["category"]),
+      hoursToDue: aiField("Hours until the response is due; negative once it is late.", ["numeric"]),
+    },
+    {
+      dispute: "Dispute",
+      disputeClass: "Class",
+      platform: "Platform",
+      status: "Status",
+      amount: "Amount",
+      action: "Recommended action",
+      dueAt: "Respond by",
+      hoursToDue: "Hours to respond",
+    },
+    DisputeGrid,
+    { width: 900, height: 360 },
+  ),
+  definition(
     "mandate-diff",
     {
       dispute: aiField("The dispute id; one dispute's limits are shown at a time.", ["category"]),
@@ -406,8 +676,11 @@ export const customWidgetDefinitions: any[] = [
       disputeClass: aiField("The copilot's class for the dispute; only MANDATE_COMPLIANT has a PDF.", [
         "category",
       ]),
+      coverNote: aiField("The cover note drafted to go with the evidence PDF, empty when there is none.", [
+        "category",
+      ]),
     },
-    { dispute: "Dispute", disputeClass: "Class" },
+    { dispute: "Dispute", disputeClass: "Class", coverNote: "Cover note" },
     EvidencePreview,
     { width: 520, height: 420 },
   ),

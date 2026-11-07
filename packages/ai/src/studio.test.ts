@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import type { Generate, GenerateRequest } from "./runtime";
-import { runStudioTurn, type StudioTurn } from "./studio";
+import { backtickCodes, runStudioTurn, type StudioTurn } from "./studio";
 
 const turn: StudioTurn = {
   kind: "turn",
@@ -178,4 +178,21 @@ test("a model that keeps repeating a call is made to answer from the results it 
   const fallback = await runStudioTurn(looping, "live", never);
   expect(fallback.tool).toBeNull();
   expect(fallback.text).toContain("Our review found that the purchase exceeded your limits");
+});
+
+test("codes in the chat answer are wrapped in backticks so markdown keeps their underscores", async () => {
+  expect(backtickCodes("PP-D-1002 is AGENT_OVERREACH; amount_max and attributes.color broke.")).toBe(
+    "PP-D-1002 is `AGENT_OVERREACH`; `amount_max` and attributes.color broke.",
+  );
+  // Already wrapped, plain words, ids with hyphens and a 64-character hash are left alone.
+  expect(
+    backtickCodes("It is `ACCEPT_CLAIM` and hello world, case PP-R-ABC-10196871, hash b6e196ee208d71ce."),
+  ).toBe("It is `ACCEPT_CLAIM` and hello world, case PP-R-ABC-10196871, hash b6e196ee208d71ce.");
+  const model: Generate = async <T>({ schema }: GenerateRequest<T>) =>
+    schema.parse({ text: "The class is MANDATE_COMPLIANT.", tool: null });
+  const first: StudioTurn = { ...turn, history: [{ role: "user", text: "Explain PP-D-1001" }] };
+  await expect(runStudioTurn(first, "live", model)).resolves.toMatchObject({
+    text: "The class is `MANDATE_COMPLIANT`.",
+    tool: null,
+  });
 });

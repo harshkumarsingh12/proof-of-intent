@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { DisputeDetail } from "./dispute-types";
 import {
+  actionLabel,
   cells,
   checkRows,
   diffView,
+  disputePath,
   disputeRows,
+  dueLabel,
   evidencePdfPath,
   hasEvidence,
+  isUrgent,
+  NO_MANDATE_LABEL,
   platformCards,
+  statusLabel,
+  urgency,
   type StudioCheckRow,
 } from "./studio-data";
 
@@ -21,7 +28,7 @@ const check = (name: string, status: "PASS" | "FAIL", reasonCode?: string) => ({
   ...(reasonCode ? { reasonCode } : {}),
 });
 
-const detail = (id: string, checks: ReturnType<typeof check>[]) =>
+const detail = (id: string, checks: ReturnType<typeof check>[], over: Record<string, unknown> = {}) =>
   ({
     id,
     disputeClass: "AGENT_OVERREACH",
@@ -29,7 +36,11 @@ const detail = (id: string, checks: ReturnType<typeof check>[]) =>
     status: "WAITING_FOR_SELLER_RESPONSE",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
     amount: { value: 9550, currency: "USD" },
+    decision: "concede",
+    sellerResponseDueDate: "2026-11-08T12:00:00.000Z",
+    classificationInfo: { recommendedAction: "ACCEPT_CLAIM" },
     constraintChecks: checks,
+    ...over,
   }) as unknown as DisputeDetail;
 
 describe("studio tables", () => {
@@ -162,5 +173,126 @@ describe("evidence preview", () => {
   it("points at the dashboard proxy and escapes the id", () => {
     expect(evidencePdfPath("PP-R-1")).toBe("/api/disputes/PP-R-1/evidence.pdf");
     expect(evidencePdfPath("a/b c")).toBe("/api/disputes/a%2Fb%20c/evidence.pdf");
+  });
+});
+
+describe("the disputes table the grid, tiles and charts read", () => {
+  const now = new Date("2026-11-07T12:00:00.000Z");
+
+  it("carries the action, the deadline in hours, and 0/1 and dollar columns for the tiles", () => {
+    const [row] = disputeRows([detail("PP-1", [])], now);
+    expect(row).toMatchObject({
+      decision: "concede",
+      action: "ACCEPT_CLAIM",
+      dueAt: "2026-11-08T12:00:00.000Z",
+      hoursToDue: 24,
+      open: 1,
+      overreach: 1,
+      dueSoon: 1,
+      atStake: 95.5,
+      conceded: 95.5,
+    });
+  });
+
+  it("counts a resolved dispute as closed: nothing at stake, never due soon, still conceded if it was an overreach", () => {
+    const [row] = disputeRows([detail("PP-2", [], { status: "RESOLVED" })], now);
+    expect(row).toMatchObject({ open: 0, dueSoon: 0, atStake: 0, conceded: 95.5 });
+  });
+
+  it("is not due soon when the deadline is more than a day away, and is when it is already late", () => {
+    const far = disputeRows(
+      [detail("PP-3", [], { sellerResponseDueDate: "2026-11-20T00:00:00.000Z" })],
+      now,
+    )[0]!;
+    expect([far.dueSoon, far.hoursToDue > 24]).toEqual([0, true]);
+    const late = disputeRows(
+      [detail("PP-4", [], { sellerResponseDueDate: "2026-11-06T00:00:00.000Z" })],
+      now,
+    )[0]!;
+    expect([late.dueSoon, late.hoursToDue < 0]).toEqual([1, true]);
+  });
+
+  it("copes with a missing deadline, a compliant dispute (no conceded dollars) and a missing analysis", () => {
+    const [row] = disputeRows(
+      [
+        detail("PP-5", [], {
+          sellerResponseDueDate: "",
+          disputeClass: "MANDATE_COMPLIANT",
+          classificationInfo: undefined,
+        }),
+      ],
+      now,
+    );
+    expect(row).toMatchObject({
+      dueAt: "",
+      hoursToDue: 99_999,
+      dueSoon: 0,
+      conceded: 0,
+      overreach: 0,
+      action: "",
+    });
+  });
+
+  it("labels orders with no agent platform instead of showing 'none'", () => {
+    const rows = disputeRows(
+      [detail("PP-6", [], { agentPlatform: "none" }), detail("PP-7", [], { agentPlatform: "" })],
+      now,
+    );
+    expect(rows.map((r) => r.agentPlatform)).toEqual([NO_MANDATE_LABEL, NO_MANDATE_LABEL]);
+  });
+
+  it("passes the cover note through for the evidence preview", () => {
+    const [row] = disputeRows(
+      [detail("PP-8", [], { evidenceDraftInfo: { coverNote: "Signed record attached." } })],
+      now,
+    );
+    expect(row?.coverNote).toBe("Signed record attached.");
+  });
+});
+
+describe("grid labels", () => {
+  it("sorts open disputes by deadline and resolved ones after all of them", () => {
+    const rows = [
+      { status: "RESOLVED", hoursToDue: -500 },
+      { status: "WAITING_FOR_SELLER_RESPONSE", hoursToDue: 200 },
+      { status: "WAITING_FOR_SELLER_RESPONSE", hoursToDue: 5 },
+    ];
+    expect([...rows].sort((a, b) => urgency(a) - urgency(b)).map((r) => r.hoursToDue)).toEqual([
+      5, 200, -500,
+    ]);
+  });
+
+  it("says how long is left in plain terms", () => {
+    const open = (hoursToDue: number) => ({ status: "WAITING_FOR_SELLER_RESPONSE", hoursToDue });
+    expect(dueLabel(open(-2))).toBe("Overdue");
+    expect(dueLabel(open(0.2))).toBe("1h");
+    expect(dueLabel(open(30))).toBe("30h");
+    expect(dueLabel(open(96))).toBe("4d");
+    expect(dueLabel(open(99_999))).toBe("No deadline");
+    expect(dueLabel({ status: "RESOLVED", hoursToDue: -1 })).toBe("Closed");
+  });
+
+  it("flags only open disputes due within a day or already late", () => {
+    const open = (hoursToDue: number) => ({ status: "ACTION_REQUIRED", hoursToDue });
+    expect([isUrgent(open(-3)), isUrgent(open(24)), isUrgent(open(25)), isUrgent(open(99_999))]).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(isUrgent({ status: "RESOLVED", hoursToDue: -3 })).toBe(false);
+  });
+
+  it("words the actions and statuses for people", () => {
+    expect(actionLabel("PROVIDE_EVIDENCE")).toBe("Defend with evidence");
+    expect(actionLabel("ACCEPT_CLAIM")).toBe("Accept the claim");
+    expect(actionLabel("")).toBe("Not analysed yet");
+    expect(actionLabel("SOMETHING_NEW")).toBe("SOMETHING_NEW");
+    expect(statusLabel("WAITING_FOR_SELLER_RESPONSE")).toBe("Waiting for seller response");
+  });
+
+  it("links to the full dispute page and escapes the id", () => {
+    expect(disputePath("PP-R-1")).toBe("/disputes/PP-R-1");
+    expect(disputePath("a/b c")).toBe("/disputes/a%2Fb%20c");
   });
 });
