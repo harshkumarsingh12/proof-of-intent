@@ -176,7 +176,7 @@ Day-by-day tasks are GitHub issues under each milestone; see [ROADMAP.md](ROADMA
 | # | Decision | Default | By | Owner |
 |---|---|---|---|---|
 | D1 | LLM provider and model | **Decided:** NVIDIA `nemotron-3.5-lightning-30b-a3b`, thinking off (spec 0006) | done | Sumedha |
-| D2 | Vault v3 in MVP | **Decided:** yes. Built (#17, #36); PayPal accepts the setup token on the sandbox (Nov 7); the approved-token capture is checked with `pnpm sandbox:vault-wallet` | Nov 3 | Harsh |
+| D2 | Vault v3 in MVP | **Decided:** yes. Built (#17, #36); PayPal accepts the setup token on the sandbox (Nov 7); a real approval became a payment token that charged a vaulted `CAPTURE` with nobody present (Nov 7) | Nov 3 | Harsh |
 | D3 | Step-up channel | Email link with a signed token | Oct 31 | Sristee |
 | D4 | Studio agent calls the PayPal MCP server | No for MVP; Toolkit read-only tools only | Nov 7 | Sumedha |
 | D5 | Hosting | **Decided:** team server, Docker Compose | done | Harsh |

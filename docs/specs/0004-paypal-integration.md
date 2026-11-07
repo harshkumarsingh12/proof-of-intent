@@ -32,9 +32,11 @@ the team must be able to work before the sandbox is wired, hence a mock with the
   Nov 7) gives the claim back so the shopper can retry. A shopper
   can remove the wallet (`POST /vault/remove`, a `vault.remove` proof): our `vault_id` is cleared first, so the agent
   can't charge it from that moment, then PayPal is asked to revoke the payment token (`deletePaymentToken`; a failure
-  there is audited with the id for a later revoke and doesn't undo the removal). The vault id never leaves the server: `GET /vault/:kid` answers only `{ wallet: boolean }`. Verified against the sandbox: PayPal
-  accepts the setup token request (Nov 7). The approval and the vaulted capture need a person:
-  `pnpm sandbox:vault-wallet` runs the loop.
+  there is audited with the id for a later revoke and doesn't undo the removal). The vault id never leaves the server:
+  `GET /vault/:kid` answers only `{ wallet: boolean }`. Verified against the sandbox (Nov 7,
+  `pnpm sandbox:vault-wallet`): PayPal accepts the setup token request; after a real approval as a sandbox shopper
+  the setup token became a payment token, and a $1.00 `CAPTURE` order against that vault id completed at creation
+  with a capture and no shopper present. That is the call agent-alone checkout makes.
 - **Webhooks:** verify every delivery with `POST /v1/notifications/verify-webhook-signature` (transmission headers,
   raw body, our webhook id); persist first (unique event id), enqueue, answer 200 fast; unverified → 400.
 - **Disputes:** the sandbox client calls the PayPal Agent Toolkit (`@paypal/agent-toolkit`,
@@ -94,8 +96,9 @@ at any point. Sandbox-only calls live in `scripts/sandbox/paypal-raw.ts`, never 
 7. A shopper saves a PayPal wallet through the setup and save routes; only the signed shopper can, a setup token works
    once, and the saved wallet is what an agent-alone checkout charges. _(done, mock: `apps/api/src/vault.test.ts`)_
 8. PayPal's sandbox accepts the Vault v3 setup token request. _(done Nov 7: `pnpm sandbox:vault-wallet --setup-only`)_
-   A real approval turns into a vault id that a CAPTURE order charges with no shopper present. _(needs one manual
-   approval: `pnpm sandbox:vault-wallet`)_
+   A real approval turns into a vault id that a CAPTURE order charges with no shopper present. _(done Nov 7: vault id
+   `6x4815154r7192528`, order `84B88568BU8741939` COMPLETED with capture `01T21005RJ936303S`; run by script, so the
+   hosted shop's own save-and-pay run is still to do, #36)_
 
 ## Open questions
 
