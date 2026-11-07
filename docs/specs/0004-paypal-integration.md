@@ -97,8 +97,10 @@ at any point. Sandbox-only calls live in `scripts/sandbox/paypal-raw.ts`, never 
    once, and the saved wallet is what an agent-alone checkout charges. _(done, mock: `apps/api/src/vault.test.ts`)_
 8. PayPal's sandbox accepts the Vault v3 setup token request. _(done Nov 7: `pnpm sandbox:vault-wallet --setup-only`)_
    A real approval turns into a vault id that a CAPTURE order charges with no shopper present. _(done Nov 7: vault id
-   `6x4815154r7192528`, order `84B88568BU8741939` COMPLETED with capture `01T21005RJ936303S`; run by script, so the
-   hosted shop's own save-and-pay run is still to do, #36)_
+   `6x4815154r7192528`, order `84B88568BU8741939` COMPLETED with capture `01T21005RJ936303S`; run by script. Then through the
+   hosted shop itself, same day: a wallet saved with a real PayPal approval, and the agent paid alone, order
+   `ord_8358760d-b6bd-404f-b748-130c399ebd04` (PayPal `56C17655XU605930R`) `COMPLETED`, `humanPresent` false, $74.00,
+   capture `7UK80073R2712115B`)_
 
 ## Open questions
 
