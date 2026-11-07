@@ -42,6 +42,10 @@ listening session after the card is up. A request that itself contains "confirm"
 still appears. The rules are pure functions (`parseConfirmation`, `readBack`, `voiceReducer`) with unit tests;
 `VOICE=1 pnpm smoke:shop` runs the flow in Chrome with a fake recognizer.
 
+**Near-miss suggestions** (`src/near-miss.ts`, spec 0010; always on, no model). When the merchant refuses a cart for price or kind, the
+refusal panel says what would have fit (the closest product within the signed limits) and offers a button that refills the limits form.
+It never signs or buys: the old signed intent is dropped and you review and sign again.
+
 **Shop assistant** (`src/chat.ts`, `src/chat-server.ts`, `app/shop/ChatPanel.tsx`, spec 0010; off unless `BUYER_CHAT=1`). Ask about the
 store, compare products, understand your limits, or find out why a cart was refused. It is read-only: its replies are text, product
 information and limits for you to review, and its one button, "Use these limits", only fills the form. The server looks the facts up

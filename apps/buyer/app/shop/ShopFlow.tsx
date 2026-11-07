@@ -27,6 +27,7 @@ import {
 import type { TraceStep } from "../../src/agent";
 import { buildIntent, type IntentForm } from "../../src/intent";
 import { forgetShopper, loadShopper, saveShopper, type StoredShopper } from "../../src/key-store";
+import { nearMiss } from "../../src/near-miss";
 import { REASON_TEXT } from "../../src/reasons";
 import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact } from "../../src/signing";
 import { stepUpApproval, stepUpListProof } from "../../src/stepup";
@@ -604,6 +605,19 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   // A human-present order waits for the shopper at PayPal; an agent-alone one was charged when it was created.
   const hasOrder = Boolean(checkout?.res.paypal_order_id) && !checkout?.alone;
   const set = <K extends keyof IntentForm>(k: K, v: IntentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
+  // After a refusal: what would have fit, worked out from the signed limits and the store (no model).
+  const hint =
+    verdict?.outcome === "REJECT" && checkout && signed
+      ? nearMiss({
+          sku: checkout.sku,
+          reasons: verdict.reasons,
+          limits: {
+            maxCents: signed.intent.constraints.amount_max.value,
+            category: signed.intent.constraints.attributes?.category,
+            color: signed.intent.constraints.attributes?.color,
+          },
+        })
+      : undefined;
 
   // The signed intent's category first: that's where the agent shops. Everything else is a click away, so a
   // cross-category cart can still be tried (and refused with ATTRIBUTE_MISMATCH).
@@ -682,7 +696,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         )}
       </section>
 
-      <section className={`panel${shopper ? "" : " muted"}`}>
+      <section id="limits" className={`panel${shopper ? "" : " muted"}`}>
         <h2>
           <span className="num">2</span> Say what you want, then sign it
         </h2>
@@ -920,6 +934,31 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
               </p>
             )}
             <Reasons reasons={verdict.reasons} />
+            {hint && (
+              <div className="near-miss">
+                <p>{hint.text}</p>
+                {hint.apply && (
+                  <p>
+                    <button
+                      className="btn btn-ghost btn-small"
+                      onClick={() => {
+                        // Only the limits form changes. The old signed intent is dropped, so the shopper reviews the
+                        // new limits and signs again: nothing is signed or bought from here.
+                        setForm((f) => ({ ...f, ...hint.apply!.patch }));
+                        setSigned(undefined);
+                        setCheckout(undefined);
+                        setCheckoutError(undefined);
+                        setDraftNote("Limits filled in from the suggestion. Check them, then sign.");
+                        document.getElementById("limits")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                    >
+                      {hint.apply.label}
+                    </button>{" "}
+                    <span className="meta">Fills the limits form. You still review and sign it.</span>
+                  </p>
+                )}
+              </div>
+            )}
             {checkout?.res.order_id && (
               <p className="meta">
                 Order <code>{checkout.res.order_id}</code> · PayPal{" "}

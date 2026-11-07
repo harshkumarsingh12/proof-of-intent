@@ -89,6 +89,25 @@ await step("the red $95 jacket is refused with the reason codes and no PayPal or
   if (/Order\s+ord_/.test(text)) throw new Error("an order id is shown for a refused cart");
 });
 
+await step("the refusal says what would have fit, and its button only refills the limits", async () => {
+  const box = verdictBox(/Refused/);
+  const text = await box.innerText();
+  if (!/comes in red/.test(text) || !/already fits what you signed/.test(text))
+    throw new Error("no near-miss text in the refusal");
+  await box.getByRole("button", { name: /Set limits for running jackets/ }).click();
+  // Nothing was signed or bought: the signed intent and the verdict are gone and the form holds the new limits.
+  await page.getByRole("button", { name: "Sign my intent" }).waitFor({ timeout: 10_000 });
+  if (await verdictBox(/Refused/).count()) throw new Error("the refusal is still showing");
+  const color = await page.getByLabel(/color/i).first().inputValue();
+  if (color !== "red") throw new Error(`the form color is ${color}, not red`);
+  await freshIntent(); // back to the default limits for the steps below
+});
+
+await step("the red $95 jacket is refused again under the fresh limits", async () => {
+  await cart("$95.00", "red").getByRole("button", { name: "Propose this cart" }).click();
+  await verdictBox(/Refused/).waitFor({ timeout: 60_000 });
+});
+
 await step("the grey $74 jacket is approved by the merchant", async () => {
   await cart("$74.00", "grey").getByRole("button", { name: "Propose this cart" }).click();
   await verdictBox(/Fits what you signed/).waitFor({ timeout: 60_000 });
