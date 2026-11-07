@@ -9,7 +9,10 @@
 x-app: &app
   env_file: .env
   restart: unless-stopped
-  networks: [poi]
+  # No `networks` here on purpose (#121). Dokploy rewrites this file on deploy and does not resolve `<<: *app` merge keys,
+  # so a network inherited from this anchor looks missing to it and is replaced by Dokploy's own network, which strands the
+  # service away from `postgres` (`getaddrinfo ENOTFOUND postgres`, Nov 6 and Nov 7). Every service lists `networks: [poi]`
+  # itself, and apps/api/src/compose.test.ts fails if one doesn't.
   # Outside names (PayPal, the LLM) go to public resolvers; Docker's embedded DNS still answers service names
   # (postgres, api). The host's resolver dropped lookups on the team server (EAI_AGAIN for
   # api.sandbox.paypal.com, Nov 6), which failed an operator's accept-claim.
@@ -37,6 +40,7 @@ services:
   # One-shot: applies pending migrations (packages/db/migrations), then exits. Uses the api image.
   migrate:
     <<: *app
+    networks: [poi]
     build: { context: ., args: { APP: api } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
     command: ["pnpm", "--filter", "@poi/db", "migrate"]
@@ -45,6 +49,7 @@ services:
 
   api:
     <<: *app
+    networks: [poi]
     build: { context: ., args: { APP: api } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-api:${IMAGE_TAG:-local}
     environment: { PORT: "3000" }
@@ -58,12 +63,14 @@ services:
 
   worker:
     <<: *app
+    networks: [poi]
     build: { context: ., args: { APP: worker } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-worker:${IMAGE_TAG:-local}
     depends_on: { migrate: { condition: service_completed_successfully } }
 
   buyer:
     <<: *app
+    networks: [poi]
     build: { context: ., args: { APP: buyer } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-buyer:${IMAGE_TAG:-local}
     # The shop's server routes (key registration, the buyer agent, approval) call the API on the compose network.
@@ -76,6 +83,7 @@ services:
 
   dashboard:
     <<: *app
+    networks: [poi]
     build: { context: ., args: { APP: dashboard } }
     image: ghcr.io/${GHCR_OWNER:-harshkumarsingh12}/proof-of-intent-dashboard:${IMAGE_TAG:-local}
     environment: { API_INTERNAL_URL: "http://api:3000" }

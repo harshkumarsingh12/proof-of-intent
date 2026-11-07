@@ -29,6 +29,16 @@ deliver webhooks to it. The team runs it on its own server; the same Compose fil
 
 Deploy never runs on pull requests, and no self-hosted runner is used on this public repo.
 
+### Compose networks (#121)
+
+Every service in `docker-compose.yml` writes `networks: [poi]` itself, and the shared `x-app` anchor carries no `networks`.
+Dokploy rewrites the file on deploy to attach its own network and does not resolve `<<: *app` merge keys, so a network
+inherited through the anchor looked missing to it and was replaced by Dokploy's. The recreated app containers then sat on a
+different network from `postgres` and answered `getaddrinfo ENOTFOUND postgres` (Nov 6 and Nov 7). `apps/api/src/compose.test.ts`
+fails if the anchor gets `networks` back or a service lacks its own. Checked locally by recreating the app containers while
+`postgres` kept running: all of them still resolve it. **Still to confirm on the team server with one real Dokploy redeploy**,
+because the rewrite only happens there; until then keep avoiding redeploys near judging.
+
 ## Interfaces
 
 Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`, optional
