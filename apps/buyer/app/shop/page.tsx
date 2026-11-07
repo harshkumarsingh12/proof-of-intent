@@ -28,6 +28,8 @@ export default function Shop() {
             voiceEnabled: process.env.BUYER_VOICE === "1",
             // The shop assistant (spec 0010) is off until BUYER_CHAT=1, also read at runtime.
             chatEnabled: process.env.BUYER_CHAT === "1",
+            // An agent-alone permission is signed for this platform only (#157); the agent registers under the same name.
+            agentPlatform: process.env.AGENT_PLATFORM?.trim() || "Northstar",
           }}
         />
       </main>

@@ -20,6 +20,7 @@ export const REASON_TEXT: Record<ReasonCode, string> = {
   ADDRESS_MISMATCH: "It ships somewhere else",
   RECURRENCE_EXCEEDED: "You've reached your limit of orders for now",
   CATALOG_MISMATCH: "The cart doesn't match what the store sells (product or price)",
+  UNATTENDED_NOT_PERMITTED: "You didn't let the agent pay without you, so you approve at PayPal",
   SEMANTIC_UNCERTAIN: "The merchant isn't sure it's what you meant, so you confirm",
   SEMANTIC_MISMATCH: "The merchant's check says it isn't what you described",
 };

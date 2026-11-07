@@ -175,6 +175,13 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
   const ledger = await deps.db.activeLedger(intent.mandate_id, now);
   const rules = evaluate({ intent, cart, now, ledger });
   const misses = catalogMismatches(cart.contents.lines, deps.catalog);
+  // Paying without the shopper is something the shopper signed, not something the agent declares (#157).
+  const unattended = intent.constraints.unattended_payment;
+  const unattendedRefused =
+    !payment.human_present &&
+    (!unattended ||
+      (unattended.allowed_agent_platforms !== undefined &&
+        !unattended.allowed_agent_platforms.includes(payment.agent_platform)));
   if (misses.length > 0) {
     // The agent only hears the reason code; the operator can see exactly which fact differed.
     await deps.db.appendAudit({
@@ -184,9 +191,10 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
       requestBody: { cartId: cart.contents.cart_id, mismatches: misses },
     });
   }
-  if (misses.length > 0 || !rules.pass) {
+  if (misses.length > 0 || unattendedRefused || !rules.pass) {
     const reasons: ReasonCode[] = [
       ...(misses.length > 0 ? (["CATALOG_MISMATCH"] as const) : []),
+      ...(unattendedRefused ? (["UNATTENDED_NOT_PERMITTED"] as const) : []),
       ...rules.reasons,
     ];
     return record(deps, intent.mandate_id, cart.contents.cart_id, "REJECT", reasons);

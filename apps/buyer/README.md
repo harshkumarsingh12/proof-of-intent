@@ -28,7 +28,7 @@ the merchant already created, with a link to `approval_url` as a fallback. Other
 
 **Wallet and paying alone** (`src/wallet.ts`, `/shop/wallet`, #17, #36). "Save a PayPal wallet" signs a short-lived proof with
 the browser's key, asks the merchant for a Vault v3 setup token and sends the shopper to PayPal; PayPal returns them to
-`/shop/wallet`, which signs the save proof and finishes. Once a wallet is saved, "Remove my wallet" forgets it again. "Let the agent pay alone" sends
+`/shop/wallet`, which signs the save proof and finishes. Once a wallet is saved, "Remove my wallet" forgets it again. "Let the agent pay alone" is signed into the intent (`constraints.unattended_payment`, #157) and then sends
 `human_present: false`: an approved cart is charged to that wallet with no PayPal step, a step-up charges nothing and waits under "Waiting for your approval" (listed with a signed proof, approved with the shopper's signature, no link needed), and the
 agent stops after the merchant accepts one cart. In `PAYPAL_MODE=mock` the approval returns to the shop at once.
 

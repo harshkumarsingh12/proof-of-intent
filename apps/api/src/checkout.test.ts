@@ -595,6 +595,62 @@ describe("POST /checkout: failure handling", () => {
   });
 });
 
+describe("POST /checkout: the shopper's signed permission to pay without them (#157)", () => {
+  const alone = (opts: Partial<Parameters<typeof signedCheckout>[0]> = {}) =>
+    signedCheckout({ shopper, agent, humanPresent: false, ...opts });
+
+  test("an agent that only claims the shopper is absent is refused, and the saved wallet is never charged", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const res = await s.checkout((await alone({ permitUnattended: false })).body);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().verdict).toEqual({ outcome: "REJECT", reasons: ["UNATTENDED_NOT_PERMITTED"] });
+    expect(s.createOrder).not.toHaveBeenCalled();
+    expect(s.mem.orders.size).toBe(0);
+  });
+
+  test("with the permission signed into the intent, the same request is charged to the wallet", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const signed = await alone();
+    expect(signed.intent.constraints.unattended_payment).toEqual({});
+    const res = await s.checkout(signed.body);
+    expect(res.json().verdict.outcome).toBe("APPROVE");
+    expect(s.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: "CAPTURE", vaultId: "VAULT-1" }),
+    );
+  });
+
+  test("a permission limited to named agent platforms refuses every other platform", async () => {
+    const intent = {
+      ...greyJacketIntent,
+      constraints: {
+        ...greyJacketIntent.constraints,
+        unattended_payment: { allowed_agent_platforms: ["Someone Else"] },
+      },
+    };
+    const s = setup({ vaultId: "VAULT-1" });
+    const refused = await s.checkout((await alone({ intent })).body); // the agent registers as Northstar
+    expect(refused.json().verdict.reasons).toEqual(["UNATTENDED_NOT_PERMITTED"]);
+    expect(s.createOrder).not.toHaveBeenCalled();
+
+    const own = {
+      ...intent,
+      constraints: { ...intent.constraints, unattended_payment: { allowed_agent_platforms: ["Northstar"] } },
+    };
+    const ok = await s.checkout((await alone({ intent: own })).body);
+    expect(ok.json().verdict.outcome).toBe("APPROVE");
+  });
+
+  test("a shopper who is present needs no permission, and it is reported with the other reasons", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const present = await s.checkout((await signedCheckout({ shopper, agent })).body);
+    expect(present.json().verdict.outcome).toBe("APPROVE");
+    const both = await s.checkout((await alone({ permitUnattended: false, cart: overreachingCart })).body);
+    expect(both.json().verdict.reasons).toEqual(
+      expect.arrayContaining(["UNATTENDED_NOT_PERMITTED", "AMOUNT_EXCEEDS_MAX"]),
+    );
+  });
+});
+
 describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", () => {
   /** PayPal completes the order and charges the wallet, but the answer never reaches us (once). */
   function losesFirstAnswer(inner: PayPalClient, failure: Error = new Error("socket hang up")) {

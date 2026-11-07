@@ -248,8 +248,17 @@ export async function signedCheckout(opts: {
   platform?: string;
   timestamp?: string;
   paymentMandateId?: string;
+  /**
+   * Agent-alone requests carry the shopper's signed permission by default (#157). Pass false to sign an intent
+   * without it, which is what a shopper who never allowed it has.
+   */
+  permitUnattended?: boolean;
 }) {
-  const intent = opts.intent ?? greyJacketIntent;
+  const given = opts.intent ?? greyJacketIntent;
+  const intent: IntentMandate =
+    opts.humanPresent === false && opts.permitUnattended !== false && !given.constraints.unattended_payment
+      ? { ...given, constraints: { ...given.constraints, unattended_payment: {} } }
+      : given;
   const base = opts.cart ?? compliantCart;
   const cart: CartMandate = {
     ...base,
