@@ -34,11 +34,15 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 3. Under the grey USD 74 jacket, click **Propose this cart** and approve in PayPal with the sandbox shopper.
    When **Paid** appears, copy the capture ID. In [Operations → Orders](https://poi-dashboard.iotkiit.in/orders),
    compare the captured order with the red cart's rejection in **Checkout verdicts**.
-4. In [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), open the compliant-order dispute ID
-   supplied with the testing instructions and click **Preview evidence PDF**. An operator testing the action
+4. Create a fresh dispute for the paid order as the same judge sandbox shopper. Follow the
+   [judge testing instructions](JUDGE_TESTING.md#hosted-checkout-and-dispute-tests), including the report form
+   and the 4–5 minute sandbox-event delay. In
+   [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), locate that fresh case and click
+   **Preview evidence PDF**. An operator testing the action
    on a designated sandbox dispute can click **Escalate to a claim** at inquiry, wait for PayPal to open the
    claim, then click **Submit evidence to PayPal** when PayPal allows it.
-5. **Hosted sandbox refund.** Open the separate refund-test dispute designated in Devpost. When PayPal allows
+5. **Hosted sandbox refund.** Buy as judge-2 and file a second fresh dispute using the same instructions.
+   When PayPal allows
    the action, the operator selects **Override: accept the claim instead**, adds a note, and verifies the
    outcome. Reserve the evidence-submission dispute for step 4.
 6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
@@ -52,9 +56,9 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 9. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
    mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**
    and try the starter prompts. The hosted data has no agent overreach, so the overreach rate reads 0% there.
-10. **File your own dispute.** The disputes prepared in advance run past their response date before judging ends, so use
-   the judge shopper accounts: buy in the shop, then in the PayPal sandbox open Activity, the payment, Report a problem,
-   "different or not as described". It appears in Disputes after about 5 minutes (PayPal's sandbox emits the event late).
+10. The pre-prepared disputes expire before judging ends. Use your fresh cases for actions. The designated
+    December backup IDs and access will be in Devpost's testing field. The
+    [team verification record](JUDGE_TESTING.md#team-verification-record) tracks the account checks and backup handoff.
 
 ### Local mock walkthrough
 
@@ -72,7 +76,8 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
   refund) with the supplied test accounts.
 - Record the 1:42 overreach shot on the local seeded stack (`pnpm demo:seed`); the hosted sandbox has no
   overreaching capture to dispute.
-- Put the verified dispute IDs and the appropriate sandbox access in the Devpost testing instructions.
+- Copy the [judge testing steps](JUDGE_TESTING.md) into Devpost and add verified access and fresh dispute IDs
+  in its testing field. Confirm both judge shopper accounts can sign in, buy and report a problem.
 - Add the dated full eval report and its measured numbers to the README when #43 is complete.
 - Use the analytics view at 2:02. Studio is built and checked locally with the real key (the hosted check is #123);
   time the Studio shot (a grid row click, a donut click, one Ask the AI prompt: a live answer takes about 15 to 25
