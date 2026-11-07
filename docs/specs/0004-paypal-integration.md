@@ -32,7 +32,10 @@ the team must be able to work before the sandbox is wired, hence a mock with the
   Nov 7) gives the claim back so the shopper can retry. A shopper
   can remove the wallet (`POST /vault/remove`, a `vault.remove` proof): our `vault_id` is cleared first, so the agent
   can't charge it from that moment, then PayPal is asked to revoke the payment token (`deletePaymentToken`; a failure
-  there is audited with the id for a later revoke and doesn't undo the removal). The vault id never leaves the server:
+  there is audited with the id for a later revoke and doesn't undo the removal). PayPal returns the same payment
+  token for the same PayPal account, so several shopper rows can hold one wallet (the shopper clicked "Use a new key",
+  or used another browser): `shoppers.vault_id` is not unique (migration 0005; it was, and the second save failed with a
+  500), and the token is revoked only when the last holder removes it. The vault id never leaves the server:
   `GET /vault/:kid` answers only `{ wallet: boolean }`. Verified against the sandbox (Nov 7,
   `pnpm sandbox:vault-wallet`): PayPal accepts the setup token request; after a real approval as a sandbox shopper
   the setup token became a payment token, and a $1.00 `CAPTURE` order against that vault id completed at creation

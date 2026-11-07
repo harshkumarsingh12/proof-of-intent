@@ -348,3 +348,61 @@ describe("POST /vault/remove", () => {
     expect(s.mem.keys.get(shopper.kid)!.vaultId).not.toBe(vaultId);
   });
 });
+
+describe("the same PayPal wallet saved from a second browser key", () => {
+  // PayPal answers the same Vault payment token for the same PayPal account. "Use a new key" (or another browser)
+  // makes a new shopper row that saves that wallet again; a unique constraint on the vault id made that a 500.
+  const SAME = "VAULT-SAME-WALLET";
+  const sameWalletClient = () => {
+    const paypal = createMockClient();
+    paypal.createVaultPaymentToken = async () => ({ vaultId: SAME });
+    return paypal;
+  };
+  const save = async (s: ReturnType<typeof setup>, who: Party) => {
+    const id = (await s.post("/vault/setup", { proof_jws: await s.setupProof(who) })).json().setup_token_id;
+    return s.post("/vault/save", { setup_token_id: id, proof_jws: await s.saveProof(id, who) });
+  };
+  const remove = async (s: ReturnType<typeof setup>, who: Party) =>
+    s.post("/vault/remove", {
+      proof_jws: await signMandate({ purpose: "vault.remove", issued_at: NOW }, who.privateKey, who.kid),
+    });
+
+  test("both keys save it and both can have the agent pay from it", async () => {
+    const s = setup(sameWalletClient());
+    expect((await save(s, shopper)).statusCode).toBe(200);
+    const second = await save(s, other);
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ wallet: true });
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBe(SAME);
+    expect(s.mem.keys.get(other.kid)!.vaultId).toBe(SAME);
+
+    const createOrder = vi.spyOn(s.paypal, "createOrder");
+    for (const who of [shopper, other]) {
+      const res = await s.post(
+        "/checkout",
+        (await signedCheckout({ shopper: who, agent, humanPresent: false })).body,
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.json().verdict.outcome).toBe("APPROVE");
+    }
+    expect(createOrder).toHaveBeenCalledTimes(2);
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ vaultId: SAME }));
+  });
+
+  test("removing it on one key doesn't revoke it while another key still uses it; the last removal does", async () => {
+    const s = setup(sameWalletClient());
+    await save(s, shopper);
+    await save(s, other);
+    const revoke = vi.spyOn(s.paypal, "deletePaymentToken");
+
+    expect((await remove(s, shopper)).json()).toEqual({ wallet: false });
+    expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeUndefined();
+    expect(s.mem.keys.get(other.kid)!.vaultId).toBe(SAME);
+    expect(revoke).not.toHaveBeenCalled(); // the other key's wallet must keep working
+
+    expect((await remove(s, other)).json()).toEqual({ wallet: false });
+    expect(s.mem.keys.get(other.kid)!.vaultId).toBeUndefined();
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith(SAME);
+  });
+});

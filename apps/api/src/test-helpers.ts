@@ -90,6 +90,7 @@ export function memoryDb() {
     saveVaultId: async (shopperId, vaultId) => {
       for (const k of keys.values()) if (k.shopperId === shopperId) k.vaultId = vaultId;
     },
+    countVaultHolders: async (vaultId) => [...keys.values()].filter((k) => k.vaultId === vaultId).length,
     clearVaultId: async (shopperId) => {
       for (const k of keys.values()) if (k.shopperId === shopperId) delete k.vaultId;
     },

@@ -181,8 +181,9 @@ export async function saveWallet(
 
 /**
  * Forgets the shopper's saved wallet. Our side goes first: the moment this answers, agent-alone checkout can no
- * longer charge, whatever PayPal does next. Then the payment token is revoked at PayPal; if that fails the token
- * lingers there unused, and the audit row keeps its id so it can be revoked later. Asking again is harmless.
+ * longer charge, whatever PayPal does next. Then the payment token is revoked at PayPal, unless another shopper row
+ * (the same PayPal wallet saved from a new browser key) still holds it; if the revoke fails the token lingers there
+ * unused, and the audit row keeps its id so it can be revoked later. Asking again is harmless.
  */
 export async function removeWallet(proofJws: string, deps: VaultDeps): Promise<VaultRemoveResult> {
   const checked = await checkProof(proofJws, "vault.remove", deps);
@@ -199,6 +200,9 @@ export async function removeWallet(proofJws: string, deps: VaultDeps): Promise<V
     subjectId: shopper.shopperId,
     requestBody: { vaultId },
   });
+  // PayPal gives the same payment token to the same PayPal account, so another browser key of this shopper may hold
+  // it too. Revoking it then would break that key's wallet: only the last holder's removal revokes it.
+  if ((await deps.db.countVaultHolders(vaultId)) > 0) return { status: 200, body: { wallet: false } };
   try {
     await deps.paypal.deletePaymentToken(vaultId);
   } catch (err) {
