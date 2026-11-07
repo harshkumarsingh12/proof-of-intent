@@ -10,6 +10,7 @@ import { generateSigningKeyPair } from "@poi/mandates";
 import { createPayPalClient, parseMode, type PayPalClient } from "@poi/paypal";
 import { importPKCS8 } from "jose";
 import type { CheckoutDeps, Merchant, StepUpConfig } from "./checkout";
+import { loggerOptions } from "./logging";
 import { checkoutRoutes } from "./routes/checkout";
 import { disputeRoutes } from "./routes/disputes";
 import { keyRoutes } from "./routes/keys";
@@ -36,6 +37,8 @@ export interface AppDeps {
    * email provider is wired yet (the link only locates the cart: approving it needs the shopper's own key).
    */
   stepUp?: Partial<StepUpConfig>;
+  /** Tests only: logs go here (and are on), so they can check what is, and isn't, written. */
+  logStream?: NodeJS.WritableStream;
   /** How long `/readyz` waits for the database to answer `select 1`. Default 2000 ms. */
   readyDbTimeoutMs?: number;
 }
@@ -105,7 +108,8 @@ async function merchantFromEnv(env: NodeJS.ProcessEnv, required: boolean): Promi
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({
-    logger: process.env.NODE_ENV !== "test",
+    logger:
+      deps.logStream || process.env.NODE_ENV !== "test" ? loggerOptions(deps.logStream) : false,
     trustProxy: process.env.TRUST_PROXY === "1",
   });
 
@@ -161,9 +165,19 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       send:
         deps.stepUp?.send ??
         (async (link) => {
+          // The link carries a secret token, so it is not logged unless asked for (local development, where there is
+          // no email provider). The shop lists a shopper's held carts without any link.
+          const logLink = process.env.LOG_STEPUP_LINKS === "1";
           app.log.info(
-            { stepUpId: link.stepUpId, shopperId: link.shopperId, expiresAt: link.expiresAt, url: link.url },
-            "step-up approval link (no email provider configured; deliver this to the shopper)",
+            {
+              stepUpId: link.stepUpId,
+              shopperId: link.shopperId,
+              expiresAt: link.expiresAt,
+              ...(logLink ? { url: link.url } : {}),
+            },
+            logLink
+              ? "step-up approval link (LOG_STEPUP_LINKS=1; deliver this to the shopper)"
+              : "step-up created; its link is not logged because it carries a secret (set LOG_STEPUP_LINKS=1 to log it for local development)",
           );
         }),
     },

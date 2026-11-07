@@ -106,8 +106,10 @@ and the agent's response carries no link.
   `placeOrder` as checkout. The order's verdict is `STEP_UP`. A retry after success returns the same answer.
 - **PayPal failing at approval** marks the step-up `FAILED` and answers 502. The link doesn't retry blind,
   because PayPal may have charged before the error reached us. The agent starts a new checkout.
-- **Delivery:** no email provider is wired. The API logs the link (`step-up approval link`), and
-  `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin (it must be the
+- **Delivery:** no email provider is wired, and the link carries a secret token, so by default the API logs only the
+  step-up's id, shopper and expiry, not the link. `LOG_STEPUP_LINKS=1` logs the full link (`step-up approval link`) for
+  local development. The request log also redacts the token in `/stepup/<token>` paths (`apps/api/src/logging.ts`), which
+  used to put it in the access log on every view and approval. `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin (it must be the
   shop's public address on a hosted deploy, SETUP.md §4).
 - **In the shop, no link needed:** the shop lists the carts waiting for the shopper with `POST /stepups/pending`, a
   fresh `StepUpListProof` (`stepup.list`, 5 minutes) signed by the key that signed the intent, and approves one with
