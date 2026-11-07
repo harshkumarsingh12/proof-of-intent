@@ -135,8 +135,8 @@ The 2:30 video script is in [DEMO.md](DEMO.md).
 | Sikruti Mahapatra | @hoursgotviral-dev | Dispute copilot worker, AG Studio dashboard | Harsh (dashboard, after Nov 6) |
 | Sumedha | @sumedhag28 | AI jobs, evals, replay mode, Studio agent, demo, video, Devpost | Sikruti |
 
-Path-level ownership: [CONTRIBUTING.md](../CONTRIBUTING.md#who-owns-what). Representative for Devpost: **to be named
-at the Oct 31 standup** (issue in M0).
+Path-level ownership: [CONTRIBUTING.md](../CONTRIBUTING.md#who-owns-what). All four members are registered on Devpost and the team is created (Nov 7).
+Representative for Devpost: **still to be named** (#14).
 
 ## 7. Plan and gates
 
@@ -160,7 +160,7 @@ Day-by-day tasks are GitHub issues under each milestone; see [ROADMAP.md](ROADMA
 | R3 | Team server down during judging (to Dec 15) | M | H | Harsh | Restart policies, uptime alerts, nightly backups, local fallback |
 | R4 | Webhooks can't reach the server (TLS, DNS, NAT) | M | H | Harsh | HTTPS by Oct 31; Cloudflare Tunnel fallback |
 | R5 | LLM verdicts differ between video takes | M | M | Sumedha | Temperature 0, strict schemas, replay mode for recording |
-| R6 | AG Studio license expires before Dec 15 or watermarks | M | M | Sikruti | Renewal key Nov 25; plain AG Grid fallback page |
+| R6 | AG Studio license expires before Dec 15 or watermarks | L | M | Sikruti | Mitigated: the license expires Dec 21, after judging; plain AG Grid fallback page |
 | R7 | Scope creep before the gates | H | H | all | Cut lists; no stretch merges before Nov 8 |
 | R8 | Judges can't run it | M | H | Sumedha | Three access paths; zero-credential defaults; clean-machine test Nov 10 |
 | R9 | Over-claiming in the pitch | M | H | Sumedha | Claims list above; honesty line in the video |
