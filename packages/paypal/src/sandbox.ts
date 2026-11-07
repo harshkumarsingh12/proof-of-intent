@@ -1,4 +1,5 @@
 /** Real REST calls against the PayPal sandbox. Spec: docs/specs/0004-paypal-integration.md. */
+import { randomUUID } from "node:crypto";
 import { createToolkit, type ToolkitDisputes } from "./agent-toolkit";
 import {
   PayPalError,
@@ -105,6 +106,26 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
       };
     },
 
+    async createVaultSetupToken({ returnUrl, cancelUrl }) {
+      const res = await call<{ id: string; links?: Link[] }>("POST", "/v3/vault/setup-tokens", {
+        body: JSON.stringify(vaultSetupBody(returnUrl, cancelUrl)),
+        // A fresh token each call: the shopper can start over after abandoning an approval.
+        requestId: randomUUID(),
+      });
+      const approvalUrl = res.links?.find((l) => l.rel === "approve" || l.rel === "payer-action")?.href;
+      if (!approvalUrl) throw new Error(`PayPal created setup token ${res.id} but returned no approval link`);
+      return { setupTokenId: res.id, approvalUrl };
+    },
+
+    async createVaultPaymentToken(setupTokenId) {
+      const res = await call<{ id: string }>("POST", "/v3/vault/payment-tokens", {
+        body: JSON.stringify({ payment_source: { token: { id: setupTokenId, type: "SETUP_TOKEN" } } }),
+        // A setup token turns into a payment token once; a retry of the same call must not look like a second one.
+        requestId: `${setupTokenId}-payment-token`,
+      });
+      return { vaultId: res.id };
+    },
+
     async authorizeOrder(orderId) {
       const order = await call<OrderResponse>(
         "POST",
@@ -182,6 +203,18 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
     getDispute: (disputeId) => agent().getDispute(disputeId),
     listDisputes: () => agent().listDisputes(),
     addTracking: (input) => agent().addTracking(input),
+  };
+}
+
+/** Vault v3 setup token for a PayPal wallet the merchant may charge later (agent-alone checkout, spec 0004). */
+export function vaultSetupBody(returnUrl: string, cancelUrl: string) {
+  return {
+    payment_source: {
+      paypal: {
+        usage_type: "MERCHANT",
+        experience_context: { return_url: returnUrl, cancel_url: cancelUrl },
+      },
+    },
   };
 }
 

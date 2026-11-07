@@ -13,7 +13,7 @@ import {
   type WebhookHeaders,
 } from "./index";
 import { toolkitDisputes, type ToolkitTool } from "./agent-toolkit";
-import { orderBody, verifyBody } from "./sandbox";
+import { orderBody, vaultSetupBody, verifyBody } from "./sandbox";
 
 const order: CreateOrderInput = {
   intent: "AUTHORIZE",
@@ -593,5 +593,89 @@ describe("Agent Toolkit transport (sandbox disputes and tracking)", () => {
       carrier: "UPS",
       status: "SHIPPED",
     });
+  });
+});
+
+describe("Vault v3 wallet saving", () => {
+  test("the setup token asks for a MERCHANT wallet and comes back with PayPal's approval link", async () => {
+    const { client, requests } = fakePayPal({
+      "/v3/vault/setup-tokens": {
+        status: 200,
+        body: {
+          id: "SETUP-1",
+          status: "PAYER_ACTION_REQUIRED",
+          links: [
+            { rel: "self", href: "https://api-m.sandbox.paypal.com/v3/vault/setup-tokens/SETUP-1" },
+            {
+              rel: "approve",
+              href: "https://www.sandbox.paypal.com/agreements/approve?approval_session_id=SETUP-1",
+            },
+          ],
+        },
+      },
+    });
+    const res = await client.createVaultSetupToken({
+      returnUrl: "https://shop.example/shop/wallet",
+      cancelUrl: "https://shop.example/shop",
+    });
+    expect(res).toEqual({
+      setupTokenId: "SETUP-1",
+      approvalUrl: "https://www.sandbox.paypal.com/agreements/approve?approval_session_id=SETUP-1",
+    });
+    const sent = JSON.parse(requests[0]!.body as string);
+    expect(sent).toEqual(vaultSetupBody("https://shop.example/shop/wallet", "https://shop.example/shop"));
+    expect(sent.payment_source.paypal.usage_type).toBe("MERCHANT");
+    expect(requests[0]!.headers["PayPal-Request-Id"]).toBeTruthy();
+  });
+
+  test("a setup token with no approval link is an error, not a dead end for the shopper", async () => {
+    const { client } = fakePayPal({ "/v3/vault/setup-tokens": { status: 200, body: { id: "SETUP-2" } } });
+    await expect(
+      client.createVaultSetupToken({ returnUrl: "https://a.example/r", cancelUrl: "https://a.example/c" }),
+    ).rejects.toThrow("no approval link");
+  });
+
+  test("the payment token is made from the approved setup token, and its id is the vault id", async () => {
+    const { client, requests } = fakePayPal({
+      "/v3/vault/payment-tokens": { status: 200, body: { id: "VAULT-9", status: "CREATED" } },
+    });
+    expect(await client.createVaultPaymentToken("SETUP-1")).toEqual({ vaultId: "VAULT-9" });
+    expect(JSON.parse(requests[0]!.body as string)).toEqual({
+      payment_source: { token: { id: "SETUP-1", type: "SETUP_TOKEN" } },
+    });
+    expect(requests[0]!.headers["PayPal-Request-Id"]).toBe("SETUP-1-payment-token");
+  });
+
+  test("PayPal refusing an unapproved setup token surfaces as a PayPalError", async () => {
+    const { client } = fakePayPal({
+      "/v3/vault/payment-tokens": {
+        status: 422,
+        body: { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "SETUP_TOKEN_NOT_APPROVED" }] },
+      },
+    });
+    await expect(client.createVaultPaymentToken("SETUP-3")).rejects.toMatchObject({
+      status: 422,
+      issue: "SETUP_TOKEN_NOT_APPROVED",
+    });
+  });
+
+  test("mock: approval sends the shopper straight back with the setup token, which converts once", async () => {
+    const mock = createMockClient();
+    const setup = await mock.createVaultSetupToken({
+      returnUrl: "https://shop.example/shop/wallet",
+      cancelUrl: "https://shop.example/shop",
+    });
+    const back = new URL(setup.approvalUrl);
+    expect(back.origin + back.pathname).toBe("https://shop.example/shop/wallet");
+    expect(back.searchParams.get("approval_token_id")).toBe(setup.setupTokenId);
+
+    const { vaultId } = await mock.createVaultPaymentToken(setup.setupTokenId);
+    expect(vaultId).toMatch(/^[A-Z0-9]{17}$/);
+    await expect(mock.createVaultPaymentToken(setup.setupTokenId)).rejects.toMatchObject({
+      issue: "SETUP_TOKEN_ALREADY_USED",
+    });
+    await expect(mock.createVaultPaymentToken("NOPE")).rejects.toMatchObject({ status: 404 });
+    // ...and the vault id charges at once, as in agent-alone checkout.
+    expect((await mock.createOrder({ ...order, intent: "CAPTURE", vaultId })).status).toBe("COMPLETED");
   });
 });
