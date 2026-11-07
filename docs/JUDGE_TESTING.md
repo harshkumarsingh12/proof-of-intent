@@ -10,7 +10,8 @@ credentials in that private field. The public repository contains the steps and 
 2. Propose the red USD 95 jacket. Check for `AMOUNT_EXCEEDS_MAX` and `ATTRIBUTE_MISMATCH` and the confirmation
    that PayPal created no order or charge.
 3. Propose the grey USD 74 jacket. Approve with the designated **judge-1 sandbox shopper** from the Devpost
-   testing field. When **Paid** appears, retain the capture ID. Find it in
+   testing field. Note the **order id** and **PayPal order id** the shop shows under the verdict
+   (`Order ord_… · PayPal …`), and when **Paid** appears the capture ID. Find the order in
    [Operations → Orders](https://poi-dashboard.iotkiit.in/orders).
 4. Create a fresh dispute for that payment. Sign in to [PayPal Sandbox](https://www.sandbox.paypal.com/) with
    the same judge-1 shopper. Open **Activity**, select the payment and choose **Report a problem**. Select
@@ -23,9 +24,10 @@ credentials in that private field. The public repository contains the steps and 
    > the signed purchase instructions and demonstrate its dispute evidence workflow.
 
 5. Allow about 4–5 minutes for PayPal Sandbox to emit the dispute event. Open
-   [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), locate the new case using its payment
-   reference and record the dispute ID. Confirm that the recommendation describes the grey USD 74 cart.
-   If it has not appeared after five minutes, refresh and retain the payment and dispute references for
+   [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), find the new case with the top-bar search
+   (press `/`) using the order id or PayPal order id from step 3, and record the dispute ID. The search matches
+   dispute ids, order ids and PayPal order ids, not capture ids. Confirm that the recommendation describes the grey USD 74 cart.
+   If it has not appeared after five minutes, refresh and keep the order, capture and dispute ids for
    the team to check webhook delivery.
 6. Open the case and select **Preview evidence PDF**. Compare the signed mandate, cart, capture and policy
    finding. For the action test, sign in as the designated operator. If the case is still an inquiry,
@@ -35,7 +37,7 @@ credentials in that private field. The public repository contains the steps and 
    **judge-2**, then file a separate dispute using
    steps 4–5. Open that second case as the operator. When PayPal allows it, choose
    **Override: accept the claim instead**, add a note identifying the sandbox test and verify the outcome.
-   Keep each case's payment and dispute references with its result. Evidence submission and claim
+   Keep each case's order, capture and dispute ids with its result. Evidence submission and claim
    acceptance are one-shot actions, so each test needs its own case.
 8. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics). Follow **Dispute Studio** to inspect the
    widgets and chat when enabled on the verified deployment. Use the starter prompts for that deployment's

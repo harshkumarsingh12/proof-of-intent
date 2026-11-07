@@ -32,14 +32,14 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 2. Under the red USD 95 jacket, click **Propose this cart**. Look for `AMOUNT_EXCEEDS_MAX` and
    `ATTRIBUTE_MISMATCH`. The shop confirms that PayPal created no order or charge.
 3. Under the grey USD 74 jacket, click **Propose this cart** and approve in PayPal with the sandbox shopper.
-   When **Paid** appears, copy the capture ID. In [Operations → Orders](https://poi-dashboard.iotkiit.in/orders),
+   When **Paid** appears, note the order id and PayPal order id shown under the verdict and the capture ID. In [Operations → Orders](https://poi-dashboard.iotkiit.in/orders),
    compare the captured order with the red cart's rejection in **Checkout verdicts**.
 4. Create a fresh dispute for the paid order as the same judge sandbox shopper. Follow the
    [judge testing instructions](JUDGE_TESTING.md#hosted-checkout-and-dispute-tests), including the report form
    and the 4–5 minute sandbox-event delay. In
    [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), locate that fresh case and click
    **Preview evidence PDF**. An operator testing the action
-   on a designated sandbox dispute can click **Escalate to a claim** at inquiry, wait for PayPal to open the
+   on that fresh case can click **Escalate to a claim** at inquiry, wait for PayPal to open the
    claim, then click **Submit evidence to PayPal** when PayPal allows it.
 5. **Hosted sandbox refund.** Buy as judge-2 and file a second fresh dispute using the same instructions.
    When PayPal allows
