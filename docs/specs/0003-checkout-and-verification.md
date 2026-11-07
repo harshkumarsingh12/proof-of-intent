@@ -83,7 +83,14 @@ and the agent's response carries no link.
 - **PayPal failing at approval** marks the step-up `FAILED` and answers 502. The link doesn't retry blind,
   because PayPal may have charged before the error reached us. The agent starts a new checkout.
 - **Delivery:** no email provider is wired. The API logs the link (`step-up approval link`), and
-  `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin.
+  `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin (it must be the
+  shop's public address on a hosted deploy, SETUP.md §4).
+- **In the shop, no link needed:** the shop lists the carts waiting for the shopper with `POST /stepups/pending`, a
+  fresh `StepUpListProof` (`stepup.list`, 5 minutes) signed by the key that signed the intent, and approves one with
+  `POST /stepups/:id/approve` and the same `CartApproval` signature the link flow takes (`order_id` = the step-up id).
+  The link token only ever located a step-up and the shopper's signature carried the authority, so this is the same
+  security as the link: the agent, which never holds the shopper's key, can neither list nor approve. Only that
+  shopper's own pending, unexpired step-ups are returned, and never a token.
 
 ### Buyer agent, as built (#37)
 
@@ -124,6 +131,8 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 | POST   | `/checkout/:id/approve`                                      | Harsh   | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }`                                                                                                                                                        |
 | GET    | `/stepup/:token`                                             | Sristee | the waiting cart for the approval page → `StepUpView`; `cache-control: no-store`                                                                                                                                               |
 | POST   | `/stepup/:token/approve`                                     | Sristee | `{ approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse`                                                                                                            |
+| POST   | `/stepups/pending`                                           | Sristee | `{ proof_jws }` (`StepUpListProof`, purpose `stepup.list`) → `{ stepups: StepUpView[] }`: this shopper's own pending, unexpired carts; `cache-control: no-store`                                                               |
+| POST   | `/stepups/:id/approve`                                       | Sristee | `{ approval_jws }` (CartApproval, `order_id` = the step-up id) → as `/stepup/:token/approve`; found by id instead of link token                                                                                                |
 | GET    | `/orders`, `/verifications`                                  | Harsh   | paginated grids for the dashboard                                                                                                                                                                                              |
 | GET    | `/disputes`, `/disputes/:id/recommendation`                  | Sikruti | spec 0005                                                                                                                                                                                                                      |
 | POST   | `/disputes/:id/actions/:action`                              | Sikruti | operator token; `action ∈ provide-evidence, accept-claim, send-message, escalate` (`make-offer` → 501, out of scope)                                                                                                           |

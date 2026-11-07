@@ -157,6 +157,26 @@ if (!hosted) {
     },
   );
 
+  // #36: a cart the merchant isn't sure about is held for the shopper, who approves it in the shop (no link needed).
+  await step(
+    "a held cart waits in the shop, and approving it signs and charges the saved wallet",
+    async () => {
+      await cart("$79.00", "grey").getByRole("button", { name: "Propose this cart" }).click();
+      await verdictBox(/Fits your limits, but please confirm/).waitFor({ timeout: 60_000 });
+      if (await page.getByRole("heading", { name: "Paid by your agent" }).count())
+        throw new Error("a held cart was charged");
+      await page.getByRole("heading", { name: "Waiting for your approval" }).waitFor({ timeout: 30_000 });
+      const held = page.locator(".verdict.warn", { hasText: "$79.00" }).first();
+      await held.getByRole("button", { name: /Approve and pay from my wallet/ }).click();
+      await page
+        .locator(".panel", { hasText: "Waiting for your approval" })
+        .getByRole("heading", { name: "Paid" })
+        .waitFor({ timeout: 30_000 });
+      const text = await page.locator(".panel", { hasText: "Waiting for your approval" }).innerText();
+      if (!/Capture\s+\S+/.test(text)) throw new Error("no capture shown after approving");
+    },
+  );
+
   await step(
     "removing the wallet turns agent-alone off, and the agent can't charge it any more",
     async () => {

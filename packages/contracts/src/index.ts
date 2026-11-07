@@ -179,6 +179,17 @@ export const VaultProof = z.discriminatedUnion("purpose", [
 ]);
 export type VaultProof = z.infer<typeof VaultProof>;
 
+/**
+ * The shopper asking to see the carts waiting for their approval (docs/specs/0003 §Step-up links). Signed like a
+ * VaultProof, so only the holder of the key that signed the intent can list (and approve) its step-ups.
+ */
+export const StepUpListProof = z.object({ purpose: z.literal("stepup.list"), issued_at: isoDateTime });
+export type StepUpListProof = z.infer<typeof StepUpListProof>;
+
+/** Every proof a shopper's key signs for the merchant besides mandates. */
+export const ShopperProof = z.union([VaultProof, StepUpListProof]);
+export type ShopperProof = z.infer<typeof ShopperProof>;
+
 /** POST /vault/setup: `{ proof_jws }` (purpose vault.setup) → where the shopper approves the wallet with PayPal. */
 export const VaultSetupRequest = z.object({ proof_jws: z.string().min(1) });
 export const VaultSetupResponse = z.object({ setup_token_id: z.string(), approval_url: z.string().url() });
@@ -226,6 +237,9 @@ export const StepUpView = z.object({
 export type StepUpView = z.infer<typeof StepUpView>;
 
 /** POST /stepup/:token/approve, body ApproveRequest. The order exists only from here. */
+/** POST /stepups/pending: `{ proof_jws }` (purpose stepup.list) → the shopper's own unexpired, pending step-ups. */
+export const StepUpListRequest = z.object({ proof_jws: z.string().min(1) });
+
 export const StepUpApproveResponse = z.object({
   status: z.literal("CAPTURED"),
   order_id: z.string(),

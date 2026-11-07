@@ -9,7 +9,7 @@ keys (`POST /keys/shopper`, `POST /keys/agent`, `POST /keys/:kind/:kid/retire`),
 (`POST /vault/setup`, `POST /vault/save`, `POST /vault/remove`, `GET /vault/:kid`), disputes (`GET /disputes`,
 `/disputes/:id/recommendation`, `/disputes/:id/evidence.pdf`, `/disputes/:id/paypal-actions`,
 `POST /disputes/:id/actions/:action`), `GET /orders`, `GET /verifications`, `POST /orders/:id/tracking`, step-up links
-(`GET /stepup/:token`, `POST /stepup/:token/approve`) and `POST /ai/studio` (operator token, 60 requests a minute; `list_disputes` reads our own
+(`GET /stepup/:token`, `POST /stepup/:token/approve`, and for the shop's own list `POST /stepups/pending`, `POST /stepups/:id/approve`) and `POST /ai/studio` (operator token, 60 requests a minute; `list_disputes` reads our own
 table: counts, then what needs a response soonest-first, capped at 12). Still 501 with its owner:
 `GET /analytics/:report` (the dashboard's analytics page computes from the disputes and orders it already reads).
 

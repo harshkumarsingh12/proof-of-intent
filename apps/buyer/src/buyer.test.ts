@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { CartApproval, CartMandate, IntentMandate, PaymentMandate, VaultProof } from "@poi/contracts";
+import {
+  CartApproval,
+  CartMandate,
+  IntentMandate,
+  PaymentMandate,
+  ShopperProof,
+  VaultProof,
+} from "@poi/contracts";
 import {
   compliantCart,
   greyJacketIntent,
@@ -13,7 +20,7 @@ import { evaluate } from "@poi/policy-engine";
 import { agentCheckout, intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
-import { canApprove, isStepUpToken, stepUpApproval } from "./stepup";
+import { canApprove, isStepUpId, isStepUpToken, stepUpApproval, stepUpListProof } from "./stepup";
 import {
   isSetupTokenId,
   isShopperKid,
@@ -281,6 +288,21 @@ describe("step-up approval page (#35)", () => {
     expect(canApprove(view, "shp_other")).toBe(false);
     expect(canApprove(view, undefined)).toBe(false);
     expect(canApprove({ ...view, status: "EXPIRED" }, "shp_me")).toBe(false);
+  });
+
+  test("the shop asks for the waiting carts with a signed proof the merchant verifies, and ids are checked", async () => {
+    const { key, kid, registry } = await registeredShopper();
+    const now = new Date(NOW);
+    const res = await verifyMandate(await signCompact(stepUpListProof(now), key.privateKey, kid), (k) =>
+      registry.resolve(k, NOW),
+    );
+    expect(res.ok && ShopperProof.parse(res.payload)).toEqual({
+      purpose: "stepup.list",
+      issued_at: now.toISOString(),
+    });
+    expect(isStepUpId("stp_0192f3a0-0000-7000-8000-000000000001")).toBe(true);
+    for (const bad of ["", "stp_1", "../x", "ord_0192f3a0-0000-7000-8000-000000000001"])
+      expect(isStepUpId(bad)).toBe(false);
   });
 
   test("link tokens are checked before they are forwarded", () => {

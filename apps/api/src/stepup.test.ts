@@ -267,6 +267,94 @@ describe("step-up approval links (#35)", () => {
   });
 });
 
+describe("the shopper's own list of waiting carts (shop, no link)", () => {
+  const listProof = (key: Party, issued_at = NOW, purpose = "stepup.list") =>
+    signMandate({ purpose, issued_at }, key.privateKey, key.kid);
+  const list = (s: ReturnType<typeof setup>, jws: string) =>
+    s.app.inject({ method: "POST", url: "/stepups/pending", payload: { proof_jws: jws } });
+  const approveById = (s: ReturnType<typeof setup>, id: string, approval_jws: string) =>
+    s.app.inject({ method: "POST", url: `/stepups/${id}/approve`, payload: { approval_jws } });
+
+  test("lists the shopper's pending carts, approves one by id with their signature, and charges once", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    const res = await list(s, await listProof(shopper));
+    expect(res.statusCode).toBe(200);
+    const [v] = res.json().stepups as StepUpView[];
+    expect(res.json().stepups).toHaveLength(1);
+    expect(v).toMatchObject({
+      status: "PENDING",
+      total: { value: 7900, currency: "USD" },
+      agent_platform: "Northstar",
+      shopper_kid: shopper.kid,
+    });
+    // No link, no token: the list is the shopper's, proven by their own signature.
+    expect(JSON.stringify(res.json())).not.toContain(s.token());
+    expect(JSON.stringify(res.json())).not.toContain("approve/");
+
+    expect(s.createOrder).not.toHaveBeenCalled();
+    const ok = await approveById(s, v!.stepup_id, await s.sign(v!));
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ status: "CAPTURED", order_id: expect.stringMatching(/^ord_/) });
+    expect(s.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: "CAPTURE", vaultId: "VAULT-1" }),
+    );
+    // Again (a retry) charges nothing more, and the cart is no longer waiting.
+    expect((await approveById(s, v!.stepup_id, await s.sign(v!))).json()).toEqual(ok.json());
+    expect(s.createOrder).toHaveBeenCalledTimes(1);
+    expect((await list(s, await listProof(shopper))).json().stepups).toEqual([]);
+  });
+
+  test("approving by id still needs the shopper's own signature for that cart", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    const [v] = (await list(s, await listProof(shopper))).json().stepups as StepUpView[];
+    const stranger = await party("shp_someone_else");
+    const forged = await approveById(s, v!.stepup_id, await s.sign(v!, stranger));
+    expect(forged.statusCode).toBe(403);
+    const wrongCart = await approveById(
+      s,
+      v!.stepup_id,
+      await s.sign(v!, shopper, { cart_mandate_hash: "a".repeat(64) }),
+    );
+    expect(wrongCart.statusCode).toBe(403);
+    expect(s.createOrder).not.toHaveBeenCalled();
+    for (const id of ["stp_nope", "x", `stp_${randomUUID()}`]) {
+      expect((await approveById(s, id, await s.sign(v!))).statusCode).toBe(404);
+    }
+  });
+
+  test("another shopper sees nothing of it; a stale, unregistered or wrong-purpose proof is refused", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    const other = await party("shopper-key-2");
+    s.mem.keys.set(other.kid, {
+      kind: "shopper",
+      kid: other.kid,
+      publicJwk: other.publicJwk,
+      shopperId: "shopper-2",
+    });
+    expect((await list(s, await listProof(other))).json().stepups).toEqual([]);
+
+    const stranger = await party("shp_unregistered");
+    expect((await list(s, await listProof(stranger))).json().reasons).toEqual(["UNKNOWN_KEY"]);
+    expect((await list(s, await listProof(shopper, NOW, "vault.setup"))).json().reasons).toEqual([
+      "MANDATE_MISMATCH",
+    ]);
+    expect((await list(s, await listProof(shopper, at(-6 * 60_000)))).json().error).toBe("proof_expired");
+    expect((await s.app.inject({ method: "POST", url: "/stepups/pending", payload: {} })).statusCode).toBe(
+      400,
+    );
+  });
+
+  test("an expired cart isn't listed", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    s.clock.now = at(24 * HOUR + 1000);
+    expect((await list(s, await listProof(shopper, s.clock.now))).json().stepups).toEqual([]);
+  });
+});
+
 // The same flow against real Postgres, for the SQL behind the in-memory Db (claim, expiry, the token hash).
 describe.runIf(process.env.DATABASE_URL)("step-up links with Postgres", () => {
   test("store, view, approve once, and an expired link creates nothing", async () => {
@@ -298,6 +386,18 @@ describe.runIf(process.env.DATABASE_URL)("step-up links with Postgres", () => {
       expect(rows.every((r) => r.status === "PENDING" && r.order_id === null)).toBe(true);
       expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(0);
 
+      // The shopper's list (the shop's, no link): both, newest first; one drops off once it is approved.
+      const waiting = await db.listPendingStepUps(shopper.kid, NOW);
+      expect(waiting.map((w) => w.cartMandateHash)).toEqual(
+        (await raw.query("select cart_mandate_hash from stepups order by created_at desc")).rows.map(
+          (r) => r.cart_mandate_hash,
+        ),
+      );
+      expect(waiting).toHaveLength(2);
+      expect(await db.listPendingStepUps("shp_other", NOW)).toEqual([]);
+      expect((await db.findStepUpById(waiting[0]!.id))?.id).toBe(waiting[0]!.id);
+      expect(await db.findStepUpById("stp_missing")).toBeNull();
+
       // Two approvals at once: one order.
       const v = await s.view(0);
       const jws = await s.sign(v);
@@ -306,6 +406,9 @@ describe.runIf(process.env.DATABASE_URL)("step-up links with Postgres", () => {
       expect(statuses[0]).toBe(200);
       expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(1);
       expect((await s.view(0)).status).toBe("APPROVED");
+
+      expect(await db.listPendingStepUps(shopper.kid, NOW)).toHaveLength(1);
+      expect(await db.listPendingStepUps(shopper.kid, at(24 * HOUR + 1000))).toEqual([]); // expired
 
       // The second link, a day later: nothing.
       s.clock.now = at(24 * HOUR + 1000);

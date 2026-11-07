@@ -132,6 +132,17 @@ export function memoryDb() {
       const st = [...stepups.values()].find((x) => x.tokenHash === tokenHash);
       return st ? { ...st } : null;
     },
+    findStepUpById: async (id) => {
+      const st = stepups.get(id);
+      return st ? { ...st } : null;
+    },
+    listPendingStepUps: async (kid, now) =>
+      [...stepups.values()]
+        .filter(
+          (x) => x.shopperKid === kid && x.status === "PENDING" && Date.parse(x.expiresAt) > Date.parse(now),
+        )
+        .reverse()
+        .map((x) => ({ ...x })),
     claimStepUp: async (id, now) => {
       const st = stepups.get(id);
       if (!st || st.status !== "PENDING" || Date.parse(st.expiresAt) <= Date.parse(now)) return false;
