@@ -24,6 +24,8 @@ export default function Shop() {
             paypalMode: sandbox ? "sandbox" : "mock",
             // Public by design: PayPal's JS SDK needs it in the page. The secret never leaves the API.
             paypalClientId: sandbox ? process.env.PAYPAL_CLIENT_ID || undefined : undefined,
+            // Voice ordering (spec 0010) is off until BUYER_VOICE=1; read at runtime like the PayPal mode.
+            voiceEnabled: process.env.BUYER_VOICE === "1",
           }}
         />
       </main>

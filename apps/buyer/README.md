@@ -32,6 +32,16 @@ the browser's key, asks the merchant for a Vault v3 setup token and sends the sh
 `human_present: false`: an approved cart is charged to that wallet with no PayPal step, a step-up charges nothing and waits under "Waiting for your approval" (listed with a signed proof, approved with the shopper's signature, no link needed), and the
 agent stops after the merchant accepts one cart. In `PAYPAL_MODE=mock` the approval returns to the shop at once.
 
+**Voice ordering** (`src/voice.ts`, `app/shop/useVoice.ts`, spec 0010; off unless `BUYER_VOICE=1`). "Speak your request" fills the text
+box from the browser's Web Speech API (Chrome, Edge, Safari over HTTPS or localhost; not Firefox, where the microphone is hidden
+and typing still works; the browser vendor processes the audio). The agent drafts the limits, a **read-back card** lists exactly
+what will be signed, and signing needs a **separate confirmation**: the Confirm button, or the word "confirm" said in a new
+listening session after the card is up. A request that itself contains "confirm" signs nothing, a confirmation in the first
+700 ms or after 60 s is ignored, editing the limits discards the card, and Cancel works at every step. Voice never touches the
+"agent pays alone" checkbox: with it on and a wallet saved the order is paid with no PayPal step, otherwise the PayPal button
+still appears. The rules are pure functions (`parseConfirmation`, `readBack`, `voiceReducer`) with unit tests;
+`VOICE=1 pnpm smoke:shop` runs the flow in Chrome with a fake recognizer.
+
 **Buyer agent** (`src/agent.ts`, #37). Three tools and nothing else: `create_intent_mandate` (a draft only: the
 shopper's key never leaves their browser, so the shopper reviews and signs it), `search_catalog` and
 `request_checkout` (one SKU under the signed intent; the model sees the outcome and reason codes, never signed
