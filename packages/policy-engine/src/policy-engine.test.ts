@@ -272,10 +272,51 @@ describe("freshness: the time rules stage-two approval re-runs before capture (#
   });
 
   test("an expired intent is reported even when the cart is still valid (the cart's expiry is the agent's choice)", () => {
-    const longCart = { ...compliantCart, contents: { ...compliantCart.contents, cart_expiry: "2026-12-01T00:00:00Z" } };
+    const longCart = {
+      ...compliantCart,
+      contents: { ...compliantCart.contents, cart_expiry: "2026-12-01T00:00:00Z" },
+    };
     expect(freshness({ intent: greyJacketIntent, cart: longCart, now: "2026-11-09T00:00:00Z" })).toEqual([
       "MANDATE_EXPIRED",
     ]);
   });
 });
 
+describe("policy engine: one purchase by default (#156)", () => {
+  const oneBought = { capturedTotal: 7400, capturedOrderTimes: [NOW] };
+  const withConstraints = (extra: Partial<IntentMandate["constraints"]>): IntentMandate => ({
+    ...greyJacketIntent,
+    constraints: { ...greyJacketIntent.constraints, ...extra },
+  });
+
+  test("the first purchase passes, with no ledger or an empty one", () => {
+    expect(evaluate({ intent: greyJacketIntent, cart: compliantCart, now: NOW }).pass).toBe(true);
+    const empty = { capturedTotal: 0, capturedOrderTimes: [] };
+    expect(evaluate({ intent: greyJacketIntent, cart: compliantCart, now: NOW, ledger: empty }).pass).toBe(
+      true,
+    );
+  });
+
+  test("a second purchase under an intent with no budget and no recurrence is refused", () => {
+    expect(evaluate({ intent: greyJacketIntent, cart: compliantCart, now: NOW, ledger: oneBought })).toEqual({
+      pass: false,
+      reasons: ["INTENT_ALREADY_USED"],
+    });
+  });
+
+  test("a signed budget_cap or recurrence is the permission for more than one, and then they govern", () => {
+    const budget = withConstraints({ budget_cap: { value: 20000, currency: "USD" } });
+    expect(evaluate({ intent: budget, cart: compliantCart, now: NOW, ledger: oneBought }).pass).toBe(true);
+    const overBudget = withConstraints({ budget_cap: { value: 10000, currency: "USD" } });
+    expect(
+      evaluate({ intent: overBudget, cart: compliantCart, now: NOW, ledger: oneBought }).reasons,
+    ).toEqual(["BUDGET_EXCEEDED"]);
+    const three = withConstraints({ recurrence: { max_orders: 3, window_days: 30 } });
+    expect(evaluate({ intent: three, cart: compliantCart, now: NOW, ledger: oneBought }).pass).toBe(true);
+  });
+
+  test("it is reported with the other reasons, not instead of them", () => {
+    const res = evaluate({ intent: greyJacketIntent, cart: overreachingCart, now: NOW, ledger: oneBought });
+    expect(res.reasons).toEqual(expect.arrayContaining(["AMOUNT_EXCEEDS_MAX", "INTENT_ALREADY_USED"]));
+  });
+});

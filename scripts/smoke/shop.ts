@@ -181,6 +181,18 @@ if (!hosted) {
   await step(
     "a held cart waits in the shop, and approving it signs and charges the saved wallet",
     async () => {
+      // One intent covers one purchase (#156), and the agent has already bought under this one: sign a new intent.
+      const mandate = page.locator(".verdict.ok", { hasText: "Signed in your browser" }).locator("code").first();
+      const before = await mandate.innerText();
+      await page.getByRole("button", { name: "Sign my intent" }).click();
+      await page.waitForFunction(
+        (old) =>
+          Array.from(document.querySelectorAll(".verdict.ok"))
+            .find((e) => e.textContent?.includes("Signed in your browser"))
+            ?.querySelector("code")?.textContent !== old,
+        before,
+        { timeout: 20_000 },
+      );
       await cart("$79.00", "grey").getByRole("button", { name: "Propose this cart" }).click();
       await verdictBox(/Fits your limits, but please confirm/).waitFor({ timeout: 60_000 });
       if (await page.getByRole("heading", { name: "Paid by your agent" }).count())

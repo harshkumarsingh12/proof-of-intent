@@ -501,6 +501,8 @@ describe("POST /checkout: retired keys are judged by the merchant's clock (#162)
     let clock = NOW;
     const s = setup({ now: () => clock });
     expect((await verdict(s, { shopper, agent, cart: longCart })).outcome).toBe("APPROVE"); // first seen 10:00
+    // The first order was never paid (one default intent allows one purchase, #156), so the intent is still unspent.
+    await s.mem.db.updateOrder([...s.mem.orders.keys()][0]!, { status: "VOIDED" });
     retire(s, shopper.kid, "2026-11-02T10:30:00Z");
     clock = "2026-11-02T11:00:00Z";
     // A new attempt (a new Payment Mandate) under the same intent, after the retirement.
@@ -651,6 +653,63 @@ describe("POST /checkout: the shopper's signed permission to pay without them (#
   });
 });
 
+describe("POST /checkout: one purchase per default intent (#156)", () => {
+  const nth = (n: number) => ({
+    ...compliantCart,
+    contents: { ...compliantCart.contents, cart_id: `cart-${n}` },
+  });
+
+  test("a second purchase under the default intent is refused with INTENT_ALREADY_USED, and nothing is created", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const first = await s.checkout(
+      (await signedCheckout({ shopper, agent, cart: nth(1), humanPresent: false })).body,
+    );
+    expect(first.json().verdict.outcome).toBe("APPROVE"); // charged at once
+    const second = await s.checkout(
+      (await signedCheckout({ shopper, agent, cart: nth(2), humanPresent: false })).body,
+    );
+    expect(second.json().verdict).toEqual({ outcome: "REJECT", reasons: ["INTENT_ALREADY_USED"] });
+    expect(s.createOrder).toHaveBeenCalledTimes(1);
+    expect(s.mem.orders.size).toBe(1);
+  });
+
+  test("the same holds for a shopper who is present, once the first order is captured", async () => {
+    const s = setup();
+    const first = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(1) })).body);
+    await s.mem.db.updateOrder(first.json().order_id, { status: "CAPTURED", capturedAt: NOW });
+    const second = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(2) })).body);
+    expect(second.json().verdict.reasons).toEqual(["INTENT_ALREADY_USED"]);
+  });
+
+  test("a refused attempt is not a purchase: the retry after a rejection still works", async () => {
+    const s = setup();
+    const rejected = await s.checkout(
+      (await signedCheckout({ shopper, agent, cart: overreachingCart })).body,
+    );
+    expect(rejected.json().verdict.outcome).toBe("REJECT");
+    const retry = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(2) })).body);
+    expect(retry.json().verdict.outcome).toBe("APPROVE");
+  });
+
+  test("more than one needs signed permission: an order count lets a second purchase through", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const intent = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, recurrence: { max_orders: 2, window_days: 30 } },
+    };
+    for (const n of [1, 2]) {
+      const res = await s.checkout(
+        (await signedCheckout({ shopper, agent, intent, cart: nth(n), humanPresent: false })).body,
+      );
+      expect(res.json().verdict.outcome).toBe("APPROVE");
+    }
+    const third = await s.checkout(
+      (await signedCheckout({ shopper, agent, intent, cart: nth(3), humanPresent: false })).body,
+    );
+    expect(third.json().verdict.reasons).toEqual(["RECURRENCE_EXCEEDED"]);
+  });
+});
+
 describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", () => {
   /** PayPal completes the order and charges the wallet, but the answer never reaches us (once). */
   function losesFirstAnswer(inner: PayPalClient, failure: Error = new Error("socket hang up")) {
@@ -709,6 +768,31 @@ describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", 
   });
 
   test("a different cart under the same intent waits until the unconfirmed charge is settled", async () => {
+    // A budget is the signed permission for more than one purchase (#156); without it the default intent is spent.
+    const intent = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, budget_cap: { value: 20000, currency: "USD" } },
+    };
+    const { paypal } = losesFirstAnswer(createMockClient());
+    const s = setup({ vaultId: "VAULT-1", paypal });
+    await s.checkout((await signedCheckout({ shopper, agent, intent, humanPresent: false })).body);
+    const other = await s.checkout(
+      (
+        await signedCheckout({
+          shopper,
+          agent,
+          intent,
+          humanPresent: false,
+          cart: { ...compliantCart, contents: { ...compliantCart.contents, cart_id: "cart-other" } },
+        })
+      ).body,
+    );
+    expect(other.statusCode).toBe(409);
+    expect(other.json().error).toBe("payment_outcome_unknown");
+    expect(s.mem.orders.size).toBe(1);
+  });
+
+  test("an unconfirmed charge counts against the intent, so a default intent is not bought twice", async () => {
     const { paypal } = losesFirstAnswer(createMockClient());
     const s = setup({ vaultId: "VAULT-1", paypal });
     await s.checkout((await unattended()).body);
@@ -722,8 +806,22 @@ describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", 
         })
       ).body,
     );
-    expect(other.statusCode).toBe(409);
-    expect(other.json().error).toBe("payment_outcome_unknown");
+    expect(other.json().verdict.reasons).toEqual(["INTENT_ALREADY_USED"]);
+    expect(s.mem.orders.size).toBe(1);
+  });
+
+  test("retrying the same cart does not count the unconfirmed order against the intent's budget", async () => {
+    const intent = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, budget_cap: { value: 8000, currency: "USD" } },
+    };
+    const { paypal } = losesFirstAnswer(createMockClient());
+    const s = setup({ vaultId: "VAULT-1", paypal });
+    const send = async () =>
+      s.checkout((await signedCheckout({ shopper, agent, intent, humanPresent: false })).body);
+    expect((await send()).json().error).toBe("paypal_outcome_unknown");
+    const retry = await send(); // 7400 is held, the cap is 8000: counted twice it would be refused
+    expect(retry.json().verdict.outcome).toBe("APPROVE");
     expect(s.mem.orders.size).toBe(1);
   });
 

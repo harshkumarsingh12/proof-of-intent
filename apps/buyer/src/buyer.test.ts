@@ -31,7 +31,7 @@ import {
   setupProof,
   setupTokenFromQuery,
 } from "./wallet";
-import { buildIntent, CLOCK_SKEW_MS, dollarsToCents, type IntentForm } from "./intent";
+import { buildIntent, CLOCK_SKEW_MS, describePermission, dollarsToCents, type IntentForm } from "./intent";
 import {
   generateShopperKey,
   jwsPayloadText,
@@ -188,6 +188,30 @@ describe("agent pays alone: signed into the intent (#157)", () => {
       },
     );
     expect(named.constraints.unattended_payment).toEqual({ allowed_agent_platforms: ["Northstar"] });
+  });
+});
+
+describe("what a signed intent allows (#156)", () => {
+  test("the shop's default intent says it covers one purchase, and what it costs at most", () => {
+    const said = describePermission(intentFor("shp_x"));
+    expect(said).toContain("one purchase");
+    expect(said).toContain("$80");
+    expect(said).toContain("new signed intent");
+  });
+
+  test("a budget or an order count is described as what the shopper signed", () => {
+    const base = intentFor("shp_x");
+    const budget = {
+      ...base,
+      constraints: { ...base.constraints, budget_cap: { value: 15050, currency: "USD" } },
+    };
+    expect(describePermission(budget)).toContain("up to $150.50 in total");
+    const orders = {
+      ...base,
+      constraints: { ...base.constraints, recurrence: { max_orders: 3, window_days: 30 } },
+    };
+    expect(describePermission(orders)).toContain("up to 3 orders every 30 days");
+    expect(describePermission(orders)).not.toContain("one purchase");
   });
 });
 

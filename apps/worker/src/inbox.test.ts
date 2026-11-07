@@ -18,8 +18,13 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
   url.pathname = `/${name}`;
   let db: Db;
   let raw: pg.Pool;
-  const intentHash = mandateHash(greyJacketIntent);
-  const pointer = customId(greyJacketIntent.mandate_id, intentHash);
+  // Two orders under one intent, so the shopper signed permission for more than one purchase (#156).
+  const intent = {
+    ...greyJacketIntent,
+    constraints: { ...greyJacketIntent.constraints, recurrence: { max_orders: 5, window_days: 30 } },
+  };
+  const intentHash = mandateHash(intent);
+  const pointer = customId(intent.mandate_id, intentHash);
   const log: string[] = [];
   const deps = () => ({
     db,
@@ -46,9 +51,9 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
     await db.saveMandate({
       hash: intentHash,
       kind: "intent",
-      mandateId: greyJacketIntent.mandate_id,
-      canonical: canonicalJson(greyJacketIntent),
-      jws: await signMandate(greyJacketIntent, privateKey, "shopper-key-1"),
+      mandateId: intent.mandate_id,
+      canonical: canonicalJson(intent),
+      jws: await signMandate(intent, privateKey, "shopper-key-1"),
       kid: "shopper-key-1",
     });
     await capturedOrder("ord_compliant", compliantCart, "CAP-COMPLIANT");
@@ -87,7 +92,7 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
     });
     await db.createOrder({
       id,
-      intentMandateId: greyJacketIntent.mandate_id,
+      intentMandateId: intent.mandate_id,
       intentMandateHash: intentHash,
       cartMandateHash: cartHash,
       customId: pointer,
@@ -100,7 +105,7 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
       humanPresent: true,
     });
     await db.recordVerdict({
-      intentMandateId: greyJacketIntent.mandate_id,
+      intentMandateId: intent.mandate_id,
       cartId: cart.contents.cart_id,
       orderId: id,
       outcome: "STEP_UP",

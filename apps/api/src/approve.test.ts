@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { SemanticFit } from "@poi/ai";
 import { compliantCart, greyJacketIntent, MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
@@ -126,7 +127,12 @@ describe("POST /checkout/:id/approve", () => {
 
   test("a genuine approval of one order can't be replayed to void another", async () => {
     const s = await orderedApp();
-    const second = await signedCheckout({ shopper, agent });
+    // Its own intent: one default intent authorizes one purchase (#156).
+    const second = await signedCheckout({
+      shopper,
+      agent,
+      intent: { ...greyJacketIntent, mandate_id: randomUUID() },
+    });
     const other = (await s.app.inject({ method: "POST", url: "/checkout", payload: second.body })).json();
     expect(other.order_id).toBeTruthy();
     const paypal = watch(s.paypal);

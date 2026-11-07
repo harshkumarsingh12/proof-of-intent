@@ -135,6 +135,7 @@ const REASON_TEXT: Record<string, string> = {
   QUANTITY_EXCEEDS_MAX: "the quantity was above the limit",
   ADDRESS_MISMATCH: "it shipped to a different address",
   RECURRENCE_EXCEEDED: "the shopper's order limit for the period was reached",
+  INTENT_ALREADY_USED: "the shopper's intent allowed one purchase and it had already been made",
   CATALOG_MISMATCH: "the cart's product or price didn't match the merchant's catalog",
   UNATTENDED_NOT_PERMITTED: "the shopper had not signed permission for the agent to pay without them",
   SEMANTIC_UNCERTAIN: "the semantic check wasn't sure it was what they meant",

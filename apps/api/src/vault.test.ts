@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import { MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
+import { greyJacketIntent, MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
 import { generateSigningKeyPair, signMandate } from "@poi/mandates";
 import { createMockClient, PayPalError, type PayPalClient } from "@poi/paypal";
 import { buildApp } from "./app";
@@ -378,9 +379,11 @@ describe("the same PayPal wallet saved from a second browser key", () => {
 
     const createOrder = vi.spyOn(s.paypal, "createOrder");
     for (const who of [shopper, other]) {
+      // Each shopper signs their own intent: one default intent authorizes one purchase (#156).
+      const intent = { ...greyJacketIntent, mandate_id: randomUUID() };
       const res = await s.post(
         "/checkout",
-        (await signedCheckout({ shopper: who, agent, humanPresent: false })).body,
+        (await signedCheckout({ shopper: who, agent, intent, humanPresent: false })).body,
       );
       expect(res.statusCode).toBe(200);
       expect(res.json().verdict.outcome).toBe("APPROVE");
