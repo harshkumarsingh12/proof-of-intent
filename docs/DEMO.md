@@ -42,6 +42,14 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
    the action, the operator selects **Override: accept the claim instead**, adds a note, and verifies the
    outcome. Reserve the evidence-submission dispute for step 4.
 6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
+7. Back in the shop, sign an intent and click **Let the agent choose**. The agent searches the store, proposes a cart,
+   and the page lists what it did and the merchant's answer. It never proposes a product that breaks the signed limits.
+8. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
+   mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**
+   and try the starter prompts. The hosted data has no agent overreach, so the overreach rate reads 0% there.
+9. **File your own dispute.** The disputes prepared in advance run past their response date before judging ends, so use
+   the judge shopper accounts: buy in the shop, then in the PayPal sandbox open Activity, the payment, Report a problem,
+   "different or not as described". It appears in Disputes after about 5 minutes (PayPal's sandbox emits the event late).
 
 ### Local mock walkthrough
 
@@ -61,8 +69,13 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
   overreaching capture to dispute.
 - Put the verified dispute IDs and the appropriate sandbox access in the Devpost testing instructions.
 - Add the dated full eval report and its measured numbers to the README when #43 is complete.
-- Use the analytics view at 2:02. If #39 lands and is verified on the hosted demo, time the Studio prompt
-  against the same slot during the dry run.
+- Use the analytics view at 2:02. Studio is built and checked locally with the real key (the hosted check is #123);
+  time the Studio shot (a grid row click, a donut click, one Ask the AI prompt: a live answer takes about 15 to 25
+  seconds) against the same slot, or record it separately. The chat is not deterministic, so record more than one
+  take (#124).
+- The buyer agent ("Let the agent choose") is not in the 2:30 script yet. Add a short shot after the signed intent if
+  there is room, or keep it in the click path only.
+- Judge disputes expire before Dec 15 (#122): the Devpost testing instructions must say judges file their own.
 - Have a teammate run the click path from a clean browser and time both dry runs.
 
 ## What we will not claim
