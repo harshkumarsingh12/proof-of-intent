@@ -42,6 +42,15 @@ listening session after the card is up. A request that itself contains "confirm"
 still appears. The rules are pure functions (`parseConfirmation`, `readBack`, `voiceReducer`) with unit tests;
 `VOICE=1 pnpm smoke:shop` runs the flow in Chrome with a fake recognizer.
 
+**Shop assistant** (`src/chat.ts`, `src/chat-server.ts`, `app/shop/ChatPanel.tsx`, spec 0010; off unless `BUYER_CHAT=1`). Ask about the
+store, compare products, understand your limits, or find out why a cart was refused. It is read-only: its replies are text, product
+information and limits for you to review, and its one button, "Use these limits", only fills the form. The server looks the facts up
+by plain code and the model only phrases them (the free models don't reliably look things up themselves); a guard replaces an answer
+that states a price or SKU the store doesn't have; a refusal is always explained in fixed text including "nothing was charged"; and
+asked to buy, sign or pay it always says it can't. Limits: 10 questions a minute and 60 an hour per address, and
+`BUYER_CHAT_DAILY_LIMIT` live model calls a day (past either, or with no model, it answers from the store's data and says so).
+`pnpm chat:eval` checks the hard cases against the real model; `CHAT=1 pnpm smoke:shop` drives it in Chrome.
+
 **Buyer agent** (`src/agent.ts`, #37). Three tools and nothing else: `create_intent_mandate` (a draft only: the
 shopper's key never leaves their browser, so the shopper reviews and signs it), `search_catalog` and
 `request_checkout` (one SKU under the signed intent; the model sees the outcome and reason codes, never signed

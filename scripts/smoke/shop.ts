@@ -354,6 +354,71 @@ if (process.env.VOICE === "1") {
   );
 }
 
+// The shop assistant (spec 0010). Needs the shop started with BUYER_CHAT=1; run with CHAT=1. In replay mode its answers
+// come straight from the store's data, so they are exact.
+if (process.env.CHAT === "1") {
+  const assistant = () => page.getByRole("region", { name: "Shop assistant" });
+  const askAssistant = async (question: string) => {
+    await assistant().getByLabel("Your question").fill(question);
+    await assistant().getByRole("button", { name: "Ask", exact: true }).click();
+  };
+
+  await step(
+    "chat: a store question is answered from the store's data, and the chat has no way to buy",
+    async () => {
+      await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
+      await page.getByText("Key id").waitFor({ timeout: 30_000 });
+      await assistant().getByRole("button", { name: "Ask a question" }).click();
+      await askAssistant("show me grey running jackets under $80");
+      await assistant()
+        .getByText("Stride Running Jacket, grey, $74.00 (JKT-GRY-M)")
+        .waitFor({ timeout: 30_000 });
+      const text = await assistant().innerText();
+      if (/\$95|red/i.test(text.replace(/Straight from the store.s data\./g, "")))
+        throw new Error("a red or $95 product leaked into the answer");
+      // Everything the chat offers: no propose, buy, pay or sign button inside it, only "Use these limits".
+      const buttons = await assistant().getByRole("button").allInnerTexts();
+      for (const label of buttons)
+        if (/propose|buy|pay|sign|approve/i.test(label))
+          throw new Error(`the chat offers an action: "${label}"`);
+      if (!buttons.some((b) => /Use these limits/.test(b)))
+        throw new Error("no Use these limits offered for a full request");
+      if (await page.getByText("Signed in your browser").count()) throw new Error("asking signed something");
+    },
+  );
+
+  await step("chat: 'Use these limits' fills the form and signs nothing", async () => {
+    await assistant().getByRole("button", { name: "Use these limits" }).first().click();
+    const description = await page.locator("textarea").inputValue();
+    if (!/grey running jacket under \$80/i.test(description))
+      throw new Error(`the form says "${description}"`);
+    if ((await page.locator('input[inputmode="decimal"]').inputValue()) !== "80")
+      throw new Error("the price limit isn't 80");
+    if (await page.getByText("Signed in your browser").count()) throw new Error("filling the form signed it");
+  });
+
+  await step("chat: after the merchant refuses a cart, it explains why in the shop's words", async () => {
+    await freshIntent();
+    await cart("$95.00", "red").getByRole("button", { name: "Propose this cart" }).click();
+    await verdictBox(/Refused/).waitFor({ timeout: 60_000 });
+    await assistant().getByRole("button", { name: "Ask a question" }).click();
+    await assistant().getByRole("button", { name: "Why was my cart refused or held?" }).click();
+    await assistant()
+      .getByText(/no PayPal order was created and nothing was charged/)
+      .waitFor({ timeout: 30_000 });
+    const text = await assistant().innerText();
+    for (const line of ["It costs more than your limit (AMOUNT_EXCEEDS_MAX)", "(ATTRIBUTE_MISMATCH)"])
+      if (!text.includes(line)) throw new Error(`the explanation is missing "${line}"`);
+  });
+
+  await step("chat: a pasted token is refused with a reason, not answered", async () => {
+    await askAssistant("my key is nvapi-AbCdEf0123456789xyz why does it fail");
+    await assistant()
+      .getByText(/Don.t paste those here/)
+      .waitFor({ timeout: 10_000 });
+  });
+}
+
 await browser.close();
 console.log(failed ? `\n${failed} check(s) failed` : "\nshop smoke test passed");
 process.exitCode = failed ? 1 : 0;
