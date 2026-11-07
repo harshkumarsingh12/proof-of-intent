@@ -28,7 +28,16 @@ Checks run in this order and stop at the first stage that fails (built in `apps/
    platform; the cart points at the intent; the cart's `merchant_id` is ours (`MERCHANT_ID`).
 4. Replay: the **Payment Mandate id** is claimed in a unique-indexed table → `NONCE_REPLAYED`. Not the intent's
    nonce: one intent legitimately backs several attempts (journey B's retry after a rejection).
-5. Hard rules: `evaluate()` (spec 0002) with the intent's capture ledger.
+5. Hard rules: `evaluate()` (spec 0002) with the intent's capture ledger, **and the merchant's own facts** (#158): every
+   cart line's SKU, title, attributes and unit price (value and currency) must equal what the merchant's catalog says for
+   that SKU, exactly (no extra attributes; quantity is the shopper's and isn't compared) → `CATALOG_MISMATCH`. The agent
+   proposes the cart and the merchant signs it, so without this the price was whatever the agent wrote: a real SKU at one
+   cent was approved and captured. The two checks run together, so an agent that gets a fact wrong *and* breaks a limit
+   hears both (`CATALOG_MISMATCH` first). The agent only hears the code; the audit log gets a
+   `checkout.catalog_mismatch` row naming each differing fact. The catalog is `CheckoutDeps.catalog` (an `AppDeps`
+   option); by default it is the demo store (`packages/contracts/src/catalog.ts`, the same list the shop and the buyer
+   agent use, and `catalogMismatches()` lives next to it so a test can guarantee every cart the shop proposes passes).
+   A merchant with its own products supplies its own catalog. A REJECT here creates no order and no Cart Mandate.
 6. Semantic: J1 (spec 0006) only if every hard rule passed. If J1 is unavailable (unbuilt, error, budget kill
    switch), the outcome is `STEP_UP` with `SEMANTIC_UNCERTAIN`: a person confirms instead of the model.
 7. Decision:

@@ -39,6 +39,8 @@ export const ReasonCode = z.enum([
   "QUANTITY_EXCEEDS_MAX",
   "ADDRESS_MISMATCH",
   "RECURRENCE_EXCEEDED",
+  // the merchant's own facts: a cart line that its catalog doesn't back (docs/specs/0003, #158)
+  "CATALOG_MISMATCH",
   // semantic (LLM, downgrade only)
   "SEMANTIC_UNCERTAIN",
   "SEMANTIC_MISMATCH",

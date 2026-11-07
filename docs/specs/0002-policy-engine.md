@@ -35,7 +35,8 @@ a table; every failing rule adds its reason code; `pass` is true only with zero 
 | `recurrence` (max orders per window) vs ledger    | `RECURRENCE_EXCEEDED`   | built  |
 
 Signature, key and nonce failures (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `NONCE_REPLAYED`, `SCHEMA_INVALID`) are
-produced by the verification pipeline before the engine runs (spec 0003). Semantic codes (`SEMANTIC_UNCERTAIN`,
+produced by the verification pipeline before the engine runs (spec 0003). `CATALOG_MISMATCH` (a cart line the merchant's
+catalog doesn't back) is also the pipeline's, not the engine's: the engine stays free of merchant data. Semantic codes (`SEMANTIC_UNCERTAIN`,
 `SEMANTIC_MISMATCH`) come from J1 (spec 0006).
 
 **Attributes:** exact, case-insensitive comparison of keys present in `constraints.attributes` against each cart

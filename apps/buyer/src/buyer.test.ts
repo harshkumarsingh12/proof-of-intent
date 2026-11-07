@@ -15,6 +15,7 @@ import {
   overreachingCart,
   partialCart,
 } from "@poi/contracts/fixtures";
+import { catalogMismatches } from "@poi/contracts/catalog";
 import { createKeyRegistry, keyIdFor, mandateHash, publicEs256Jwk, verifyMandate } from "@poi/mandates";
 import { evaluate } from "@poi/policy-engine";
 import { agentCheckout, intentFromJws } from "./agent-server";
@@ -208,6 +209,14 @@ describe("buyer agent: cart and Payment Mandate", () => {
       );
       expect(inside, preset.category).toContain(true);
       expect(outside, preset.category).not.toContain(true);
+    }
+  });
+
+  test("every cart the shop proposes is one the merchant's catalog check accepts (#158)", () => {
+    // The API rejects any line that differs from the catalog, so the shop must never reword or reprice a product.
+    for (const p of CATALOG) {
+      const cart = proposeCart(intent, p.line.sku, { merchant, now, cartId: "c" });
+      expect(catalogMismatches(cart.contents.lines), p.line.sku).toEqual([]);
     }
   });
 

@@ -28,6 +28,8 @@ export interface AppDeps {
   /** Bearer token for operator dispute actions. Absent → those routes answer 503. */
   operatorToken?: string;
   semanticFit?: CheckoutDeps["semanticFit"];
+  /** What the merchant sells, for checking cart lines against (spec 0003). Absent: the demo store. */
+  catalog?: CheckoutDeps["catalog"];
   now?: () => string;
   /**
    * Agent-alone step-up links. linkBase defaults to BUYER_PUBLIC_URL; send defaults to the API log, because no

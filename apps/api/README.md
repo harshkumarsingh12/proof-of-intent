@@ -22,7 +22,8 @@ client and the in-memory `Db` from `src/test-helpers.ts`.
 
 `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, order_id?, cart_mandate_jws?, paypal_order_id?, approval_url?, capture_id? }`
 (`CheckoutRequest` / `CheckoutResponse` in `packages/contracts`). The order of checks and the decision table are in
-spec 0003 §Stage 1. A REJECT is HTTP 200; 400 is a malformed request, 409 an agent-alone order with no saved wallet,
+spec 0003 §Stage 1. Cart lines (SKU, title, attributes, price) are checked against the merchant's catalog and a line it
+doesn't back is `CATALOG_MISMATCH`. A REJECT is HTTP 200; 400 is a malformed request, 409 an agent-alone order with no saved wallet,
 502 PayPal down, 503 missing configuration.
 
 Against the sandbox: `DATABASE_URL=… pnpm sandbox:checkout-smoke` runs journey B and reads the order back from PayPal.
