@@ -63,6 +63,21 @@ repeated identical tool call by withdrawing that tool and then forcing an answer
 `/ai/studio` allows 60 requests a minute because one question is several requests, and J4 gets the 10 s the spec gave it.
 `redact` no longer cuts digits out of hashes and ids (it had corrupted a mandate hash the chat quoted).
 
+**The opening report, as built.** Four KPI tiles (open disputes, due within 24 hours, dollars at stake, conceded dollars: built-in
+`value` widgets, each a plain sum of a 0/1 or dollar column in the `disputes` table, so they follow filters), a donut of disputes
+by class (a click cross-filters every widget), the agent platform cards, the disputes grid, and the mandate diff and evidence
+preview for the selected dispute. The grid (`dispute-grid`, a custom widget around AG Grid Community on the same theme as the
+Orders page, `src/grid-theme.ts`) has class chips, a "Respond in" column that sorts open disputes by deadline and reddens
+anything due within a day, a quick filter, CSV export, and a row click that sets the shared selection the diff and the PDF
+follow. The evidence preview shows the cover note beside the PDF; both it and the diff link to the full dispute page. Orders with
+no agent platform read "No mandate (not an agent order)" instead of "none". More ag-studio 3.0.0 gotchas: a custom widget gets
+no event for a cross filter (the donut filtered the tiles and left the grid on all 24), so the Studio view publishes a revision
+from `onStateUpdated` when the page's filters change (`src/studio-filters.ts`) and the widgets reload on it; built-in widgets
+need `title.enabled: true` for the title set in the report state to show; `currencyFormat` prints `1,143.00` unless the field
+carries a `$` `Intl.NumberFormat` in `formatOptions`. The chat's `list_disputes` now reads our own table (class, action, amount,
+deadline, whether a response is due), so "What needs my attention?" works in mock mode too; PayPal's list is the fallback when
+there is no database.
+
 **Theme, as built:** `src/studio-theme.ts` builds the Studio theme from `palette` (Studio wants literal colors, so it
 reads the palette, not the CSS variables), and the filters panel starts collapsed so it doesn't sit over the widgets.
 

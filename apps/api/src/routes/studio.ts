@@ -31,6 +31,12 @@ const recommendation = z.object({
     .optional(),
 });
 
+/** How many disputes the list tool returns to the chat (the counts cover all of them). */
+const STUDIO_LIST_LIMIT = 12;
+
+/** PayPal statuses that mean the merchant owes the next move. */
+const NEEDS_RESPONSE = new Set(["WAITING_FOR_SELLER_RESPONSE", "ACTION_REQUIRED"]);
+
 const draftMessages: Record<z.infer<typeof DisputeClass>, string> = {
   MANDATE_COMPLIANT:
     "We reviewed the order against the signed purchase instructions and are preparing the supporting record for review.",
@@ -58,6 +64,35 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
       const body = parsed.data;
       try {
         if (body.kind === "turn") return await runStudioTurn(body, deps.aiMode ?? "replay");
+        if (body.tool === "list_disputes" && deps.db) {
+          // Our own table, so the chat can say which disputes need a response and why (and it works in mock mode,
+          // where PayPal's list is empty). Counts first, then the ones needing a response soonest-first, then the
+          // rest, capped: the full 24-row JSON was more than the live model would summarise.
+          const rows = await deps.db.listDisputes({ limit: 100, offset: 0 });
+          const items = rows.map((row) => {
+            const rec = recommendation.safeParse(row.recommendation);
+            return {
+              id: row.id,
+              status: row.status,
+              needsResponse: NEEDS_RESPONSE.has(row.status ?? ""),
+              ...(rec.success ? { class: rec.data.class, action: rec.data.action } : {}),
+              ...(row.amountValue !== undefined
+                ? { amount: `${row.currency ?? "USD"} ${(row.amountValue / 100).toFixed(2)}` }
+                : {}),
+              ...(row.sellerResponseDueDate ? { respondBy: row.sellerResponseDueDate } : {}),
+            };
+          });
+          const due = (d: { respondBy?: string }) => Date.parse(d.respondBy ?? "") || Infinity;
+          const waiting = items.filter((d) => d.needsResponse).sort((a, b) => due(a) - due(b));
+          const others = items.filter((d) => !d.needsResponse);
+          return {
+            counts: { total: items.length, needResponse: waiting.length, other: others.length },
+            disputes: [...waiting, ...others].slice(0, STUDIO_LIST_LIMIT),
+            ...(items.length > STUDIO_LIST_LIMIT
+              ? { note: `Showing the first ${STUDIO_LIST_LIMIT} of ${items.length}.` }
+              : {}),
+          };
+        }
         if (body.tool === "list_disputes") {
           const disputes = await listDisputes();
           return { disputes: disputes.map(({ dispute_id, status }) => ({ id: dispute_id, status })) };
@@ -78,7 +113,12 @@ export const studioRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
             .send({ error: "dispute_not_found", message: "No analyzed dispute with this id" });
         const rec = result.data;
         if (body.tool === "draft_buyer_message") {
-          return { id: dispute.id, draft: draftMessages[rec.class], sent: false };
+          return {
+            id: dispute.id,
+            draft: draftMessages[rec.class],
+            sent: false,
+            note: "Quote this draft in your answer and call it a draft. Nothing has been sent to the buyer.",
+          };
         }
         return {
           id: dispute.id,

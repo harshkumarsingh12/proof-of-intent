@@ -22,7 +22,8 @@ export const tools = [
   {
     name: "list_disputes",
     readOnly: true,
-    description: "List dispute IDs and current statuses from PayPal.",
+    description:
+      "List disputes with their class, recommended action, amount, response deadline and whether a response is due.",
   },
   {
     name: "get_dispute",
@@ -229,7 +230,7 @@ export const createStudioAi =
             instructions: () =>
               [
                 "You help a merchant's operator understand disputes. Use the read-only dispute tools yourself; never ask the user to run a tool.",
-                "When the user names a dispute id, call explain_dispute with it right away. Call draft_buyer_message only when the user asks for a reply or a message to the buyer. To see which disputes exist or which are waiting, call list_disputes. Once you have the result you need, answer; do not call more tools.",
+                "When the user names a dispute id, call explain_dispute with it right away. Call draft_buyer_message only when the user asks for a reply or a message to the buyer. To see which disputes exist or which are waiting, call list_disputes, then say how many need a response and name the first few with their class and amount. Once you have the result you need, answer; do not call more tools.",
                 "Meanings: MANDATE_COMPLIANT means the cart met every limit the shopper signed, so the merchant defends with evidence (PROVIDE_EVIDENCE). AGENT_OVERREACH means the agent bought outside the signed limits, so the merchant accepts the buyer's claim and refunds (ACCEPT_CLAIM). INTENT_MISREAD means the item was related but not what the shopper meant (offer or accept). NO_MANDATE means there is no signed record, so standard evidence applies. Never say a claim was rejected unless a tool says so. Write codes and ids such as `AGENT_OVERREACH` and `PP-D-1002` in backticks, because the chat renders markdown and would swallow the underscores.",
                 "Then answer in a few plain sentences: the class and recommended action, the broken limits, and the case ID. When the user asked for a reply or message, quote the draft text from draft_buyer_message in full and label it a draft. Never claim any action was taken.",
               ].join("\n"),

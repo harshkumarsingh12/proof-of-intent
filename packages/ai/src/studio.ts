@@ -38,6 +38,17 @@ const response = z.object({
     .nullable(),
 });
 
+/** The forced final answer: no `tool` field, so the model cannot ask for one. */
+const textOnly = z.object({ text: z.string().max(8000) });
+
+/**
+ * Studio's chat renders markdown, where `AGENT_OVERREACH` becomes "AGENTOVERREACH" (the underscores turn into italics).
+ * The prompt asks for backticks and the model only sometimes obeys, so wrap any snake_case or UPPER_CASE code that is
+ * not already in backticks.
+ */
+export const backtickCodes = (text: string): string =>
+  text.replace(/(?<![`\w])[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+(?![`\w])/g, "`$&`");
+
 const argsText = (args: string | Record<string, unknown>): string =>
   typeof args === "string" ? args : JSON.stringify(args);
 
@@ -95,6 +106,17 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
       // Spec 0006 gives J4 10 s. Summarising a long tool result (24 disputes) took longer than the 5 s that was here.
       timeoutMs: 10_000,
     });
+  const askText = (extraSystem: string) =>
+    generateWithRetry("J4", model, {
+      system: `${system}\n${extraSystem}`,
+      prompt: dataBlock("turn", {
+        history: turn.history.map((item) => ({ ...item, text: redact(item.text) })),
+        tools: [],
+        format: turn.format,
+      }),
+      schema: textOnly,
+      timeoutMs: 10_000,
+    });
   let answer = await ask();
   const { toolChoice } = turn;
   // One firm retry when it announced a step with tools on offer, including right after a tool result: the live
@@ -126,20 +148,20 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
       (!offered.has(answer.tool.name) ||
         wasCalledBefore(turn.history, answer.tool.name, argsText(answer.tool.arguments)))
     ) {
-      answer = await ask(ANSWER_NOW, []);
-      if (answer.tool) {
-        // It still would not answer. Show what the tools returned rather than failing the chat.
-        const result = [...turn.history].reverse().find((item) => item.role === "tool")?.text ?? "";
-        const text = answer.text.trim() || `Here is what the tools returned:\n${result.slice(0, 1500)}`;
-        return { text, tool: null };
-      }
+      // A text-only schema, not just an empty tool list: with `tool` still in the output format the live model
+      // answered "Answer now" with yet another tool call.
+      const final = await askText(ANSWER_NOW);
+      const result = [...turn.history].reverse().find((item) => item.role === "tool")?.text ?? "";
+      // If it still has nothing to say, show what the tools returned rather than failing the chat.
+      const text = final.text.trim() || `Here is what the tools returned:\n${result.slice(0, 1500)}`;
+      return { text: backtickCodes(text), tool: null };
     }
   }
   if (!answer.tool) {
     if (toolChoice === "required" || typeof toolChoice === "object" || !answer.text.trim()) {
       throw new AiUnavailableError("J4", "the response did not complete the turn");
     }
-    return answer;
+    return { ...answer, text: backtickCodes(answer.text) };
   }
   if (
     toolChoice === "none" ||

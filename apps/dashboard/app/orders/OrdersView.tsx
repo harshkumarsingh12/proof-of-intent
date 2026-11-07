@@ -1,29 +1,15 @@
 "use client";
 
-import { AllCommunityModule, ModuleRegistry, themeQuartz, type CellStyle, type ColDef } from "ag-grid-community";
+import { AllCommunityModule, ModuleRegistry, type CellStyle, type ColDef } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { useMemo, useState, type CSSProperties } from "react";
 import { formatMoney } from "../../src/api";
 import { orderKpis, type OrderRow, type OrdersData, type Outcome, type VerdictRow } from "../../src/orders";
-import { card, fontStack, kpiLabel, palette, v } from "../../src/theme";
+import { gridTheme } from "../../src/grid-theme";
+import { card, kpiLabel, palette, v } from "../../src/theme";
 import { SampleDataNotice } from "../SampleDataNotice";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
-
-/** AG Grid on the dashboard palette (src/theme.ts). */
-const gridTheme = themeQuartz.withParams({
-  accentColor: palette.blue,
-  foregroundColor: palette.text,
-  backgroundColor: palette.surface,
-  borderColor: palette.border,
-  headerBackgroundColor: palette.surfaceMuted,
-  headerTextColor: palette.heading,
-  oddRowBackgroundColor: palette.bg,
-  rowHoverColor: palette.navHoverBg,
-  fontFamily: fontStack,
-  fontSize: 13,
-  wrapperBorderRadius: 12,
-});
 
 const OUTCOME_STYLE: Record<Outcome, { label: string; fg: string; bg: string }> = {
   APPROVE: { label: "Approved", fg: palette.success, bg: palette.successBg },
@@ -58,7 +44,14 @@ function Reasons({ value }: { value?: string[] }) {
 }
 
 const when = (iso?: string) =>
-  iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  iso
+    ? new Date(iso).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
 
 const orderColumns: ColDef<OrderRow>[] = [
   { field: "orderId", headerName: "Order", cellStyle: monoCell, minWidth: 300, tooltipField: "orderId" },
@@ -67,11 +60,19 @@ const orderColumns: ColDef<OrderRow>[] = [
     colId: "humanPresent",
     headerName: "Shopper",
     // A string, not the boolean: AG Grid would draw a checkbox, and the filter and search need the words.
-    valueGetter: (p) => (p.data?.humanPresent === undefined ? "" : p.data.humanPresent ? "Present" : "Agent alone"),
+    valueGetter: (p) =>
+      p.data?.humanPresent === undefined ? "" : p.data.humanPresent ? "Present" : "Agent alone",
     filter: true,
   },
   { field: "verdict", headerName: "Verdict", cellRenderer: OutcomeChip, filter: true },
-  { field: "reasons", headerName: "Reason codes", cellRenderer: Reasons, sortable: false, flex: 1.4, minWidth: 200 },
+  {
+    field: "reasons",
+    headerName: "Reason codes",
+    cellRenderer: Reasons,
+    sortable: false,
+    flex: 1.4,
+    minWidth: 200,
+  },
   {
     field: "amount",
     headerName: "Amount",
@@ -80,7 +81,13 @@ const orderColumns: ColDef<OrderRow>[] = [
     type: "rightAligned",
   },
   { field: "status", headerName: "PayPal status", filter: true },
-  { field: "createdAt", headerName: "Created", valueFormatter: (p) => when(p.value), sort: "desc", minWidth: 150 },
+  {
+    field: "createdAt",
+    headerName: "Created",
+    valueFormatter: (p) => when(p.value),
+    sort: "desc",
+    minWidth: 150,
+  },
   { field: "capturedAt", headerName: "Captured", valueFormatter: (p) => when(p.value), minWidth: 150 },
 ];
 
@@ -151,7 +158,9 @@ export function OrdersView({ data }: { data: OrdersData }) {
         {tiles.map(([label, value, hint]) => (
           <div key={label} style={card}>
             <div style={kpiLabel}>{label}</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: v("heading"), margin: "6px 0 4px" }}>{value}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: v("heading"), margin: "6px 0 4px" }}>
+              {value}
+            </div>
             <div style={{ fontSize: 12, color: v("textMuted") }}>{hint}</div>
           </div>
         ))}
