@@ -650,12 +650,12 @@ describe("Vault v3 wallet saving", () => {
     const { client } = fakePayPal({
       "/v3/vault/payment-tokens": {
         status: 422,
-        body: { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "SETUP_TOKEN_NOT_APPROVED" }] },
+        body: { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "PAYER_ACTION_REQUIRED" }] },
       },
     });
     await expect(client.createVaultPaymentToken("SETUP-3")).rejects.toMatchObject({
       status: 422,
-      issue: "SETUP_TOKEN_NOT_APPROVED",
+      issue: "PAYER_ACTION_REQUIRED",
     });
   });
 

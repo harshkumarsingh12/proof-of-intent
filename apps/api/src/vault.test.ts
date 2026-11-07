@@ -218,14 +218,14 @@ describe("POST /vault/save", () => {
     const real = paypal.createVaultPaymentToken;
     let approved = false;
     paypal.createVaultPaymentToken = async (id) => {
-      if (!approved) throw new PayPalError(422, "SETUP_TOKEN_NOT_APPROVED", "dbg", "not approved");
+      if (!approved) throw new PayPalError(422, "PAYER_ACTION_REQUIRED", "dbg", "not approved");
       return real(id);
     };
     const s = setup(paypal);
     const id = await started(s);
     const first = await s.post("/vault/save", { setup_token_id: id, proof_jws: await s.saveProof(id) });
     expect(first.statusCode).toBe(409);
-    expect(first.json()).toMatchObject({ error: "paypal_refused", issue: "SETUP_TOKEN_NOT_APPROVED" });
+    expect(first.json()).toMatchObject({ error: "paypal_refused", issue: "PAYER_ACTION_REQUIRED" });
     expect(s.mem.keys.get(shopper.kid)!.vaultId).toBeUndefined();
 
     approved = true;

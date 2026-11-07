@@ -22,6 +22,7 @@ import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
 import { canApprove, isStepUpId, isStepUpToken, stepUpApproval, stepUpListProof } from "./stepup";
 import {
+  isNotApprovedYet,
   isSetupTokenId,
   isShopperKid,
   removeProof,
@@ -338,6 +339,13 @@ describe("saving a PayPal wallet (#17)", () => {
       setup_token_id: "SETUP-1",
       issued_at: now.toISOString(),
     });
+  });
+
+  test('PayPal\'s "not approved yet" answer is recognized by the name the sandbox really uses', () => {
+    expect(isNotApprovedYet("PAYER_ACTION_REQUIRED")).toBe(true);
+    expect(isNotApprovedYet("SETUP_TOKEN_NOT_APPROVED")).toBe(true);
+    expect(isNotApprovedYet("PERMISSION_DENIED")).toBe(false);
+    expect(isNotApprovedYet(undefined)).toBe(false);
   });
 
   test("only an id-shaped approval_token_id from PayPal's return URL is used", () => {

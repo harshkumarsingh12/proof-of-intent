@@ -13,6 +13,13 @@ export function setupTokenFromQuery(search: string): string | undefined {
   return id !== null && isSetupTokenId(id) ? id : undefined;
 }
 
+/**
+ * What PayPal answers when the shopper hasn't approved the setup token yet: 422 PAYER_ACTION_REQUIRED (seen on the
+ * sandbox, Nov 7). The older name some docs use is kept too.
+ */
+export const isNotApprovedYet = (issue: string | undefined): boolean =>
+  issue === "PAYER_ACTION_REQUIRED" || issue === "SETUP_TOKEN_NOT_APPROVED";
+
 export const setupProof = (now: Date): VaultProof => ({
   purpose: "vault.setup",
   issued_at: now.toISOString(),
