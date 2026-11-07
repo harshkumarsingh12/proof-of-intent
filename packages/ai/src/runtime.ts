@@ -102,38 +102,94 @@ export interface LiveConfig {
   model: string;
   apiKey: string;
   baseURL: string;
+  /** AI_FALLBACK_MODEL: tried once, on the same provider, when `model` is gone (retired or renamed). */
+  fallbackModel?: string;
 }
 
-const BASE_URLS: Record<string, string> = { nvidia: "https://integrate.api.nvidia.com/v1" };
+/**
+ * Default endpoints. NVIDIA is the decided provider (D1). The others speak the same OpenAI-compatible protocol, so
+ * `AI_PROVIDER=groq` (plus a model and key) works with no code change; `AI_BASE_URL` overrides any of these.
+ */
+const BASE_URLS: Record<string, string> = {
+  nvidia: "https://integrate.api.nvidia.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/openai",
+  groq: "https://api.groq.com/openai/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+};
 
-/** AI_PROVIDER (default nvidia, D1), AI_MODEL, AI_API_KEY, and AI_BASE_URL for any other OpenAI-compatible host. */
+/** AI_PROVIDER (default nvidia, D1), AI_MODEL, AI_API_KEY, optional AI_FALLBACK_MODEL, and AI_BASE_URL for any other host. */
 export function liveConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LiveConfig | { missing: string } {
   const provider = env.AI_PROVIDER?.trim() || "nvidia";
   const model = env.AI_MODEL?.trim();
   const apiKey = env.AI_API_KEY?.trim();
   const baseURL = env.AI_BASE_URL?.trim() || BASE_URLS[provider];
+  const fallbackModel = env.AI_FALLBACK_MODEL?.trim();
   if (!model) return { missing: "AI_MODEL" };
   if (!apiKey) return { missing: "AI_API_KEY" };
   if (!baseURL) return { missing: `AI_BASE_URL (no default for provider "${provider}")` };
-  return { provider, model, apiKey, baseURL };
+  return {
+    provider,
+    model,
+    apiKey,
+    baseURL,
+    ...(fallbackModel && fallbackModel !== model ? { fallbackModel } : {}),
+  };
+}
+
+/**
+ * D1: Nemotron on NVIDIA spends its whole budget thinking unless `chat_template_kwargs.enable_thinking` is false on
+ * every call. That field belongs to NVIDIA's endpoint: another provider may reject or ignore an unknown body field, so
+ * it is sent to nvidia only. (apps/buyer keeps a copy of this rule; a test keeps the two identical.)
+ */
+export function providerOptionsFor(provider: string) {
+  return provider === "nvidia" ? { nvidia: { chat_template_kwargs: { enable_thinking: false } } } : undefined;
+}
+
+/**
+ * True when the provider says the model itself is gone: HTTP 404/410, or a message that names a missing, retired or
+ * renamed model. The free lineups churn (a model can leave the free endpoints with no notice), so this is the one
+ * failure worth retrying on a different model. Rate limits, timeouts and bad requests are not.
+ */
+export function isModelUnavailableError(err: unknown): boolean {
+  const status = (err as { statusCode?: number } | null)?.statusCode;
+  if (status === 404 || status === 410) return true;
+  const text = err instanceof Error ? err.message : String(err);
+  return (
+    /model[^.]{0,60}(not found|does not exist|decommission|deprecated|no longer (available|supported)|not available)/i.test(
+      text,
+    ) || /(not found|does not exist)[^.]{0,60}model/i.test(text)
+  );
 }
 
 /** The Vercel AI SDK over an OpenAI-compatible endpoint. Temperature 0, no SDK retries (we retry once ourselves). */
-export function createGenerate(cfg: LiveConfig): Generate {
-  const provider = createOpenAICompatible({ name: cfg.provider, baseURL: cfg.baseURL, apiKey: cfg.apiKey });
+export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Generate {
+  const provider = createOpenAICompatible({
+    name: cfg.provider,
+    baseURL: cfg.baseURL,
+    apiKey: cfg.apiKey,
+    ...(fetchImpl ? { fetch: fetchImpl } : {}),
+  });
   return async <T>({ system, prompt, schema, timeoutMs }: GenerateRequest<T>): Promise<T> => {
-    const { object } = await generateObject({
-      model: provider.chatModel(cfg.model),
-      schema,
-      system,
-      prompt,
-      temperature: 0,
-      maxRetries: 0,
-      abortSignal: AbortSignal.timeout(timeoutMs),
-      // D1: nemotron spends its whole budget thinking unless this is off on every call.
-      providerOptions: { [cfg.provider]: { chat_template_kwargs: { enable_thinking: false } } },
-    });
-    return object as T;
+    const call = async (model: string) => {
+      const { object } = await generateObject({
+        model: provider.chatModel(model),
+        schema,
+        system,
+        prompt,
+        temperature: 0,
+        maxRetries: 0,
+        abortSignal: AbortSignal.timeout(timeoutMs),
+        providerOptions: providerOptionsFor(cfg.provider),
+      });
+      return object as T;
+    };
+    try {
+      return await call(cfg.model);
+    } catch (err) {
+      // Not sticky on purpose: if the primary comes back it is used again on the next call.
+      if (cfg.fallbackModel && isModelUnavailableError(err)) return call(cfg.fallbackModel);
+      throw err;
+    }
   };
 }
 
