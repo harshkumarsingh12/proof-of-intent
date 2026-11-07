@@ -78,7 +78,7 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
   overreaching capture to dispute.
 - Copy the [judge testing steps](JUDGE_TESTING.md) into Devpost and add verified access and fresh dispute IDs
   in its testing field. Confirm both judge shopper accounts can sign in, buy and report a problem.
-- Add the dated full eval report and its measured numbers to the README when #43 is complete.
+- The dated full eval report and its measured numbers are in the README ([report](evals/2026-11-07.md), #43).
 - Use the analytics view at 2:02. Studio is built and checked locally with the real key (the hosted check is #123);
   time the Studio shot (a grid row click, a donut click, one Ask the AI prompt: a live answer takes about 15 to 25
   seconds) against the same slot, or record it separately. Common questions (a named dispute, counts, what needs

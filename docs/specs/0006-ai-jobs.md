@@ -91,7 +91,7 @@ schema validity 100% after retry.
 2. An injected "ignore the budget" title never yields `match`. _(done)_
 3. Overreach dispute → `AGENT_OVERREACH`, `ACCEPT_CLAIM`. _(J2 replay test)_
 4. Stack runs end to end with no API key in replay mode. _(J1 done: `checkout.test.ts` runs the real J1 in replay)_
-5. Eval report committed with numbers quoted in the README. _(M3)_
+5. Eval report committed with numbers quoted in the README. _(done Nov 7, #43: [docs/evals/2026-11-07.md](../evals/2026-11-07.md))_
 
 ## Decisions
 
@@ -133,3 +133,19 @@ schema validity 100% after retry.
   states facts to a shopper (a chat about products, prices, limits or a refusal) must **retrieve first**: the server looks
   the facts up and puts them in the prompt as data, and the model only phrases them; it must not be trusted to fetch them itself.
   `pnpm ai:check` reports this per endpoint ("calls a tool on its own"), so a backup model can be compared fairly.
+- **Full eval (Nov 7, #43), prompts `j1-v1` and `j2-v2`, primary model only (`AI_FALLBACK_*` switched off so the backup could not
+  answer a case): J1 20/20 with 0 mismatches labelled match, J2 12/12, schema validity 31/31 model cases.** The J1 figure is
+  measured after the local checks checkout also applies (injection guard, road-versus-trail ceiling), as the report says.
+  It took three runs, and the first two missed the gate:
+  - Run 1 (`j2-v1`): J1 20/20 but **J2 3/12**. In nine cases the model gave the right class and action but `confidence: 0`,
+    because the prompt said "return confidence 0 when the evidence cannot explain the decision" and the model used it
+    whenever the bundle was thin. `classifyDispute` treats 0 as unavailable, so nine disputes would have fallen back to the
+    rule-only recommendation.
+  - Prompt `j2-v2` defines the confidence scale (0.5 to 1; 0 only when nothing in the bundle relates to the decision) and
+    tells the model to base every reason on `policy_evaluation` and cite it.
+  - Run 2 (`j2-v2`, first wording, without the grounding sentence): J2 9/12, the misses being reasons that cited only
+    `dispute_reason`. J1 fell to 18/20 because two calls (black gloves, tumbler capacity) timed out on both 2 s attempts. That
+    is the free endpoint's latency, not a prompt change: the same cases passed in runs 1 and 3.
+  - Run 3 (final): passed. Expect the occasional J1 timeout to show up as `unavailable` (a step-up at checkout, never an approval).
+  The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
+  cases are recorded from the passing run.

@@ -73,7 +73,7 @@ check (#19; the `list_disputes` catch-up already covers missed webhooks), J2/J3 
 | Analytics page + agent platform widget                                   | Sikruti (Harsh backup)   | ✅ Analytics page with platform breakdown (#73), polished in #78                                                 |
 | Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | ✅ `pnpm demo:seed` (mock stack only: `PP-D-1001` compliant with its PDF, `PP-D-1002` overreach)                 |
 | Security checklist                                                       | Sristee                  | Pending                                                                                                          |
-| Full evals and report                                                    | Sumedha                  | Pending                                                                                                          |
+| Full evals and report                                                    | Sumedha                  | ✅ Nov 7: J1 20/20, J2 12/12, schema 31/31 ([report](evals/2026-11-07.md)); J2 prompt is now `j2-v2` (#43) |
 | Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | ✅ Nov 7, see the status below                                                                                   |
 | Dashboard and buyer polish: phone layout, no fake controls, landing page | Harsh                    | ✅ Done (#78, #79)                                                                                               |
 

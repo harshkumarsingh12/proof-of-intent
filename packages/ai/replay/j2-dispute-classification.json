@@ -1,5 +1,297 @@
 {
-  "e2e33408dc72316a87848bdbdac8ed36c035397a8c57a069f4c9d7764931d606": {
+  "99dfbef61c6cdbc51e7e84d487b9d67d55a312a2e9ced990cae7997cf8b06968": {
+    "label": "grey jacket as requested",
+    "output": {
+      "class": "MANDATE_COMPLIANT",
+      "confidence": 0.85,
+      "recommended_action": "PROVIDE_EVIDENCE",
+      "reasons": [
+        {
+          "text": "The policy evaluation confirms the transaction matched the signed intent for a grey running jacket under USD 80, satisfying the mandate compliance requirement.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Provide the signed intent record and the transaction details showing the grey running jacket priced at USD 74.",
+          "cites": [
+            "policy_evaluation",
+            "dispute_reason"
+          ]
+        }
+      ]
+    }
+  },
+  "705b42098a2a9353d8f834b7533bd7ab7c9f4d65193278a5fe0e710269e14add": {
+    "label": "delivery alleged missing",
+    "output": {
+      "class": "MANDATE_COMPLIANT",
+      "confidence": 0.85,
+      "recommended_action": "PROVIDE_EVIDENCE",
+      "reasons": [
+        {
+          "text": "The policy evaluation confirms the cart matched the signed mandate, and the bundle contains no delivery confirmation, so the operator must provide evidence of delivery to rebut the buyer's non-receipt claim.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Provide delivery confirmation (e.g., tracking number, signature proof, carrier receipt) that shows the merchandise was received.",
+          "cites": [
+            "dispute_reason"
+          ]
+        }
+      ]
+    }
+  },
+  "2ee48b2bfa0a6ca017d3ac7cc275cafd9347d01e70615c50159024a6179155b7": {
+    "label": "shopper approved exact cart",
+    "output": {
+      "class": "MANDATE_COMPLIANT",
+      "confidence": 0.9,
+      "recommended_action": "PROVIDE_EVIDENCE",
+      "reasons": [
+        {
+          "text": "The policy evaluation confirms the shopper signed the cart approval and all hard rules passed, making the mandate compliant.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Provide the cart approval record showing the shopper's signature and the rule‑check results.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "58a1eff6259e381bfceda0ede829ba694c29ecc8cf5c4e6bd9ad08266a6a6ae1": {
+    "label": "price and color violations",
+    "output": {
+      "class": "AGENT_OVERREACH",
+      "confidence": 0.7,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "The policy evaluation states the red USD 95 jacket exceeded the USD 80 limit and conflicted with the required grey color, which constitutes agent overreach in approving a transaction outside policy bounds.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Verify the transaction amount and color compliance by checking the order record for price <= USD 80 and color = grey.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "3cd6e87b79c856e91433340d28dd645d4f0c5a431994dd64bfa9934d5236ef44": {
+    "label": "unapproved merchant",
+    "output": {
+      "class": "AGENT_OVERREACH",
+      "confidence": 0.9,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "The merchant was outside the signed allowlist, so the agent exceeded its authority by processing the transaction.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Verify the signed allowlist and confirm the merchant ID is not listed.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "c57f1885514469663a5c07f54905e192f2755ce1852eea4dc21770a34fbaef84": {
+    "label": "too many units",
+    "output": {
+      "class": "AGENT_OVERREACH",
+      "confidence": 0.7,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "The policy evaluation states the signed order limit was one, but the cart contained two units, indicating the agent allowed an over‑limit order.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Verify the signed order limit and the number of units ordered by checking the order‑limit configuration and the cart contents at time of purchase.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "aec5e53d74ee8e96de14f8db75813d05d551b436e0be58f246079b220a6248a6": {
+    "label": "rain shell substitution",
+    "output": {
+      "class": "INTENT_MISREAD",
+      "confidence": 0.75,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "The policy evaluation states the semantic check found the merchandise (rain shell) was a partial fit for the requested running jacket, indicating the operator misread the buyer's intent.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Verify the product description and buyer's original request to confirm the mismatch between rain shell and running jacket.",
+          "cites": [
+            "dispute_reason",
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "625437dc955ced93668fe44434099974b3047f10a860b00d7b3bbbb3f1270a93": {
+    "label": "road versus trail shoes",
+    "output": {
+      "class": "INTENT_MISREAD",
+      "confidence": 0.85,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "The policy evaluation indicates a semantic check identified a trail shoe substituted for a road shoe, which constitutes a misread of the buyer's intent regarding product type.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Verify the product description and type listed in the original listing against the item shipped; confirm that a road shoe was advertised and a trail shoe was sent.",
+          "cites": [
+            "dispute_reason",
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "ba9895b74ddc47600faba00a7b1f7d9d37b8b2773870363d79b40d2131fd8d96": {
+    "label": "missing insulation",
+    "output": {
+      "class": "INTENT_MISREAD",
+      "confidence": 0.7,
+      "recommended_action": "ACCEPT_CLAIM",
+      "reasons": [
+        {
+          "text": "Policy evaluation found that the product description could not establish the requested insulation, so the operator misread the buyer's intent.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Verify the product description details against the buyer's claim of non-receipt.",
+          "cites": [
+            "dispute_reason"
+          ]
+        }
+      ]
+    }
+  },
+  "380dbc8abe286467f953c58598adf2f41241357de9bcfa1204e4ab99cd817e70": {
+    "label": "ordinary checkout",
+    "output": {
+      "class": "NO_MANDATE",
+      "confidence": 0.7,
+      "recommended_action": "STANDARD_EVIDENCE",
+      "reasons": [
+        {
+          "text": "Policy evaluation found no signed intent record for the order.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Locate any signed intent record or mandate for the order; if none exists, document the gap.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "edd627e9f7f9186f34dd31aa8e6bb23bdf97c12b68ed306568302288b198b8ef": {
+    "label": "pointer mismatch",
+    "output": {
+      "class": "NO_MANDATE",
+      "confidence": 0.6,
+      "recommended_action": "STANDARD_EVIDENCE",
+      "reasons": [
+        {
+          "text": "The PayPal order pointer did not match the stored signed intent, so the merchant lacked the mandated authorization.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Compare the PayPal order pointer recorded at checkout with the signed intent on file; any discrepancy invalidates the mandate.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ]
+    }
+  },
+  "bcd36b412b6487ef68d88541ffa17f3279d6068677f190a2da06f94792cca800": {
+    "label": "injected buyer note",
+    "output": {
+      "class": "NO_MANDATE",
+      "confidence": 0.7,
+      "recommended_action": "STANDARD_EVIDENCE",
+      "reasons": [
+        {
+          "text": "Policy evaluation states the order has no signed intent record, which means the operator lacks the mandated authorization evidence.",
+          "cites": [
+            "policy_evaluation"
+          ]
+        }
+      ],
+      "evidence_plan": [
+        {
+          "text": "Collect any signed intent records, order confirmations, or delivery confirmations that demonstrate buyer authorization and receipt.",
+          "cites": [
+            "policy_evaluation",
+            "dispute_reason"
+          ]
+        }
+      ]
+    }
+  },
+  "3dce6429ee4808ae7b7864aabd45fda2cda33103bba0fb85b2b7dc0f8e23bb4a": {
     "label": "Canonical overreach dispute (hand-authored demo response)",
     "output": {
       "class": "AGENT_OVERREACH",
@@ -8,13 +300,18 @@
       "reasons": [
         {
           "text": "The policy replay found that the cart exceeded the amount limit and conflicted with a required attribute.",
-          "cites": ["policy_evaluation"]
+          "cites": [
+            "policy_evaluation"
+          ]
         }
       ],
       "evidence_plan": [
         {
           "text": "Review the failed checks against the shopper's request before responding.",
-          "cites": ["policy_evaluation", "intent_mandate"]
+          "cites": [
+            "policy_evaluation",
+            "intent_mandate"
+          ]
         }
       ]
     }

@@ -1,30 +1,31 @@
 {
   "e8826f8fe18b6c189022b8df048f1e42c4112416da4d94f0733808e88c2d36c1": {
-    "label": "JKT-GRY-M grey Stride Running Jacket, $74 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
+    "label": "grey running jacket",
     "output": {
       "fit": "match",
       "confidence": 0.95,
       "reasons": [
         "Grey color matches shopper request",
-        "Running jacket category matches request",
+        "Running jacket category matches requested item type",
         "Price $74 is under the $80 budget"
       ],
       "matched_attributes": [
         "color: grey",
-        "category: running jacket",
+        "category: running-jacket",
         "price under $80"
       ],
       "conflicting_attributes": []
     }
   },
   "e0decaa57dcb3b4fd523b1a4166a89ea451ec4421e66c9fd1f7845372a7dd2f6": {
-    "label": "SHL-GRY-M grey Hooded Rain Shell, $79 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
+    "label": "hooded rain shell",
     "output": {
       "fit": "partial",
       "confidence": 0.75,
       "reasons": [
-        "The cart contains a grey hooded rain shell, which is a type of running jacket and matches the color grey and price under $80.",
-        "However, the shopper asked for a 'running jacket' and the item is specifically a 'hooded rain shell', which is a different kind of outerwear and may miss expected features of a running jacket (e.g., breathability, fit)."
+        "The cart contains a hooded rain shell, which is a type of running jacket but differs from the shopper's request for a generic running jacket.",
+        "Color matches the request (grey).",
+        "Price is under the $80 budget (79 USD)."
       ],
       "matched_attributes": [
         "color: grey",
@@ -32,23 +33,23 @@
         "category: running-jacket"
       ],
       "conflicting_attributes": [
-        "item type: hooded rain shell vs requested running jacket"
+        "style: hooded rain shell vs requested running jacket (generic)"
       ]
     }
   },
   "1926d27c0ea03fadda0a757776750491d2ce2d998a8025cf7780bc6303eb81c0": {
-    "label": "JKT-RED-M red Stride Running Jacket, $95 vs \"Find me a grey running jacket under $80, ship to my home address.\"",
+    "label": "red running jacket",
     "output": {
       "fit": "mismatch",
       "confidence": 0.99,
       "reasons": [
-        "Color requested is grey; cart item is red",
-        "Price exceeds the $80 budget (95 USD vs 80 USD cap)"
+        "Color requested is grey; cart item is red.",
+        "Price exceeds the $80 budget (95 USD vs 80 USD cap)."
       ],
       "matched_attributes": [],
       "conflicting_attributes": [
         "color: red (requested grey)",
-        "price: 95 USD (over $80 limit)"
+        "price: 95 USD (requested under $80)"
       ]
     }
   },
@@ -213,6 +214,263 @@
       "conflicting_attributes": [
         "quantity: 6-pack vs requested 3-pack",
         "price: $32 vs max $20"
+      ]
+    }
+  },
+  "ae917ca0d4d230afd754e42f88220ed476f9f04893b0ad99b556fc03f48fb8ab": {
+    "label": "navy rain shell",
+    "output": {
+      "fit": "match",
+      "confidence": 1,
+      "reasons": [
+        "The cart contains exactly one navy waterproof rain shell, matching the shopper's request."
+      ],
+      "matched_attributes": [
+        "color: navy",
+        "category: rain shell",
+        "waterproof"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "78fb3c79dad511d0d096b7a585281672696f58f8e38635d24f79effd95e339b2": {
+    "label": "black insulated gloves",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "The cart contains a single pair of black insulated gloves, exactly matching the shopper's request."
+      ],
+      "matched_attributes": [
+        "color: black",
+        "insulated",
+        "gloves"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "a09319ae42d04319e2f481b7b3ad2c18a3b82f232edda2aafde7b19c4011113b": {
+    "label": "green trail vest",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "Cart item is a lightweight trail running vest",
+        "Color matches the shopper's request for green"
+      ],
+      "matched_attributes": [
+        "category: trail-vest",
+        "color: green",
+        "style: lightweight"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "149fb24fbd4940cb5f673832181f2f33abc471564c02e7d39437d2617f8ccac7": {
+    "label": "white cycling helmet",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "Cart contains a road cycling helmet in the requested color white.",
+        "Product title matches the shopper's request for a white road cycling helmet."
+      ],
+      "matched_attributes": [
+        "color: white",
+        "category: road cycling helmet"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "512fa0a30bb840bb66bd25b716a381335020d80ff694eb3f635968578ca47284": {
+    "label": "red thermos",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "The cart contains a red insulated thermos, which exactly matches the shopper's request."
+      ],
+      "matched_attributes": [
+        "color: red",
+        "category: thermos",
+        "insulated: true"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "8f0da0279b587e2e8a1df24138a032603c7367758001a2b28059aefa7051f9f0": {
+    "label": "blue yoga mat",
+    "output": {
+      "fit": "match",
+      "confidence": 0.95,
+      "reasons": [
+        "The cart contains a non-slip blue yoga mat, which exactly matches the shopper's request."
+      ],
+      "matched_attributes": [
+        "color: blue",
+        "category: yoga mat",
+        "style: non-slip"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "24f1615f82e6f002c70bab0d9759c7841b3e90c476253515c9a03f6af662ed4a": {
+    "label": "trail shoes for road running",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.85,
+      "reasons": [
+        "The cart contains trail running shoes, but the shopper requested road running shoes."
+      ],
+      "matched_attributes": [
+        "category: running-shoes",
+        "color: black"
+      ],
+      "conflicting_attributes": [
+        "intended-surface: road (cart is trail)"
+      ]
+    }
+  },
+  "f086cf9ea7938a7f7741a3bf3e60d75532909f1bfa8f6f13b8ca8d87edb7ae1c": {
+    "label": "unrated warmth",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.75,
+      "reasons": [
+        "The cart contains a winter coat, which matches the shopper's request for a winter coat.",
+        "The coat's color is green, while the shopper did not specify a color, so there is no conflict.",
+        "The shopper requested a coat rated to minus 20 Celsius; the cart listing does not provide a temperature rating, so this important requirement is unchecked."
+      ],
+      "matched_attributes": [
+        "category: winter-coat"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "909d2f31e6c36931a4296e34c17b0a121189adfb3655e30fbb3e81e4c60d0b2b": {
+    "label": "small sock pack",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.85,
+      "reasons": [
+        "Shopper requested six pairs of black running socks; cart contains one 3‑pair pack.",
+        "Quantity and pack size do not match the shopper's request."
+      ],
+      "matched_attributes": [
+        "color: black",
+        "category: running socks"
+      ],
+      "conflicting_attributes": [
+        "quantity: shopper wanted 6 pairs, cart provides 3 pairs",
+        "pack size: 3‑pair pack vs requested 6 individual pairs"
+      ]
+    }
+  },
+  "d71dfff42f7b67c036b03888cc37e10dab06e19b2542824475fae784c93d26d9": {
+    "label": "zip pockets unverified",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.85,
+      "reasons": [
+        "Color matches the shopper's request (grey).",
+        "Category matches (running shorts).",
+        "Missing: zip pockets are not confirmed in the product title or attributes."
+      ],
+      "matched_attributes": [
+        "color: grey",
+        "category: running-shorts"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "dc63f797c2c297d3d89533753a8236090b632daf13c9cc2cc8ca4280e98968c0": {
+    "label": "carry-on dimensions unverified",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.78,
+      "reasons": [
+        "The cart contains a cabin roller suitcase, which is a type of carry‑on luggage.",
+        "The shopper requested carry‑on luggage at most 55 cm tall, but the suitcase’s height is not listed in the provided data, so we cannot confirm it meets the size limit."
+      ],
+      "matched_attributes": [
+        "category: luggage"
+      ],
+      "conflicting_attributes": []
+    }
+  },
+  "f03105ac373adad3d41094b96468a4d7dd91a873f8d6dde150c9f157ff22918c": {
+    "label": "unverified tumbler capacity",
+    "output": {
+      "fit": "partial",
+      "confidence": 0.85,
+      "reasons": [
+        "The cart contains an insulated tumbler, which matches the requested item type.",
+        "The requested volume of 750 ml is not specified in the product attributes, so it cannot be confirmed.",
+        "The color red is present but was not mentioned in the shopper's request."
+      ],
+      "matched_attributes": [
+        "category: tumbler",
+        "insulated: true"
+      ],
+      "conflicting_attributes": [
+        "volume: 750 ml (not specified)",
+        "color: red (not requested)"
+      ]
+    }
+  },
+  "0e884e4811d19a6ad5ba379bddf956fc37fb21875e3857fcdfc376ed75a6a5d8": {
+    "label": "jacket versus tent",
+    "output": {
+      "fit": "mismatch",
+      "confidence": 0.99,
+      "reasons": [
+        "The shopper requested a running jacket, but the cart contains a two-person camping tent."
+      ],
+      "matched_attributes": [],
+      "conflicting_attributes": [
+        "item type: requested running jacket, found camping tent"
+      ]
+    }
+  },
+  "c839faecbc62a2a1b181a9cbcf3a08a6ea66bd99e01ecb03f8657620857ef5ec": {
+    "label": "wrong helmet color",
+    "output": {
+      "fit": "mismatch",
+      "confidence": 0.95,
+      "reasons": [
+        "Shopper requested a white helmet; cart contains a black helmet."
+      ],
+      "matched_attributes": [],
+      "conflicting_attributes": [
+        "color: black vs requested white"
+      ]
+    }
+  },
+  "f69485ce6c84a56558bb743842c9775e6dd146cc3a5960a37d0ba0f686b35595": {
+    "label": "cordless requirement",
+    "output": {
+      "fit": "mismatch",
+      "confidence": 0.99,
+      "reasons": [
+        "Shopper requested a cordless drill, but the cart contains a corded drill."
+      ],
+      "matched_attributes": [],
+      "conflicting_attributes": [
+        "power_source: corded (requested cordless)"
+      ]
+    }
+  },
+  "bed14177cfcbd505c318509b2808b069e994cdf1f71916fb2dc2976aa0c1e580": {
+    "label": "dairy conflict",
+    "output": {
+      "fit": "mismatch",
+      "confidence": 0.95,
+      "reasons": [
+        "The shopper requested dairy-free protein bars, but the cart contains Milk Chocolate Whey Protein Bars, which contain dairy."
+      ],
+      "matched_attributes": [],
+      "conflicting_attributes": [
+        "dairy-free"
       ]
     }
   }
