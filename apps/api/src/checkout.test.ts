@@ -396,6 +396,26 @@ describe("POST /checkout: verification", () => {
     expect(res.json().verdict).toEqual({ outcome: "REJECT", reasons: ["MANDATE_MISMATCH"] });
   });
 
+  test("an expired intent, or one that isn't valid yet, is rejected end to end and creates nothing", async () => {
+    // NOW is 2026-11-02T10:00:00Z; the cart (valid until 10:15) is fine in both cases, so only the intent decides.
+    const expired = { ...greyJacketIntent, intent_expiry: "2026-11-02T09:00:00Z" };
+    const early = {
+      ...greyJacketIntent,
+      constraints: { ...greyJacketIntent.constraints, valid_from: "2026-11-02T11:00:00Z" },
+    };
+    for (const [intent, reason] of [
+      [expired, "MANDATE_EXPIRED"],
+      [early, "MANDATE_NOT_YET_VALID"],
+    ] as const) {
+      const s = setup();
+      const res = await s.checkout((await signedCheckout({ shopper, agent, intent })).body);
+      expect(res.json().verdict, reason).toEqual({ outcome: "REJECT", reasons: [reason] });
+      expect(res.json().order_id).toBeUndefined();
+      expect(s.createOrder).not.toHaveBeenCalled();
+      expect(s.mem.orders.size).toBe(0);
+    }
+  });
+
   test("a cart for another merchant, or a platform the agent key isn't registered to, is MANDATE_MISMATCH", async () => {
     const s = setup();
     const elsewhere = {
