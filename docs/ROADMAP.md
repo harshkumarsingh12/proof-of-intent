@@ -103,7 +103,7 @@ the AI variables (#123), judge disputes that expire before Dec 15 (#122), the ch
 (#125), dark mode as a stretch (#127), and the older M4 items below.
 
 **Status (Nov 7, night):** the AI upgrades are merged behind switches, all default off or degrading to plain answers:
-voice ordering (`BUYER_VOICE=1`: speak, read back, a separate "confirm" signs; #140), the shop assistant
+voice ordering (`BUYER_VOICE=1`: speak and the agent fills in the limits; #140; the read-back card and spoken "confirm" were removed Nov 8 at the owner's request, so signing is now the shopper's own click), the shop assistant
 (`BUYER_CHAT=1`, answers from the store's data, can't sign or buy; #143), provider hardening with a Groq backup
 (`AI_FALLBACK_*`, `pnpm ai:check`; #141, #142), a deterministic planner for the Studio chat so common questions are right,
 read-only and fast with no recordings in replay mode (`pnpm smoke:studio`; #144, so #124 is resolved for them), and near-miss
