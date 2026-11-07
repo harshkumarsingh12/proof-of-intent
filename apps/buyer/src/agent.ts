@@ -176,6 +176,26 @@ export function categoryFrom(text: string): string | undefined {
   return best && best.score > 0 ? best.c : undefined;
 }
 
+const NUMBER_WORD =
+  /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\b/i;
+
+/**
+ * Keeps a live draft honest to the shopper's actual words. The model was asked to set only what was stated, but on the
+ * hosted shop it still invented a price for "a running jacket" ($150, $200) and dropped an item it was given ("white
+ * socks"), and an invented cap would be signed as if the shopper had chosen it. So the plain readers the replay drafter
+ * uses back it up: a price is kept only if the words contain a number at all (digits or a number word), and an item or
+ * color the model left out is filled in when the words name one. Anything the model did set is left as it chose.
+ */
+export function groundInWords(args: DraftArgs, text: string): DraftArgs {
+  const hasNumber = /\d/.test(text) || NUMBER_WORD.test(text);
+  return {
+    ...args,
+    max_price_usd: hasNumber ? (args.max_price_usd ?? priceUsd(text)) : undefined,
+    category: args.category ?? categoryFrom(text),
+    color: args.color ?? colorFrom(text),
+  };
+}
+
 /**
  * The replay-mode drafter: no model, so read the price, color and category straight out of the words. What the words
  * don't say stays open (and the price gets the proposed cap), so it never refuses a request for missing a limit.
@@ -348,7 +368,8 @@ export function chooseTools(ctx: RunContext) {
   };
 }
 
-export function draftTools(sink: { draft?: IntentDraft }) {
+/** `words`, when given, are the shopper's own text: the model's draft is checked against them (`groundInWords`). */
+export function draftTools(sink: { draft?: IntentDraft }, words?: string) {
   return {
     create_intent_mandate: tool({
       description:
@@ -361,7 +382,7 @@ export function draftTools(sink: { draft?: IntentDraft }) {
         valid_days: z.number().int().min(1).max(30).optional(),
       }),
       execute: async (args) => {
-        sink.draft = draftIntent(args);
+        sink.draft = draftIntent(words === undefined ? args : groundInWords(args, words));
         return { drafted: true, note: "The shopper will review and sign it. Stop now." };
       },
     }),
@@ -686,7 +707,7 @@ export async function runDraft(args: {
   const sink: { draft?: IntentDraft } = {};
   await generateText({
     ...callOptions(withBudget(args.model ?? liveModelFromEnv())),
-    tools: draftTools(sink),
+    tools: draftTools(sink, args.text),
     toolChoice: { type: "tool", toolName: "create_intent_mandate" },
     maxSteps: 1,
     system: [
