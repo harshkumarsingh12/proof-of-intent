@@ -228,6 +228,10 @@ describe("policy engine: recurrence", () => {
     expect(at("2026-11-01T12:00:00Z", "2026-11-03T00:00:00Z").pass).toBe(true);
   });
 
+  test("boundary: a capture at exactly now is in the window", () => {
+    expect(at(NOW, "2026-11-01T12:00:00Z").reasons).toEqual(["RECURRENCE_EXCEEDED"]);
+  });
+
   test("max_orders 1 with no ledger allows the first order", () => {
     expect(run(compliantCart, withConstraints({ recurrence: { max_orders: 1, window_days: 30 } })).pass).toBe(
       true,
