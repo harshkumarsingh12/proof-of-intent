@@ -99,8 +99,9 @@ export function StudioView({
             { id: "open", name: "Open", format: "integerFormat" },
             { id: "overreach", name: "Agent overreach", format: "integerFormat" },
             { id: "dueSoon", name: "Due within 24 hours", format: "integerFormat" },
+            { id: "overdue", name: "Overdue", format: "integerFormat" },
             { id: "atStake", name: "Dollars at stake", format: "currencyFormat", formatOptions: usd },
-            { id: "conceded", name: "Dollars conceded", format: "currencyFormat", formatOptions: usd },
+            { id: "conceded", name: "Dollars to concede (recommended)", format: "currencyFormat", formatOptions: usd },
           ],
         },
         {

@@ -28,11 +28,13 @@ export interface StudioDisputeRow {
   // 0/1 and dollar columns, so a KPI tile is a plain sum and still follows Studio's filters and cross filters.
   open: number;
   overreach: number;
-  /** Open and due within 24 hours. */
+  /** Open and due within the next 24 hours (not yet late). */
   dueSoon: number;
+  /** Open and already past the seller's response deadline. Counted apart from `dueSoon` (#165). */
+  overdue: number;
   /** Dollars on open disputes. */
   atStake: number;
-  /** Dollars on disputes the copilot recommends conceding (AGENT_OVERREACH). */
+  /** Dollars on disputes the copilot recommends conceding (AGENT_OVERREACH): a recommendation, not a confirmed refund. */
   conceded: number;
 }
 
@@ -55,9 +57,10 @@ export const disputeRows = (details: DisputeDetail[], now: Date = new Date()): S
     const overreach = d.disputeClass === "AGENT_OVERREACH" ? 1 : 0;
     const due = Date.parse(d.sellerResponseDueDate);
     // Hours to one decimal; a missing or unreadable deadline is far in the future so it sorts last and is never "soon".
-    const hoursToDue = Number.isFinite(due)
-      ? Math.round(((due - now.getTime()) / 3_600_000) * 10) / 10
-      : 99_999;
+    // Whether it is late is judged on the exact time left: rounded to a tenth of an hour, a dispute up to three minutes late
+    // would read as 0 hours and still count as due soon.
+    const msLeft = Number.isFinite(due) ? due - now.getTime() : Infinity;
+    const hoursToDue = Number.isFinite(due) ? Math.round((msLeft / 3_600_000) * 10) / 10 : 99_999;
     return {
       id: d.id,
       disputeClass: d.disputeClass,
@@ -72,7 +75,8 @@ export const disputeRows = (details: DisputeDetail[], now: Date = new Date()): S
       coverNote: d.evidenceDraftInfo?.coverNote ?? "",
       open,
       overreach,
-      dueSoon: open && hoursToDue <= DAY_HOURS ? 1 : 0,
+      dueSoon: open && msLeft >= 0 && msLeft <= DAY_HOURS * 3_600_000 ? 1 : 0,
+      overdue: open && msLeft < 0 ? 1 : 0,
       atStake: open ? amount : 0,
       conceded: overreach ? amount : 0,
     };

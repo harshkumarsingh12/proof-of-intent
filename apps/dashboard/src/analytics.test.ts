@@ -257,3 +257,96 @@ describe("analytics panel & overreach metrics (spec 0007)", () => {
     expect(SEED_ANALYTICS.blockedOverreachCarts.totalBlocked).toBe(38);
   });
 });
+
+describe("wins, refunds and protected amounts come from PayPal's confirmed outcome, not the recommendation (#165)", () => {
+  const dispute = (
+    id: string,
+    over: Partial<(typeof SEED_DISPUTES)[number]>,
+  ): (typeof SEED_DISPUTES)[number] => ({
+    id,
+    orderId: `O-${id}`,
+    paypalOrderId: `PP-${id}`,
+    status: "RESOLVED",
+    decision: "defend",
+    disputeClass: "MANDATE_COMPLIANT",
+    amount: { value: 10000, currency: "USD" },
+    createdAt: "2026-11-01T00:00:00Z",
+    sellerResponseDueDate: "2026-11-05T00:00:00Z",
+    reasons: [],
+    agentPlatform: "Northstar",
+    buyerDisputeReason: "TEST",
+    ...over,
+  });
+  const won = { result: "SELLER_FAVOUR", code: "RESOLVED_SELLER_FAVOUR" } as const;
+  const lost = { result: "BUYER_FAVOUR", code: "RESOLVED_BUYER_FAVOUR" } as const;
+
+  it("a defended dispute PayPal decided for the buyer is a loss, not a win", () => {
+    const s = computeAnalyticsSummary([dispute("A", { outcome: lost })], []);
+    expect(s.disputes.defenseRate).toBe(0);
+    expect(s.amountProtected.defendedTotal.value).toBe(0);
+    expect(s.amountProtected.concededTotal.value).toBe(10000);
+  });
+
+  it("a conceded dispute PayPal decided for the seller is a win", () => {
+    const s = computeAnalyticsSummary([dispute("B", { decision: "concede", outcome: won })], []);
+    expect(s.disputes.defenseRate).toBe(100);
+    expect(s.amountProtected.defendedTotal.value).toBe(10000);
+    expect(s.amountProtected.concededTotal.value).toBe(0);
+  });
+
+  it("a resolved dispute with no confirmed outcome, or one closed in neither side's favour, counts as neither", () => {
+    const s = computeAnalyticsSummary(
+      [
+        dispute("C", {}), // resolved, PayPal gave no outcome
+        dispute("D", { outcome: { result: "OTHER", code: "CANCELED_BY_BUYER" } }),
+        dispute("E", { outcome: won }),
+      ],
+      [],
+    );
+    expect(s.disputes.defenseRate).toBe(100); // 1 win out of the 1 decided, not 1 of 3 resolved
+    expect(s.amountProtected.defendedTotal.value).toBe(10000);
+    expect(s.amountProtected.concededTotal.value).toBe(0);
+  });
+
+  it("an open dispute is never a win or a loss, whatever the copilot recommends", () => {
+    const s = computeAnalyticsSummary(
+      [dispute("F", { status: "ACTION_REQUIRED", outcome: won }), dispute("G", { status: "UNDER_REVIEW" })],
+      [],
+    );
+    expect(s.disputes.defenseRate).toBe(0);
+    expect(s.amountProtected.defendedTotal.value).toBe(0);
+    expect(s.amountProtected.concededTotal.value).toBe(0);
+  });
+
+  it("the refund is what PayPal says went back to the buyer, when it says (a partial refund)", () => {
+    const s = computeAnalyticsSummary(
+      [dispute("H", { outcome: { ...lost, refunded: { value: 4000, currency: "USD" } } })],
+      [],
+    );
+    expect(s.amountProtected.concededTotal.value).toBe(4000);
+  });
+
+  it("mixed outcomes give the exact rate and dollars", () => {
+    const s = computeAnalyticsSummary(
+      [
+        dispute("I", { amount: { value: 7800, currency: "USD" }, outcome: won }),
+        dispute("J", { amount: { value: 8500, currency: "USD" }, outcome: won }),
+        dispute("K", { amount: { value: 11000, currency: "USD" }, outcome: lost }),
+        dispute("L", { decision: "concede", amount: { value: 3000, currency: "USD" }, outcome: lost }),
+      ],
+      [],
+    );
+    expect(s.disputes.defenseRate).toBe(50); // 2 won of 4 decided
+    expect(s.amountProtected.defendedTotal.value).toBe(16300);
+    expect(s.amountProtected.concededTotal.value).toBe(14000);
+  });
+
+  it("the seed's three resolved disputes each carry the outcome the old numbers assumed", () => {
+    const resolved = SEED_DISPUTES.filter((d) => d.status === "RESOLVED");
+    expect(resolved.map((d) => [d.id, d.outcome?.result])).toEqual([
+      ["PP-D-1012", "SELLER_FAVOUR"],
+      ["PP-D-1013", "BUYER_FAVOUR"],
+      ["PP-D-1023", "SELLER_FAVOUR"],
+    ]);
+  });
+});

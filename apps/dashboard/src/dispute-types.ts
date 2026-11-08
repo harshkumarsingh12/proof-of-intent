@@ -9,6 +9,22 @@ export type DisputeStatus =
   | "WAITING_FOR_SELLER_RESPONSE"
   | "RESOLVED";
 
+/**
+ * How PayPal actually closed a dispute (its `dispute_outcome`), read from the dispute object the worker stores. The copilot's
+ * `decision` is only a recommendation: a defended dispute can still be lost, and a conceded one is not a win. Wins, refunds
+ * and protected amounts come from this and nothing else (#165). `OTHER` is any closure that is neither side's favour
+ * (the buyer withdrew, PayPal paid out under protection, ...): it counts as neither a win nor a loss.
+ */
+export type DisputeResult = "SELLER_FAVOUR" | "BUYER_FAVOUR" | "OTHER";
+
+export interface DisputeOutcome {
+  result: DisputeResult;
+  /** PayPal's own code, for example RESOLVED_SELLER_FAVOUR. */
+  code: string;
+  /** What PayPal says was refunded to the buyer, when it says. */
+  refunded?: Money;
+}
+
 export interface DisputeItem {
   id: string;
   orderId: string;
@@ -24,6 +40,8 @@ export interface DisputeItem {
   buyerDisputeReason: string;
   shopperNotes?: string;
   evidenceDrafted?: boolean;
+  /** Present only once PayPal has resolved the dispute and said how. Absent means not confirmed. */
+  outcome?: DisputeOutcome;
 }
 
 export type DecisionFilter = "all" | DisputeDecision;

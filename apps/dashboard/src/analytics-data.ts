@@ -137,17 +137,18 @@ export function computeAnalyticsSummary(
   const conceded = disputes.filter((d) => d.decision === "concede");
   const standard = disputes.filter((d) => d.decision === "standard");
 
-  // Actual dispute outcomes from resolved disputes (excluding unresolved/active disputes)
-  const resolved = disputes.filter((d) => d.status === "RESOLVED");
-  const resolvedWins = resolved.filter((d) => d.decision === "defend");
-  const resolvedLosses = resolved.filter((d) => d.decision === "concede");
+  // Wins, refunds and protected amounts come from how PayPal closed the dispute, never from what the copilot recommended
+  // (#165): a defended dispute can be lost, and a conceded one is not a win. A resolved dispute with no confirmed outcome,
+  // or one closed in neither side's favour (the buyer withdrew), is counted as neither.
+  const resolvedWins = disputes.filter((d) => d.status === "RESOLVED" && d.outcome?.result === "SELLER_FAVOUR");
+  const resolvedLosses = disputes.filter((d) => d.status === "RESOLVED" && d.outcome?.result === "BUYER_FAVOUR");
+  const decided = resolvedWins.length + resolvedLosses.length;
 
-  const defenseRate = resolved.length > 0
-    ? Math.round((resolvedWins.length / resolved.length) * 100)
-    : 0;
+  const defenseRate = decided > 0 ? Math.round((resolvedWins.length / decided) * 100) : 0;
 
+  // What the seller kept is the disputed amount; what went back to the buyer is what PayPal says it refunded, else the amount.
   const actualProtectedCents = resolvedWins.reduce((sum, d) => sum + d.amount.value, 0);
-  const actualConcededCents = resolvedLosses.reduce((sum, d) => sum + d.amount.value, 0);
+  const actualConcededCents = resolvedLosses.reduce((sum, d) => sum + (d.outcome?.refunded?.value ?? d.amount.value), 0);
 
   // Platform breakdown: every platform that appears in the orders or the disputes, busiest first
   const ordersByPlatform: Record<string, number> = {};
