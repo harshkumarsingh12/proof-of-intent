@@ -15,6 +15,7 @@ import { fromPayPalAmount, PayPalError, type PayPalClient, type PayPalDispute } 
 import { importJWK, type JWK } from "jose";
 import { disputeFacts, runDisputeClassifier, type DisputeRecord, type OrderRecord } from "./classifier";
 import { buildConstraintChecks, draftEvidenceForDefend, type EvidencePackageResult } from "./evidence";
+import { logger } from "./logger";
 
 export interface InboxDeps {
   db: Db;
@@ -45,7 +46,7 @@ export const retryDelayMs = (attempts: number): number =>
  * list, so nothing is dropped silently.
  */
 export async function processDisputeEvents(deps: InboxDeps, limit = 10): Promise<number> {
-  const log = deps.log ?? console.log;
+  const log = deps.log ?? ((msg: string) => logger.warn(msg));
   const now = () => deps.now?.() ?? new Date().toISOString();
   let handled = 0;
   for (const event of await deps.db.claimDisputeEvents(limit, now(), CLAIM_LEASE_MS)) {
@@ -76,7 +77,7 @@ export async function processDisputeEvents(deps: InboxDeps, limit = 10): Promise
  */
 export async function syncDisputes(deps: InboxDeps): Promise<number> {
   if (!deps.paypal) return 0;
-  const log = deps.log ?? console.log;
+  const log = deps.log ?? ((msg: string) => logger.warn(msg));
   let handled = 0;
   for (const item of await deps.paypal.listDisputes()) {
     const held = await deps.db.getDispute(item.dispute_id);

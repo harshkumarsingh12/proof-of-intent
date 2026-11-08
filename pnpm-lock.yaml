@@ -202,6 +202,9 @@ importers:
       jose:
         specifier: ^5.9.6
         version: 5.10.0
+      pino:
+        specifier: 10.4.0
+        version: 10.4.0
       tsx:
         specifier: ^4.19.2
         version: 4.23.15

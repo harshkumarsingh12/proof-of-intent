@@ -15,6 +15,7 @@
     "@poi/paypal": "workspace:*",
     "@poi/policy-engine": "workspace:*",
     "jose": "^5.9.6",
+    "pino": "10.4.0",
     "tsx": "^4.19.2"
   },
   "devDependencies": {
