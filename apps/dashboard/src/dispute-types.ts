@@ -72,7 +72,8 @@ export interface ConstraintCheck {
 
 export interface DisputeClassificationInfo {
   disputeClass: DisputeClass;
-  confidence: number;
+  /** Optional model self-estimate, uncalibrated; null when the model supplied no valid score. */
+  confidence: number | null;
   recommendedAction: "PROVIDE_EVIDENCE" | "ACCEPT_CLAIM" | "MAKE_OFFER" | "STANDARD_EVIDENCE";
   reasons: Array<{ text: string; cites: string[] }>;
   evidencePlan: string[];

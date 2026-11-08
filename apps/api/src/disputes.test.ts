@@ -117,7 +117,11 @@ describe("dispute reads", () => {
       cartLines: [{ sku: "JKT-GRY-M", color: "grey", quantity: 1 }],
       constraints: { amountMax: { value: 8000, currency: "USD" } },
       constraintChecks: [{ name: "amount_max", status: "PASS" }],
-      classificationInfo: { disputeClass: "MANDATE_COMPLIANT", recommendedAction: "PROVIDE_EVIDENCE" },
+      classificationInfo: {
+        disputeClass: "MANDATE_COMPLIANT",
+        recommendedAction: "PROVIDE_EVIDENCE",
+        confidence: null,
+      },
       evidenceDraftInfo: { attestationHash: intentHash, pdfFilename: "evidence-PP-D-1.pdf" },
     });
     expect(
@@ -135,11 +139,11 @@ describe("dispute reads", () => {
       recommendation: {
         ...compliantRec,
         ai: {
-          reasons: [
-            { text: "The buyer received the grey jacket the shopper asked for.", cites: ["cart_mandate"] },
-          ],
+          confidence: 0.83,
+          grounding_version: "source-excerpts-v1",
+          reasons: [{ text: "Recorded cart: 1 × Stride Running Jacket", cites: ["cart_mandate"] }],
           evidence_plan: [
-            { text: "Attach the signed intent and the matching cart.", cites: ["intent_mandate"] },
+            { text: "Shopper request: grey running jacket under USD 80", cites: ["intent_mandate"] },
           ],
         },
       },
@@ -148,15 +152,41 @@ describe("dispute reads", () => {
       await app.inject({ method: "GET", url: "/disputes/PP-D-AI/recommendation", headers: auth })
     ).json().classificationInfo;
     expect(info.reasons).toContainEqual({
-      text: "The buyer received the grey jacket the shopper asked for.",
+      text: "Recorded cart: 1 × Stride Running Jacket",
       cites: ["cart_mandate"],
     });
-    expect(info.evidencePlan).toEqual(["Attach the signed intent and the matching cart."]);
+    expect(info.confidence).toBe(0.83);
+    expect(info.evidencePlan).toEqual(["Shopper request: grey running jacket under USD 80"]);
     // Without J2, the rule-only plan stays.
     const plain = (
       await app.inject({ method: "GET", url: "/disputes/PP-D-1/recommendation", headers: auth })
     ).json();
     expect(plain.classificationInfo.evidencePlan[0]).toBe("Attestation PDF generated from the audit log");
+  });
+
+  test("legacy uncensored prose and invalid confidence never become a certain classification", async () => {
+    const { app, mem } = await setup();
+    for (const confidence of [undefined, 1.2, -1]) {
+      await mem.db.saveDispute({
+        id: "PP-D-LEGACY",
+        orderId: "ord_1",
+        paypal: {},
+        recommendation: {
+          ...compliantRec,
+          ai: {
+            confidence,
+            reasons: [{ text: "Delivered and refunded.", cites: ["cart_mandate"] }],
+            evidence_plan: [{ text: "Already authorized by the cardholder.", cites: ["capture_record"] }],
+          },
+        },
+      });
+      const info = (
+        await app.inject({ method: "GET", url: "/disputes/PP-D-LEGACY/recommendation", headers: auth })
+      ).json().classificationInfo;
+      expect(info.confidence).toBeNull();
+      expect(JSON.stringify(info)).not.toContain("Delivered and refunded");
+      expect(JSON.stringify(info)).not.toContain("Already authorized");
+    }
   });
 
   test("GET /disputes/:id/evidence.pdf serves the stored package", async () => {

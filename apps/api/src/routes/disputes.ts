@@ -30,6 +30,8 @@ interface Recommendation {
   evidenceError?: string;
   /** J2 (packages/ai): cited explanation of the deterministic class. Absent when the model couldn't answer. */
   ai?: {
+    confidence?: number;
+    grounding_version?: string;
     reasons: { text: string; cites: string[] }[];
     evidence_plan: { text: string; cites: string[] }[];
   };
@@ -76,12 +78,19 @@ export function outcomeOf(d: Pick<DisputeSummary, "status" | "paypal">) {
   if (d.status !== "RESOLVED") return undefined;
   const o = (
     d.paypal as {
-      dispute_outcome?: { outcome_code?: string; amount_refunded?: { currency_code?: string; value?: string } };
+      dispute_outcome?: {
+        outcome_code?: string;
+        amount_refunded?: { currency_code?: string; value?: string };
+      };
     } | null
   )?.dispute_outcome;
   const code = o?.outcome_code;
   if (!code) return undefined;
-  const result = /SELLER_FAVOU?R/.test(code) ? "SELLER_FAVOUR" : /BUYER_FAVOU?R/.test(code) ? "BUYER_FAVOUR" : "OTHER";
+  const result = /SELLER_FAVOU?R/.test(code)
+    ? "SELLER_FAVOUR"
+    : /BUYER_FAVOU?R/.test(code)
+      ? "BUYER_FAVOUR"
+      : "OTHER";
   const r = o?.amount_refunded;
   const refunded =
     r?.currency_code && r.value !== undefined && Number.isFinite(Number(r.value))
@@ -127,6 +136,8 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
   const cart = cartRow ? CartMandate.parse(JSON.parse(cartRow.canonical)) : null;
   const base = item(d, order, rec, d.evidencePdf !== undefined);
   const c = intent?.constraints;
+  const modelConfidence = rec.ai?.confidence;
+  const groundedAi = rec.ai?.grounding_version === "source-excerpts-v1" ? rec.ai : undefined;
   return {
     ...base,
     ...(intent
@@ -166,21 +177,27 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
     })),
     classificationInfo: {
       disputeClass: rec.class,
-      // The class comes from the deterministic tree, not a model.
-      confidence: 1,
+      // This is a model's uncalibrated estimate, never certainty assigned to the deterministic class.
+      confidence:
+        typeof modelConfidence === "number" &&
+        Number.isFinite(modelConfidence) &&
+        modelConfidence >= 0 &&
+        modelConfidence <= 1
+          ? modelConfidence
+          : null,
       recommendedAction: rec.action,
       reasons: [
         { text: EXPLANATION[rec.class], cites: rec.mandateHash ? [`intent_mandate:${rec.mandateHash}`] : [] },
         // J2 explains the class in the dispute's own terms; every line cites a fact the model was given.
-        ...(rec.ai?.reasons ?? []),
+        ...(groundedAi?.reasons ?? []),
         ...rec.reasons.map((r) => ({
           text: r,
           cites: intent ? [`intent_mandate:${intent.mandate_id}`] : [],
         })),
         ...(rec.evidenceError ? [{ text: `No evidence package: ${rec.evidenceError}`, cites: [] }] : []),
       ],
-      evidencePlan: rec.ai?.evidence_plan.length
-        ? rec.ai.evidence_plan.map((p) => p.text)
+      evidencePlan: groundedAi?.evidence_plan.length
+        ? groundedAi.evidence_plan.map((p) => p.text)
         : rec.action === "PROVIDE_EVIDENCE"
           ? ["Attestation PDF generated from the audit log", "JSON bundle: signed mandates and hashes"]
           : rec.action === "ACCEPT_CLAIM"
@@ -280,13 +297,10 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   // Every GET in this plugin returns merchant data; its POSTs carry their own operator check.
   app.addHook("onRequest", async (req, reply) => {
     if (req.method !== "GET" || readsAllowed(req, deps.operatorToken)) return;
-    return reply
-      .code(401)
-      .header("www-authenticate", "Bearer")
-      .send({
-        error: "read_unauthorized",
-        message: "A valid operator token is required to read merchant data",
-      });
+    return reply.code(401).header("www-authenticate", "Bearer").send({
+      error: "read_unauthorized",
+      message: "A valid operator token is required to read merchant data",
+    });
   });
 
   const needDb = (reply: FastifyReply): Db | null => {

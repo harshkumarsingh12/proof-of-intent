@@ -4,6 +4,13 @@
 
 Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 3002). Live: https://poi-dashboard.iotkiit.in.
 
+Dispute details separate the deterministic policy class from the model's optional, uncalibrated score.
+`classificationInfo.confidence` is `number | null`; missing/invalid scores are unavailable, never filled with
+100%. Record availability lists the intent, cart, checkout finding and prepared preview independently. It is
+not a completeness certification or a probability of winning. Delivery, cardholder authorization and completed
+refunds require separate evidence. Historical sample scores are unset. Old unbounded AI reasons are omitted
+until reprocessed with source-excerpt rendering; existing stored PDFs should be reviewed before reuse.
+
 ## Pages
 
 | Page           | Route               | Files                                                            |

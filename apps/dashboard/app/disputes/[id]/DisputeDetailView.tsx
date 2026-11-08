@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DisputeDetail } from "../../../src/dispute-types";
+import { confidenceDescription, evidenceAvailability } from "../../../src/evidence-availability";
 import {
   calculateAge,
   calculateSla,
@@ -22,6 +23,7 @@ export function DisputeDetailView({
   isDemoData?: boolean;
 }) {
   const isDemoData = isDemoDataProp ?? dispute.isDemoData ?? true;
+  const availability = evidenceAvailability(dispute);
   const [onlyViolations, setOnlyViolations] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [hasBeenPreviewed, setHasBeenPreviewed] = useState(false);
@@ -426,11 +428,20 @@ export function DisputeDetailView({
                 {dispute.classificationInfo.disputeClass}
               </span>
               <span style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
-                Confidence: {(dispute.classificationInfo.confidence * 100).toFixed(0)}%
+                  {confidenceDescription(dispute.classificationInfo.confidence)}
               </span>
             </div>
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, color: "var(--poi-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Key findings</div>
+                <p style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
+                  Purchase records available: {availability.available}/{availability.total}. Availability is not proof of completeness or correctness.
+                </p>
+                <ul aria-label="Evidence record availability" style={{ paddingLeft: 18, fontSize: 12 }}>
+                  {availability.checks.map((check) => <li key={check.label}>{check.label}: {check.available ? "available" : "missing"}</li>)}
+                </ul>
+                <p style={{ fontSize: 12, color: "var(--poi-text-muted)" }}>
+                  Delivery, cardholder authorization and refund completion are not established by these purchase records. Review the supporting evidence separately.
+                </p>
+                <div style={{ fontSize: 11, color: "var(--poi-text-muted)", fontWeight: 600, textTransform: "uppercase" }}>Key findings</div>
               <ul style={{ margin: "6px 0 0 0", paddingLeft: 18, fontSize: 13, color: "var(--poi-text)" }}>
                 {dispute.classificationInfo.reasons.map((r, i) => (
                   <li key={i}>{r.text}</li>
