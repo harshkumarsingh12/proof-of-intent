@@ -356,6 +356,47 @@ export function answerIsGrounded(text: string, facts: ChatFacts): boolean {
     if (!prices.has(Math.round(Number(m[1]!.replace(/,/g, "")) * 100))) return false;
   }
   for (const m of text.matchAll(SKU)) if (!skus.has(m[0])) return false;
+  return amountsBelongToTheirProducts(text, known, facts);
+}
+
+/** Clauses end at a sentence end, `;` or a line break, but not at the decimal point of "$74.00". */
+const CLAUSE = /[!?;\n]+|\.(?!\d)/;
+/** Words that make a price in a clause about the whole store (its cheapest or dearest) rather than about one product. */
+const STORE_WIDE = /\b(?:cheapest|dearest|priciest|lowest|highest|most expensive|least expensive|range)\b/i;
+
+/**
+ * A real SKU written next to another product's price is still wrong (#166), and the two sets above can't see it. In a
+ * clause that names a product (by SKU or title), every amount must be that product's own price, judged against the
+ * nearest product named. An amount that is another product's price, or the store's cheapest or dearest outside a
+ * clause about the store, is refused. The shopper's own limit ("under $80") and amounts in clauses that name no
+ * product are left to the checks above. A clause that lists several products with several prices in an order the
+ * guard can't pair up is refused too: the shopper then gets the plain answer straight from the data.
+ */
+function amountsBelongToTheirProducts(text: string, known: ChatProduct[], facts: ChatFacts): boolean {
+  const priced = new Set([...known.map((p) => p.price_cents), facts.store.cheapest_cents, facts.store.dearest_cents]);
+  for (const clause of text.split(CLAUSE)) {
+    const lower = clause.toLowerCase();
+    // A SKU names one product. A title can name several (the same jacket in two colors, at two prices), so a title
+    // accepts the price of any product that carries it.
+    const anchors: { at: number; end: number; prices: Set<number> }[] = [];
+    const find = (needle: string, prices: Set<number>) => {
+      for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, at + 1)) anchors.push({ at, end: at + needle.length, prices });
+    };
+    for (const p of known) {
+      find(p.sku.toLowerCase(), new Set([p.price_cents]));
+      const title = p.title.toLowerCase();
+      find(title, new Set(known.filter((q) => q.title.toLowerCase() === title).map((q) => q.price_cents)));
+    }
+    if (anchors.length === 0) continue;
+    for (const m of clause.matchAll(AMOUNT)) {
+      const cents = Math.round(Number(m[1]!.replace(/,/g, "")) * 100);
+      // The gap between the amount and a product named before it (measured from the end of the name) or after it.
+      const gap = (a: { at: number; end: number }) => (a.at >= m.index! ? a.at - m.index! : m.index! - a.end);
+      const nearest = anchors.reduce((a, b) => (gap(b) < gap(a) ? b : a));
+      if (nearest.prices.has(cents)) continue;
+      if (priced.has(cents) && !STORE_WIDE.test(clause)) return false;
+    }
+  }
   return true;
 }
 
