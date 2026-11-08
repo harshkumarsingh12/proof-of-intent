@@ -23,7 +23,7 @@ the evidence PDF and the JSON bundle.
 `migrations/0003_stepups.sql`: step-up links. `migrations/0004_vault_setups.sql`: which shopper a Vault v3 setup token
 was made for, claimed once (`createVaultSetup`, `claimVaultSetup`, `releaseVaultSetup`, `saveVaultId`). `migrations/0005_shared_vault_id.sql`: `shoppers.vault_id` is no longer unique, because PayPal gives the same payment token to the same PayPal account and a new browser key is a new shopper row (`countVaultHolders` says whether anyone else still holds a token).
 
-Beyond checkout's methods, `Db` has the worker's inbox (`pendingDisputeEvents`, `markEventProcessed`), disputes
+Beyond checkout's methods, `Db` has the worker's inbox (`claimDisputeEvents`, `markEventProcessed`, `failDisputeEvent`, #164), disputes
 (`saveDispute` refuses an older PayPal version, `getDispute`, `listDisputes` deadline first), the dashboard grids
 (`listOrders`, `listVerdicts`, `orderVerdict`), `activeLedger(intent, now)` and `reserveOrder` (spending reserved atomically per intent, #155), `mandateLedger(intent, asOfOrderId)` for what an order's checkout
 saw, and keys (`registerShopperKey`, `registerAgentKey`, `retireKey`).

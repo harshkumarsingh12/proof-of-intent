@@ -55,6 +55,7 @@ describe.runIf(ADMIN_URL)("db", () => {
       "0004_vault_setups.sql",
       "0005_shared_vault_id.sql",
       "0006_reservations.sql",
+      "0007_inbox_retries.sql",
     ]);
     expect(await db.migrate()).toEqual([]);
   });
@@ -311,12 +312,61 @@ describe.runIf(ADMIN_URL)("db", () => {
       payload: { a: 1 },
     });
     await db.recordWebhookEvent({ eventId: "WH-C1", eventType: "PAYMENT.CAPTURE.COMPLETED", payload: {} });
-    const pending = await db.pendingDisputeEvents(10);
-    expect(pending.map((e) => e.eventId)).toContain("WH-D1");
-    expect(pending.map((e) => e.eventId)).not.toContain("WH-C1");
-    expect(pending.find((e) => e.eventId === "WH-D1")!.payload).toEqual({ a: 1 });
+    const now = "2026-11-06T12:00:00.000Z";
+    const claimed = await db.claimDisputeEvents(10, now, 60_000);
+    expect(claimed.map((e) => e.eventId)).toContain("WH-D1");
+    expect(claimed.map((e) => e.eventId)).not.toContain("WH-C1");
+    expect(claimed.find((e) => e.eventId === "WH-D1")).toMatchObject({ payload: { a: 1 }, attempts: 1 });
     await db.markEventProcessed("WH-D1");
-    expect((await db.pendingDisputeEvents(10)).map((e) => e.eventId)).not.toContain("WH-D1");
+    expect(
+      (await db.claimDisputeEvents(10, "2026-11-06T13:00:00.000Z", 60_000)).map((e) => e.eventId),
+    ).not.toContain("WH-D1");
+  });
+
+  test("claiming is atomic: two workers never get the same event, and a lease holds it until it runs out (#164)", async () => {
+    await raw.query("delete from webhook_events");
+    for (let n = 0; n < 8; n++) {
+      await db.recordWebhookEvent({
+        eventId: `WH-CL-${n}`,
+        eventType: "CUSTOMER.DISPUTE.UPDATED",
+        payload: { n },
+      });
+    }
+    const now = "2026-11-06T12:00:00.000Z";
+    const [a, b] = await Promise.all([
+      db.claimDisputeEvents(5, now, 60_000),
+      db.claimDisputeEvents(5, now, 60_000),
+    ]);
+    const ids = [...a, ...b].map((e) => e.eventId);
+    expect(new Set(ids).size).toBe(ids.length); // no event went to both
+    expect(ids).toHaveLength(8); // and none was left behind
+    // Leased: nobody else gets them until the lease is over.
+    expect(await db.claimDisputeEvents(10, "2026-11-06T12:00:30.000Z", 60_000)).toEqual([]);
+    const again = await db.claimDisputeEvents(10, "2026-11-06T12:02:00.000Z", 60_000);
+    expect(again).toHaveLength(8);
+    expect(again.every((e) => e.attempts === 2)).toBe(true);
+  });
+
+  test("a failed event waits for its retry time, a quarantined one is never claimed, and the stats say so", async () => {
+    await raw.query("delete from webhook_events");
+    for (const id of ["WH-F1", "WH-F2"]) {
+      await db.recordWebhookEvent({ eventId: id, eventType: "CUSTOMER.DISPUTE.UPDATED", payload: {} });
+    }
+    const now = "2026-11-06T12:00:00.000Z";
+    await db.claimDisputeEvents(10, now, 60_000);
+    await db.failDisputeEvent("WH-F1", { error: "boom", retryAt: "2026-11-06T12:10:00.000Z" }, now);
+    await db.failDisputeEvent("WH-F2", { error: "gave up", quarantine: true }, now);
+    expect(await db.claimDisputeEvents(10, "2026-11-06T12:05:00.000Z", 60_000)).toEqual([]);
+    const due = await db.claimDisputeEvents(10, "2026-11-06T12:10:00.000Z", 60_000);
+    expect(due.map((e) => e.eventId)).toEqual(["WH-F1"]);
+    const stats = await db.webhookStats();
+    expect(stats).toMatchObject({ pending: 1, quarantined: 1 });
+    expect(stats.oldestPendingAt).toEqual(expect.any(String));
+    expect(
+      (await raw.query("select last_error from webhook_events where event_id = 'WH-F2'")).rows[0],
+    ).toEqual({
+      last_error: "gave up",
+    });
   });
 
   test("disputes upsert, never regress to an older PayPal version, and list deadline first", async () => {

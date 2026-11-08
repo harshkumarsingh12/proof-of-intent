@@ -140,7 +140,15 @@ describe("GET /readyz webhook receipt (#19)", () => {
 
   test("starts empty, counts a verified delivery once, and ignores a redelivery", async () => {
     const app = buildApp({ paypal: createMockClient(), db: memoryDb().db });
-    expect((await readyz(app)).webhooks).toEqual({ received: 0, lastReceivedAt: null, lastEventType: null });
+    expect((await readyz(app)).webhooks).toEqual({
+      received: 0,
+      lastReceivedAt: null,
+      lastEventType: null,
+      // The worker's inbox (#164): nothing waiting, nothing quarantined.
+      pending: 0,
+      oldestPendingAt: null,
+      quarantined: 0,
+    });
 
     expect((await deliver(app, JSON.stringify(event))).json()).toEqual({ status: "stored" });
     const first = (await readyz(app)).webhooks!;

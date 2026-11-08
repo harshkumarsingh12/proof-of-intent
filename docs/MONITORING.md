@@ -17,6 +17,7 @@ Use the dedicated monitor as the main alarm and the in-repo one as a backup that
 | What | URL | Up means |
 |---|---|---|
 | API readiness | `https://poi-api.iotkiit.in/readyz` | HTTP 200 **and** the body contains `"database":"configured"` |
+| Dispute worker | `https://poi-api.iotkiit.in/readyz` | the body contains `"inbox":"ok"` (no dispute event waiting past 10 minutes, none quarantined) |
 | Shop | `https://poi-buyer.iotkiit.in/healthz` | HTTP 200 and `"status":"ok"` |
 | Dashboard | `https://poi-dashboard.iotkiit.in/healthz` | HTTP 200 and `"status":"ok"` |
 
@@ -44,9 +45,9 @@ single dropped packet is not an outage.
 
 ## The dedicated monitor
 
-Any service that can do keyword checks works (UptimeRobot, Better Stack, and others). Create three monitors:
+Any service that can do keyword checks works (UptimeRobot, Better Stack, and others). Create these monitors:
 
-1. **HTTP(S) keyword** on the API's `/readyz` URL, alert when the keyword `"database":"configured"` is **missing**.
+1. **HTTP(S) keyword** on the API's `/readyz` URL, alert when the keyword `"database":"configured"` is **missing**. Add a second keyword monitor on the same URL for `"inbox":"ok"`: it goes red when the dispute worker is behind or has quarantined an event (#164).
 2. **HTTP(S) keyword** on the shop's `/healthz` URL, keyword `"status":"ok"`.
 3. **HTTP(S) keyword** on the dashboard's `/healthz` URL, keyword `"status":"ok"`.
 

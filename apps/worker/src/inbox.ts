@@ -6,7 +6,7 @@
  * `list_disputes`); dispute actions only follow an operator click in the API.
  *
  * Handling an event twice gives the same dispute row, so a crash between saving and marking the event
- * processed just repeats the work once on restart.
+ * processed just repeats the work once, when its claim lease runs out.
  */
 import { classifyDispute, isAiUnavailable, parseAiMode, type AiMode } from "@poi/ai";
 import { CartMandate, IntentMandate, type Outcome, type ReasonCode } from "@poi/contracts";
@@ -25,18 +25,46 @@ export interface InboxDeps {
   log?: (msg: string) => void;
 }
 
-/** Handles up to `limit` pending dispute events. Returns how many were handled. */
+/** How many times an event is tried before it is quarantined (#164). */
+export const MAX_EVENT_ATTEMPTS = 5;
+/** How long a claim holds an event: past it, another poll (or worker) may take the event again. */
+export const CLAIM_LEASE_MS = 5 * 60_000;
+const RETRY_BASE_MS = 30_000;
+const RETRY_CAP_MS = 60 * 60_000;
+
+/** Wait before try number `attempts + 1`: 30 s, 1 min, 2 min, 4 min, ... capped at an hour. */
+export const retryDelayMs = (attempts: number): number =>
+  Math.min(RETRY_BASE_MS * 2 ** Math.max(attempts - 1, 0), RETRY_CAP_MS);
+
+/**
+ * Handles up to `limit` dispute events that are due. Returns how many were handled.
+ *
+ * A failed event is not retried on the next poll: it waits (`retryDelayMs`) and, after MAX_EVENT_ATTEMPTS, is quarantined,
+ * so ten events that always fail cannot fill every batch and block newer disputes (#164). A quarantined event stays in
+ * `webhook_events` with its last error and shows in `/readyz`; `syncDisputes` still picks its dispute up from PayPal's
+ * list, so nothing is dropped silently.
+ */
 export async function processDisputeEvents(deps: InboxDeps, limit = 10): Promise<number> {
   const log = deps.log ?? console.log;
+  const now = () => deps.now?.() ?? new Date().toISOString();
   let handled = 0;
-  for (const event of await deps.db.pendingDisputeEvents(limit)) {
+  for (const event of await deps.db.claimDisputeEvents(limit, now(), CLAIM_LEASE_MS)) {
     try {
       await handleDisputeEvent(event.payload, deps);
       await deps.db.markEventProcessed(event.eventId);
       handled++;
     } catch (err) {
-      // Left in the inbox and retried on the next poll: a dispute must never be dropped silently.
-      log(`dispute event ${event.eventId} failed, will retry: ${(err as Error).message}`);
+      const error = (err as Error).message;
+      if (event.attempts >= MAX_EVENT_ATTEMPTS) {
+        await deps.db.failDisputeEvent(event.eventId, { error, quarantine: true }, now());
+        log(`dispute event ${event.eventId} quarantined after ${event.attempts} failed attempts: ${error}`);
+      } else {
+        const retryAt = new Date(Date.parse(now()) + retryDelayMs(event.attempts)).toISOString();
+        await deps.db.failDisputeEvent(event.eventId, { error, retryAt }, now());
+        log(
+          `dispute event ${event.eventId} failed (attempt ${event.attempts}), will retry at ${retryAt}: ${error}`,
+        );
+      }
     }
   }
   return handled;
@@ -88,7 +116,7 @@ export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Pro
   const order = stored ? await loadOrder(stored, tx?.custom, deps.db) : null;
 
   const amount = d.dispute_amount ? fromPayPalAmount(d.dispute_amount) : undefined;
-  const buyerNote = tx?.items?.flatMap((item) => item.notes ? [item.notes] : []).join("\n");
+  const buyerNote = tx?.items?.flatMap((item) => (item.notes ? [item.notes] : [])).join("\n");
   const dispute: DisputeRecord = {
     disputeId: d.dispute_id,
     ...(stored ? { orderId: stored.id } : {}),
@@ -101,15 +129,18 @@ export async function handleDisputeEvent(payload: unknown, deps: InboxDeps): Pro
 
   const mode = deps.aiMode ?? parseAiMode(process.env.AI_MODE);
   const rec = await runDisputeClassifier(dispute, order, { mode });
-  const ai = await classifyDispute({
-    decision: { class: rec.class, action: rec.action },
-    bundle: {
-      ...disputeFacts(dispute, order?.intent, order?.cart),
-      policy_evaluation: rec.reasons.length ? rec.reasons.join(", ") : rec.class,
-      ...(order?.checkoutVerdict ? { checkout_verdict: order.checkoutVerdict.outcome } : {}),
-      ...(order?.capturedAt ? { capture_record: "PayPal recorded a capture for this order." } : {}),
+  const ai = await classifyDispute(
+    {
+      decision: { class: rec.class, action: rec.action },
+      bundle: {
+        ...disputeFacts(dispute, order?.intent, order?.cart),
+        policy_evaluation: rec.reasons.length ? rec.reasons.join(", ") : rec.class,
+        ...(order?.checkoutVerdict ? { checkout_verdict: order.checkoutVerdict.outcome } : {}),
+        ...(order?.capturedAt ? { capture_record: "PayPal recorded a capture for this order." } : {}),
+      },
     },
-  }, mode).catch((err: unknown) => {
+    mode,
+  ).catch((err: unknown) => {
     if (!isAiUnavailable(err)) throw err;
     return undefined;
   });

@@ -57,6 +57,16 @@ event twice yields the same row, so a crash before `processed_at` is set only re
 `POST /disputes/:id/actions/{provide-evidence,accept-claim,send-message,escalate}`; actions need
 `Bearer OPERATOR_TOKEN`, write the operator's audit row first, then call PayPal. Later on Nov 6:
 
+**Retries, quarantine and lag (#164, migration 0007).** A failing event must not fill every batch and block newer
+disputes. The worker *claims* due events (`Db.claimDisputeEvents`: `FOR UPDATE SKIP LOCKED`, a 5-minute lease, one attempt
+counted per claim), so several workers can run and a worker that dies lets its events go when the lease ends. A failure
+schedules the next attempt (30 s, 1 min, 2 min, 4 min, capped at an hour) and keeps the error in `last_error`; after 5
+attempts the event is *quarantined* (`quarantined_at`): kept, visible, never retried, while `list_disputes` catch-up can
+still pick its dispute up from PayPal. `/readyz` carries `webhooks.pending`, `webhooks.oldestPendingAt`,
+`webhooks.quarantined` and `inbox`: `ok`, `lagging` (the oldest event has waited past `INBOX_LAG_ALERT_SECONDS`, default
+600) or `quarantined`. It never makes `/readyz` a 503; `scripts/ops/uptime-check.sh` (so `uptime.yml`) alerts when `inbox` is
+not `ok`, and docs/MONITORING.md adds the same keyword to the dedicated monitor.
+
 - The worker re-reads every dispute with the Agent Toolkit's `get_dispute` before classifying (webhook bodies can
   be partial) and runs a `list_disputes` catch-up every `DISPUTE_SYNC_MS` (default 5 min) for missed webhooks (#59).
 - The dashboard asks `GET /disputes/:id/paypal-actions` (live) what PayPal allows; buttons PayPal won't take are

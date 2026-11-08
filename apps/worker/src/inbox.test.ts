@@ -7,7 +7,7 @@ import { createDb, type Db } from "@poi/db";
 import { canonicalJson, customId, generateSigningKeyPair, mandateHash, signMandate } from "@poi/mandates";
 import { exportJWK } from "jose";
 import { createMockClient, type PayPalDispute } from "@poi/paypal";
-import { processDisputeEvents, syncDisputes } from "./inbox";
+import { MAX_EVENT_ATTEMPTS, processDisputeEvents, retryDelayMs, syncDisputes } from "./inbox";
 
 // Real Postgres, like packages/db: the inbox is a query, so a fake would test nothing. CI provides one.
 const ADMIN_URL = process.env.DATABASE_URL;
@@ -173,7 +173,7 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
     // Acceptance criterion 3 (spec 0005): the package carries the hash that is in custom_id.
     expect(pointer.endsWith(intentHash.slice(0, 16))).toBe(true);
     expect(d.evidenceBundle).toMatchObject({ mandate_hash: intentHash, custom_id: pointer });
-    expect(await db.pendingDisputeEvents(10)).toEqual([]);
+    expect((await db.webhookStats()).pending).toBe(0);
     const audit = await db.auditTrail("PP-D-COMPLIANT");
     expect(audit.map((a) => a.action)).toEqual(["dispute.classified"]);
   });
@@ -247,14 +247,62 @@ describe.runIf(ADMIN_URL)("dispute inbox", () => {
     expect(await syncDisputes(deps())).toBe(0); // no PayPal client (mock without a reader): nothing to list
   });
 
-  test("a malformed event stays in the inbox and is reported, never dropped", async () => {
-    await db.recordWebhookEvent({
-      eventId: "WH-BAD",
+  const hours = (n: number) => new Date(Date.parse("2026-11-06T12:00:00.000Z") + n * 3_600_000).toISOString();
+  const row = async (id: string) =>
+    (await raw.query("select * from webhook_events where event_id = $1", [id])).rows[0];
+  const badEvent = (id: string) =>
+    db.recordWebhookEvent({
+      eventId: id,
       eventType: "CUSTOMER.DISPUTE.UPDATED",
-      payload: { resource: {} },
+      payload: { resource: {} }, // no dispute_id: fails every time
     });
+
+  test("a malformed event is reported and kept, waiting for a later attempt instead of the next poll", async () => {
+    await raw.query("delete from webhook_events where event_id like 'WH-BAD%'");
+    await badEvent("WH-BAD");
     expect(await processDisputeEvents(deps())).toBe(0);
     expect(log.at(-1)).toContain("WH-BAD");
-    expect((await db.pendingDisputeEvents(10)).map((e) => e.eventId)).toEqual(["WH-BAD"]);
+    expect(log.at(-1)).toContain("attempt 1");
+    const first = await row("WH-BAD");
+    expect(first).toMatchObject({ attempts: 1, quarantined_at: null, processed_at: null });
+    expect(first.last_error).toContain("no resource.dispute_id");
+    expect(Date.parse(first.next_attempt_at)).toBeGreaterThan(Date.parse("2026-11-06T12:00:00.000Z"));
+    // The same instant again: it is waiting, so the poll takes nothing.
+    expect(await db.claimDisputeEvents(10, "2026-11-06T12:00:01.000Z", 60_000)).toEqual([]);
+    expect(await db.webhookStats()).toMatchObject({ pending: 1, quarantined: 0 });
+  });
+
+  test("after repeated failures the event is quarantined with its last error, and stops being tried", async () => {
+    await raw.query("delete from webhook_events where event_id like 'WH-BAD%'");
+    await badEvent("WH-BAD");
+    for (let n = 1; n <= MAX_EVENT_ATTEMPTS; n++) {
+      // Each poll is hours after the last, so the backoff has always passed.
+      expect(await processDisputeEvents({ ...deps(), now: () => hours(n * 3) })).toBe(0);
+    }
+    const quarantined = await row("WH-BAD");
+    expect(quarantined.attempts).toBe(MAX_EVENT_ATTEMPTS);
+    expect(quarantined.quarantined_at).not.toBeNull();
+    expect(quarantined.last_error).toContain("no resource.dispute_id");
+    expect(log.at(-1)).toContain(`quarantined after ${MAX_EVENT_ATTEMPTS} failed attempts`);
+    expect(await db.claimDisputeEvents(10, hours(1000), 60_000)).toEqual([]);
+    expect(await db.webhookStats()).toMatchObject({ pending: 0, quarantined: 1 });
+  });
+
+  test("ten failing events followed by a valid one: the valid one is processed", async () => {
+    await raw.query("delete from webhook_events where event_id like 'WH-BAD%' or event_id = 'WH-GOOD'");
+    for (let n = 0; n < 10; n++) await badEvent(`WH-BAD-${String(n).padStart(2, "0")}`);
+    await deliver("WH-GOOD", "PP-D-AFTER-BAD", "ord_compliant"); // arrives after all ten
+    // The first poll's batch of ten is all failures. Before #164 they filled every batch from then on.
+    expect(await processDisputeEvents(deps())).toBe(0);
+    // The failures now wait; the next poll reaches the valid event.
+    expect(await processDisputeEvents(deps())).toBe(1);
+    expect(await db.getDispute("PP-D-AFTER-BAD")).toMatchObject({ orderId: "ord_compliant" });
+    expect((await row("WH-GOOD")).processed_at).not.toBeNull();
+    expect(await db.webhookStats()).toMatchObject({ pending: 10, quarantined: 0 });
+  });
+
+  test("retry delays double from 30 seconds and stop growing at an hour", () => {
+    expect([1, 2, 3, 4].map(retryDelayMs)).toEqual([30_000, 60_000, 120_000, 240_000]);
+    expect(retryDelayMs(30)).toBe(3_600_000);
   });
 });

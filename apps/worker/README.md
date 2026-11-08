@@ -12,8 +12,8 @@ PayPal; dispute actions happen in the API after an operator click.
    by the deterministic tree (`src/classifier.ts`). J2 adds cited reasons and an evidence plan when available.
    A verified MANDATE_COMPLIANT order gets a JSON bundle and an attestation PDF, with a J3 cover note when
    available (`src/evidence.ts`, `src/pdf.ts`). A replay miss or provider failure falls back to the existing
-   rule-only explanation and draft. The result is stored on the `disputes` row. A failing event stays in
-   the inbox and is retried; handling one twice gives the same row; an older delivery can't overwrite a newer one.
+   rule-only explanation and draft. The result is stored on the `disputes` row. A failing event is retried after a backoff (30 s doubling to an hour), and after 5 attempts is quarantined
+   with its error, so it cannot block newer disputes (#164); several workers can run (events are claimed with a lease). Handling one twice gives the same row; an older delivery can't overwrite a newer one.
 2. **Catch-up**: every `DISPUTE_SYNC_MS` (default 5 min) `list_disputes` finds disputes we don't hold, or hold an
    older version of, so a missed webhook still reaches the dashboard.
 
