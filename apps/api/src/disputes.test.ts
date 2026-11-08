@@ -91,7 +91,7 @@ async function setup(paypal: PayPalClient = createMockClient()) {
 describe("dispute reads", () => {
   test("GET /disputes lists analyzed disputes in the dashboard's shape", async () => {
     const { app } = await setup();
-    const res = await app.inject({ method: "GET", url: "/disputes" });
+    const res = await app.inject({ method: "GET", url: "/disputes", headers: auth });
     expect(res.statusCode).toBe(200);
     const { disputes } = res.json();
     expect(disputes.map((d: { id: string }) => d.id).sort()).toEqual(["PP-D-1", "PP-D-2"]);
@@ -108,7 +108,7 @@ describe("dispute reads", () => {
 
   test("GET /disputes/:id/recommendation returns the detail with mandate, cart and checks", async () => {
     const { app } = await setup();
-    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/recommendation" });
+    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/recommendation", headers: auth });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       id: "PP-D-1",
@@ -121,7 +121,8 @@ describe("dispute reads", () => {
       evidenceDraftInfo: { attestationHash: intentHash, pdfFilename: "evidence-PP-D-1.pdf" },
     });
     expect(
-      (await app.inject({ method: "GET", url: "/disputes/PP-D-PENDING/recommendation" })).statusCode,
+      (await app.inject({ method: "GET", url: "/disputes/PP-D-PENDING/recommendation", headers: auth }))
+        .statusCode,
     ).toBe(404);
   });
 
@@ -143,25 +144,30 @@ describe("dispute reads", () => {
         },
       },
     });
-    const info = (await app.inject({ method: "GET", url: "/disputes/PP-D-AI/recommendation" })).json()
-      .classificationInfo;
+    const info = (
+      await app.inject({ method: "GET", url: "/disputes/PP-D-AI/recommendation", headers: auth })
+    ).json().classificationInfo;
     expect(info.reasons).toContainEqual({
       text: "The buyer received the grey jacket the shopper asked for.",
       cites: ["cart_mandate"],
     });
     expect(info.evidencePlan).toEqual(["Attach the signed intent and the matching cart."]);
     // Without J2, the rule-only plan stays.
-    const plain = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/recommendation" })).json();
+    const plain = (
+      await app.inject({ method: "GET", url: "/disputes/PP-D-1/recommendation", headers: auth })
+    ).json();
     expect(plain.classificationInfo.evidencePlan[0]).toBe("Attestation PDF generated from the audit log");
   });
 
   test("GET /disputes/:id/evidence.pdf serves the stored package", async () => {
     const { app } = await setup();
-    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/evidence.pdf" });
+    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/evidence.pdf", headers: auth });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("application/pdf");
     expect(res.rawPayload.subarray(0, 5).toString()).toBe("%PDF-");
-    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-2/evidence.pdf" })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: "GET", url: "/disputes/PP-D-2/evidence.pdf", headers: auth })).statusCode,
+    ).toBe(404);
   });
 
   test("orders and verifications grids", async () => {
@@ -172,12 +178,90 @@ describe("dispute reads", () => {
       outcome: "REJECT",
       reasons: ["AMOUNT_EXCEEDS_MAX"],
     });
-    expect((await app.inject({ method: "GET", url: "/orders" })).json().orders[0]).toMatchObject({
+    expect(
+      (await app.inject({ method: "GET", url: "/orders", headers: auth })).json().orders[0],
+    ).toMatchObject({
       id: "ord_1",
     });
-    expect((await app.inject({ method: "GET", url: "/verifications?limit=1" })).json().verifications).toEqual(
-      [expect.objectContaining({ outcome: "REJECT", reasons: ["AMOUNT_EXCEEDS_MAX"] })],
-    );
+    expect(
+      (await app.inject({ method: "GET", url: "/verifications?limit=1", headers: auth })).json()
+        .verifications,
+    ).toEqual([expect.objectContaining({ outcome: "REJECT", reasons: ["AMOUNT_EXCEEDS_MAX"] })]);
+  });
+});
+
+describe("merchant reads need the operator token (#163)", () => {
+  const reads = [
+    "/orders",
+    "/verifications",
+    "/disputes",
+    "/disputes/PP-D-1/recommendation",
+    "/disputes/PP-D-1/audit",
+    "/disputes/PP-D-1/paypal-actions",
+    "/disputes/PP-D-1/evidence.pdf",
+  ];
+  const get = (
+    app: Awaited<ReturnType<typeof setup>>["app"],
+    url: string,
+    headers: Record<string, string> = {},
+  ) => app.inject({ method: "GET", url, headers });
+
+  test("every read refuses a caller with no token or a wrong one, and says what it needs", async () => {
+    const { app } = await setup();
+    for (const url of reads) {
+      const wrong: Record<string, string>[] = [
+        {},
+        { authorization: "Bearer nope" },
+        { authorization: "Basic b3BlcmF0b3I6eA==" },
+      ];
+      for (const headers of wrong) {
+        const res = await get(app, url, headers);
+        expect(res.statusCode, `${url} with ${JSON.stringify(headers)}`).toBe(401);
+        expect(res.headers["www-authenticate"]).toBe("Bearer");
+        expect(res.json().error).toBe("read_unauthorized");
+        // Nothing of the data is in the refusal, including the PDF's bytes.
+        expect(res.body).not.toContain("PP-D-1");
+        expect(res.body).not.toContain("%PDF");
+      }
+    }
+  });
+
+  test("with the operator token, each of them answers", async () => {
+    const { app } = await setup();
+    for (const url of reads) {
+      const res = await get(app, url, auth);
+      // paypal-actions asks PayPal live, and the mock does not know this dispute: a 404 is its answer, not a refusal.
+      expect(res.statusCode, url).toBe(url.endsWith("paypal-actions") ? 404 : 200);
+    }
+  });
+
+  test("the evidence PDF is protected like the rest", async () => {
+    const { app } = await setup();
+    expect((await get(app, "/disputes/PP-D-1/evidence.pdf")).statusCode).toBe(401);
+    const ok = await get(app, "/disputes/PP-D-1/evidence.pdf", auth);
+    expect(ok.headers["content-type"]).toBe("application/pdf");
+  });
+
+  test("liveness and readiness stay open, and readiness says whether reads are protected", async () => {
+    const { app, mem, paypal } = await setup();
+    expect((await get(app, "/healthz")).statusCode).toBe(200);
+    expect((await get(app, "/readyz")).json().reads).toBe("protected");
+    const open = buildApp({ paypal, db: mem.db });
+    expect((await get(open, "/readyz")).json().reads).toBe("open");
+  });
+
+  test("with no OPERATOR_TOKEN the API runs open, as the zero-credential mock stack does", async () => {
+    const { mem, paypal } = await setup();
+    const open = buildApp({ paypal, db: mem.db });
+    for (const url of reads) {
+      expect((await get(open, url)).statusCode, url).toBe(url.endsWith("paypal-actions") ? 404 : 200);
+    }
+  });
+
+  test("a read does not unlock an action: actions still need the token themselves", async () => {
+    const { app } = await setup();
+    const res = await app.inject({ method: "POST", url: "/disputes/PP-D-2/actions/accept-claim" });
+    expect(res.statusCode).toBe(401);
   });
 });
 
@@ -296,15 +380,16 @@ describe("operator actions", () => {
       links: [{ rel: "self" }, { rel: "accept_claim" }, { rel: "escalate" }, { rel: "make_offer" }],
     });
     const { app } = await setup(paypal);
-    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/paypal-actions" });
+    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/paypal-actions", headers: auth });
     expect(res.json()).toEqual({
       stage: "INQUIRY",
       status: "WAITING_FOR_SELLER_RESPONSE",
       allowed: ["accept-claim", "escalate"],
     });
-    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-404/paypal-actions" })).statusCode).toBe(
-      404,
-    );
+    expect(
+      (await app.inject({ method: "GET", url: "/disputes/PP-D-404/paypal-actions", headers: auth }))
+        .statusCode,
+    ).toBe(404);
   });
 
   test("make-offer is out of scope, unknown actions and disputes are 404", async () => {
@@ -328,7 +413,7 @@ describe("GET /disputes/:id/audit (#74)", () => {
     expect(
       (await act(app, "PP-D-1", "provide-evidence", { note: "Signed mandate attached." })).statusCode,
     ).toBe(200);
-    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" });
+    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit", headers: auth });
     expect(res.statusCode).toBe(200);
     const { entries } = res.json() as {
       entries: { id: number; actor: string; action: string; note?: string }[];
@@ -345,7 +430,9 @@ describe("GET /disputes/:id/audit (#74)", () => {
   test("accepting the claim against a defend recommendation is marked as an override, with its note", async () => {
     const { app } = await setup();
     await act(app, "PP-D-1", "accept-claim", { note: "Refunding as a goodwill gesture." });
-    const { entries } = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" })).json();
+    const { entries } = (
+      await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit", headers: auth })
+    ).json();
     expect(entries[0]).toMatchObject({
       action: "operator.accept-claim",
       recommended: "MANDATE_COMPLIANT",
@@ -354,7 +441,7 @@ describe("GET /disputes/:id/audit (#74)", () => {
     });
     // The copilot's own recommendation was to concede on PP-D-2, so accepting there is not an override.
     await act(app, "PP-D-2", "accept-claim");
-    const other = (await app.inject({ method: "GET", url: "/disputes/PP-D-2/audit" })).json();
+    const other = (await app.inject({ method: "GET", url: "/disputes/PP-D-2/audit", headers: auth })).json();
     expect(other.entries[0].override).toBeUndefined();
   });
 
@@ -372,7 +459,7 @@ describe("GET /disputes/:id/audit (#74)", () => {
       subjectId: "PP-D-1",
       requestBody: { message: "PayPal 422 ESCALATE_NOT_ALLOWED" },
     });
-    const body = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" })).json();
+    const body = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit", headers: auth })).json();
     expect(body.entries.map((e: { detail?: string }) => e.detail)).toEqual([
       "CUSTOMER.DISPUTE.CREATED",
       "PayPal 422 ESCALATE_NOT_ALLOWED",
@@ -384,10 +471,14 @@ describe("GET /disputes/:id/audit (#74)", () => {
   test("another dispute's rows are not included, and an unknown dispute is a 404", async () => {
     const { app } = await setup();
     await act(app, "PP-D-2", "accept-claim");
-    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" })).json()).toEqual({
+    expect(
+      (await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit", headers: auth })).json(),
+    ).toEqual({
       entries: [],
     });
-    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-NOPE/audit" })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: "GET", url: "/disputes/PP-D-NOPE/audit", headers: auth })).statusCode,
+    ).toBe(404);
   });
 });
 

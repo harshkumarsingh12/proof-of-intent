@@ -4,6 +4,7 @@
  */
 import type { Money } from "@poi/contracts";
 import { DEFAULT_API_BASE_URL } from "./api";
+import { readHeaders } from "./read-auth";
 import { SEED_ORDERS } from "./seed-orders";
 
 export type Outcome = "APPROVE" | "STEP_UP" | "REJECT";
@@ -120,7 +121,7 @@ export async function fetchOrders(
     const rows = new Map<string | number, T>();
     for (let page = 0; page < MAX_PAGES; page++) {
       const url = `${base}${path}?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`;
-      const res = await get(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+      const res = await get(url, { headers: readHeaders(), cache: "no-store" });
       if (!res.ok) return undefined;
       const body = (await res.json()) as Record<string, unknown>;
       const batch = body[key];

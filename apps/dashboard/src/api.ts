@@ -2,6 +2,7 @@ import type { Money } from "@poi/contracts";
 import type { DisputeDetail, DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
 import type { AnalyticsSummary } from "./analytics-types";
 import { getDisputeDetail } from "./dispute-details";
+import { readHeaders } from "./read-auth";
 export { getDisputeDetail };
 export {
   computeAnalyticsSummary,
@@ -47,7 +48,7 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
   try {
     const res = await runner(`${baseUrl}/disputes`, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: readHeaders(),
     });
 
     if (res.ok) {
@@ -97,7 +98,7 @@ export async function fetchDisputeDetailDetailed(
     const encodedId = encodeURIComponent(disputeId);
     const res = await runner(`${baseUrl}/disputes/${encodedId}/recommendation`, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: readHeaders(),
     });
 
     if (res.ok) {
@@ -152,7 +153,7 @@ export async function fetchPaypalActions(
   const runner = options?.fetchFn ?? fetch;
   try {
     const res = await runner(`${baseUrl}/disputes/${encodeURIComponent(disputeId)}/paypal-actions`, {
-      headers: { Accept: "application/json" },
+      headers: readHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -236,7 +237,7 @@ export async function fetchAnalytics(
   try {
     const res = await runner(`${baseUrl}/analytics/overview`, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: readHeaders(),
     });
 
     if (res.ok) {
