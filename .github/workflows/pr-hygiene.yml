@@ -37,11 +37,6 @@ jobs:
           subjectPatternError: "Start the subject in lowercase and drop the trailing period."
           ignoreLabels: dependencies
 
-      - name: No secrets in the diff
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       # Spec-first: changing the shared contract or the API surface needs a spec link.
       - name: Interface changes link a spec
         env:
@@ -55,3 +50,29 @@ jobs:
           if printf '%s' "$BODY" | grep -Eq 'docs/specs/[0-9]{4}'; then echo "Spec linked."; exit 0; fi
           echo "::error::This PR changes packages/contracts or API routes. Link the spec it implements (docs/specs/NNNN-...) in the PR body."
           exit 1
+
+      # gitleaks is pinned and installed here, not by gitleaks-action, which downloads the binary from GitHub releases
+      # on every run and failed the job whenever that download answered 504 (#210). The binary is cached by version,
+      # so an outage only affects a cold cache; a cold install retries and checks the official SHA-256 before use.
+      - name: Cache gitleaks
+        id: gitleaks-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/gitleaks-bin
+          key: gitleaks-8.24.3-linux-x64
+
+      - name: Install gitleaks
+        if: steps.gitleaks-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.cache/gitleaks-bin
+          curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 --max-time 60 \
+            -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            https://github.com/zricethezav/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C ~/.cache/gitleaks-bin gitleaks
+
+      - name: No secrets in the diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ~/.cache/gitleaks-bin/gitleaks git --no-banner --redact -v --log-opts="$BASE..$HEAD" .
