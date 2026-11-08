@@ -104,12 +104,17 @@ export type StoredOrder = OrderRecord & Partial<OrderPatch> & { createdAt?: stri
 
 export type StoredVerdict = VerdictRecord & { id: number; createdAt: string };
 
-/** A verified webhook delivery the worker hasn't handled yet. */
+/** A verified webhook delivery the worker has claimed to handle. */
 export interface PendingEvent {
   eventId: string;
   eventType: string;
   payload: unknown;
+  /** How many times it has been claimed, this claim included: 1 on the first try. */
+  attempts: number;
 }
+
+/** What happens to a claimed event that failed: tried again at `retryAt`, or quarantined and left alone. */
+export type EventFailure = { error: string; retryAt: string } | { error: string; quarantine: true };
 
 /** A PayPal dispute and what the copilot made of it (docs/specs/0005). */
 export interface DisputeRow {
@@ -168,6 +173,11 @@ export interface WebhookStats {
   received: number;
   lastReceivedAt: string | null;
   lastEventType: string | null;
+  /** The worker's inbox (#164): dispute events not handled yet and not quarantined, and how long the oldest has waited. */
+  pending: number;
+  oldestPendingAt: string | null;
+  /** Dispute events given up on after repeated failures. They stay in the table for an operator to look at. */
+  quarantined: number;
 }
 
 export interface Db {
@@ -263,8 +273,15 @@ export interface Db {
     patch: { status: StepUpStatus; orderId?: string; approvedAt?: string },
   ): Promise<void>;
   /** Dispute deliveries the worker hasn't handled yet, oldest first. */
-  pendingDisputeEvents(limit: number): Promise<PendingEvent[]>;
+  /**
+   * Claims up to `limit` dispute events that are due at `now`, oldest first: each is leased for `leaseMs` (so another worker
+   * skips it, and a worker that dies lets it go again after the lease) and has its attempt counted. Safe to call from
+   * several workers at once: no event is handed to two of them. Quarantined events are never returned.
+   */
+  claimDisputeEvents(limit: number, now: string, leaseMs: number): Promise<PendingEvent[]>;
   markEventProcessed(eventId: string): Promise<void>;
+  /** Records a failure of a claimed event: release it for a later attempt, or quarantine it. */
+  failDisputeEvent(eventId: string, failure: EventFailure, now: string): Promise<void>;
   /** Insert or replace. Returns false when we already hold a newer PayPal version (out-of-order delivery). */
   saveDispute(d: DisputeRow): Promise<boolean>;
   getDispute(id: string): Promise<DisputeRow | null>;
@@ -318,15 +335,31 @@ export function createDb(databaseUrl: string): Db {
     async webhookStats() {
       const { rows } = await pool.query(
         `select (select count(*)::int from webhook_events) as received,
-                last.received_at, last.event_type
+                last.received_at, last.event_type,
+                inbox.pending, inbox.oldest, inbox.quarantined
            from (select 1) one
-           left join lateral (select received_at, event_type from webhook_events order by received_at desc limit 1) last on true`,
+           left join lateral (select received_at, event_type from webhook_events order by received_at desc limit 1) last on true
+           cross join lateral (
+             select count(*) filter (where processed_at is null and quarantined_at is null)::int as pending,
+                    min(received_at) filter (where processed_at is null and quarantined_at is null) as oldest,
+                    count(*) filter (where quarantined_at is not null)::int as quarantined
+               from webhook_events where event_type like 'CUSTOMER.DISPUTE.%') inbox`,
       );
-      const r = rows[0] as { received: number; received_at: Date | null; event_type: string | null };
+      const r = rows[0] as {
+        received: number;
+        received_at: Date | null;
+        event_type: string | null;
+        pending: number;
+        oldest: Date | null;
+        quarantined: number;
+      };
       return {
         received: r.received,
         lastReceivedAt: r.received_at ? r.received_at.toISOString() : null,
         lastEventType: r.event_type,
+        pending: r.pending,
+        oldestPendingAt: r.oldest ? r.oldest.toISOString() : null,
+        quarantined: r.quarantined,
       };
     },
 
@@ -579,18 +612,58 @@ export function createDb(databaseUrl: string): Db {
       return res.rows.map(toVerdict);
     },
 
-    async pendingDisputeEvents(limit) {
-      const res = await pool.query<{ event_id: string; event_type: string; payload: unknown }>(
-        `select event_id, event_type, payload from webhook_events
-          where processed_at is null and event_type like 'CUSTOMER.DISPUTE.%'
-          order by received_at, event_id limit $1`,
-        [limit],
+    async claimDisputeEvents(limit, now, leaseMs) {
+      // FOR UPDATE SKIP LOCKED: two workers claiming at once take different rows.
+      const res = await pool.query<{
+        event_id: string;
+        event_type: string;
+        payload: unknown;
+        attempts: number;
+      }>(
+        `with due as (
+           select event_id from webhook_events
+            where processed_at is null and quarantined_at is null and event_type like 'CUSTOMER.DISPUTE.%'
+              and (next_attempt_at is null or next_attempt_at <= $2) and (claimed_until is null or claimed_until <= $2)
+            order by coalesce(next_attempt_at, received_at), received_at, event_id
+            limit $1
+            for update skip locked)
+         update webhook_events e
+            set attempts = e.attempts + 1, claimed_until = $2::timestamptz + ($3 || ' milliseconds')::interval
+           from due
+          where e.event_id = due.event_id
+        returning e.event_id, e.event_type, e.payload, e.attempts`,
+        [limit, now, String(leaseMs)],
       );
-      return res.rows.map((r) => ({ eventId: r.event_id, eventType: r.event_type, payload: r.payload }));
+      return res.rows
+        .map((r) => ({
+          eventId: r.event_id,
+          eventType: r.event_type,
+          payload: r.payload,
+          attempts: r.attempts,
+        }))
+        .sort((x, y) => (x.eventId < y.eventId ? -1 : 1));
     },
 
     async markEventProcessed(eventId) {
-      await pool.query("update webhook_events set processed_at = now() where event_id = $1", [eventId]);
+      await pool.query(
+        "update webhook_events set processed_at = now(), claimed_until = null, last_error = null where event_id = $1",
+        [eventId],
+      );
+    },
+
+    async failDisputeEvent(eventId, failure, now) {
+      const error = failure.error.slice(0, 500);
+      if ("quarantine" in failure) {
+        await pool.query(
+          "update webhook_events set quarantined_at = $2, claimed_until = null, last_error = $3 where event_id = $1",
+          [eventId, now, error],
+        );
+      } else {
+        await pool.query(
+          "update webhook_events set next_attempt_at = $2, claimed_until = null, last_error = $3 where event_id = $1",
+          [eventId, failure.retryAt, error],
+        );
+      }
     },
 
     async saveDispute(d) {

@@ -7,6 +7,8 @@
 # What counts as up:
 #   api        /readyz answers 200 AND says the database is reachable (/healthz never touches Postgres, so it stays green
 #              while every route answers 500: that is how the Nov 6 and Nov 7 outages looked)
+#              and /readyz says the dispute worker is keeping up (`"inbox":"ok"`: no dispute event waiting past
+#              INBOX_LAG_ALERT_SECONDS, none quarantined, #164)
 #   shop       /healthz answers 200
 #   dashboard  /healthz answers 200
 # A URL that is not set is skipped with a note. Each check is tried ATTEMPTS times (default 3, DELAY seconds apart, default 5)
@@ -45,6 +47,7 @@ check() {
 }
 
 check "api ready (database reachable)" "${API_URL:+${API_URL%/}/readyz}" '"database":"configured"'
+check "dispute worker keeping up" "${API_URL:+${API_URL%/}/readyz}" '"inbox":"ok"'
 check "shop" "${SHOP_URL:+${SHOP_URL%/}/healthz}" '"status":"ok"'
 check "dashboard" "${DASHBOARD_URL:+${DASHBOARD_URL%/}/healthz}" '"status":"ok"'
 if [ -z "${API_URL:-}${SHOP_URL:-}${DASHBOARD_URL:-}" ]; then

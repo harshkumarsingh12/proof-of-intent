@@ -140,13 +140,18 @@ export function buildApp(deps: AppDeps): FastifyInstance {
         .code(503)
         .send({ status: "unavailable", paypalMode, reads, database: "unreachable", webhooks: null });
     }
+    // Deliveries PayPal has made to POST /webhooks/paypal and passed verification (spec 0004 §Webhooks, #19).
+    const webhooks = await deps.db.webhookStats().catch(() => null);
     return {
       status: "ok",
       paypalMode,
       reads,
       database: "configured",
-      // Deliveries PayPal has made to POST /webhooks/paypal and passed verification (spec 0004 §Webhooks, #19).
-      webhooks: await deps.db.webhookStats().catch(() => null),
+      webhooks,
+      // The worker's lag signal (#164): "quarantined" when an event was given up on, "lagging" when the oldest waits past
+      // INBOX_LAG_ALERT_SECONDS (default 600), else "ok". It never turns /readyz into a 503: the API is up, the worker is the
+      // problem, and the uptime check reads this field to alert.
+      inbox: inboxStatus(webhooks, Date.now(), Number(process.env.INBOX_LAG_ALERT_SECONDS) || 600),
     };
   });
 
@@ -190,4 +195,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(async (instance) => registerRoutes(instance));
   if (deps.db) app.addHook("onClose", () => deps.db!.close());
   return app;
+}
+
+/** "ok", "lagging" (the oldest dispute event has waited too long), "quarantined" (one was given up on) or "unknown". */
+export function inboxStatus(
+  stats: { pending: number; oldestPendingAt: string | null; quarantined: number } | null,
+  nowMs: number,
+  lagSeconds: number,
+): "ok" | "lagging" | "quarantined" | "unknown" {
+  if (!stats) return "unknown";
+  if (stats.quarantined > 0) return "quarantined";
+  if (stats.oldestPendingAt && nowMs - Date.parse(stats.oldestPendingAt) > lagSeconds * 1000)
+    return "lagging";
+  return "ok";
 }

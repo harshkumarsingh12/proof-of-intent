@@ -29,6 +29,12 @@ export function memoryDb() {
   const verdicts: VerdictRecord[] = [];
   const audit: AuditEntry[] = [];
   const processed = new Set<string>();
+  // The worker's retry state per event (#164), as the webhook_events columns hold it.
+  const inbox = new Map<
+    string,
+    { attempts: number; nextAttemptAt: string; claimedUntil?: string; quarantinedAt?: string; at: string }
+  >();
+  const isDispute = (e: { eventType: string }) => e.eventType.startsWith("CUSTOMER.DISPUTE.");
   const disputes = new Map<string, DisputeRow>();
   const stepups = new Map<string, StoredStepUp>();
   const vaultSetups = new Map<string, { shopperId: string; claimed: boolean }>();
@@ -67,11 +73,19 @@ export function memoryDb() {
       lastWebhook = { at: new Date().toISOString(), type: e.eventType };
       return true;
     },
-    webhookStats: async () => ({
-      received: events.size,
-      lastReceivedAt: lastWebhook?.at ?? null,
-      lastEventType: lastWebhook?.type ?? null,
-    }),
+    webhookStats: async () => {
+      const open = [...events.values()].filter(
+        (e) => isDispute(e) && !processed.has(e.eventId) && !inbox.get(e.eventId)?.quarantinedAt,
+      );
+      return {
+        received: events.size,
+        lastReceivedAt: lastWebhook?.at ?? null,
+        lastEventType: lastWebhook?.type ?? null,
+        pending: open.length,
+        oldestPendingAt: open.map((e) => inbox.get(e.eventId)?.at ?? "").sort()[0] || null,
+        quarantined: [...inbox.values()].filter((s) => s.quarantinedAt).length,
+      };
+    },
     findKey: async (kind, kid) => {
       const k = keys.get(kid);
       if (!k || k.kind !== kind) return null;
@@ -125,7 +139,8 @@ export function memoryDb() {
         capturedOrderTimes: captured.map((o) => o.capturedAt!),
       };
     },
-    activeLedger: async (intentMandateId, now, excludeOrderId) => activeLedger(intentMandateId, now, excludeOrderId),
+    activeLedger: async (intentMandateId, now, excludeOrderId) =>
+      activeLedger(intentMandateId, now, excludeOrderId),
     reserveOrder: async (o, now, check) => {
       // No await between the check and the insert, so this is as atomic as the Postgres advisory lock.
       const reasons = check(activeLedger(o.intentMandateId, now));
@@ -187,11 +202,39 @@ export function memoryDb() {
       if (!st) throw new Error(`step-up ${id} does not exist`);
       Object.assign(st, { status }, orderId ? { orderId } : {}, approvedAt ? { approvedAt } : {});
     },
-    pendingDisputeEvents: async (limit) =>
-      [...events.values()]
-        .filter((e) => !processed.has(e.eventId) && e.eventType.startsWith("CUSTOMER.DISPUTE."))
-        .slice(0, limit)
-        .map(({ eventId, eventType, payload }) => ({ eventId, eventType, payload })),
+    claimDisputeEvents: async (limit, now, leaseMs) => {
+      const due = [...events.values()]
+        .filter((e) => {
+          const s = inbox.get(e.eventId);
+          return (
+            isDispute(e) &&
+            !processed.has(e.eventId) &&
+            !s?.quarantinedAt &&
+            (s?.nextAttemptAt ?? "") <= now &&
+            (!s?.claimedUntil || s.claimedUntil <= now)
+          );
+        })
+        .slice(0, limit);
+      return due.map(({ eventId, eventType, payload }) => {
+        const prev = inbox.get(eventId);
+        const attempts = (prev?.attempts ?? 0) + 1;
+        inbox.set(eventId, {
+          ...prev,
+          at: prev?.at ?? new Date().toISOString(),
+          attempts,
+          nextAttemptAt: prev?.nextAttemptAt ?? "",
+          claimedUntil: new Date(Date.parse(now) + leaseMs).toISOString(),
+        });
+        return { eventId, eventType, payload, attempts };
+      });
+    },
+    failDisputeEvent: async (eventId, failure, now) => {
+      const s = inbox.get(eventId);
+      if (!s) return;
+      delete s.claimedUntil;
+      if ("quarantine" in failure) s.quarantinedAt = now;
+      else s.nextAttemptAt = failure.retryAt;
+    },
     markEventProcessed: async (eventId) => void processed.add(eventId),
     saveDispute: async (d) => {
       const prev = disputes.get(d.id);
