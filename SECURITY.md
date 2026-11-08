@@ -85,9 +85,8 @@ from the repository or from outside, and stay unticked until someone looks at th
   `apps/api/src/keys.test.ts`; an expired or not-yet-valid intent through `POST /checkout` in `checkout.test.ts`; an intent
   that expires between checkout and capture in `approve.test.ts`. The full suite is green.
 - [x] Webhook signature failure returns 400 and is logged. The 400 is tested (`webhooks.test.ts`); the log line (a `warn`
-  with the event id and type, no signature or body) is asserted by the tests in #186. Logged and tested in #186
-  (`apps/api/src/logging.test.ts`, "a forged webhook signature": "is refused with 400 and is logged as a warning, without
-  the forged signature or the body").
+  with the event id and type, no signature or body) is tested in #186 (`apps/api/src/logging.test.ts`, "a forged webhook
+  signature": "is refused with 400 and is logged as a warning, without the forged signature or the body").
 - [x] Upload type and size limits on evidence files. There is no upload endpoint: the only evidence file is the PDF the worker
   generates, sent to PayPal as `application/pdf` with a 10 MB cap (`MAX_EVIDENCE_FILE_BYTES`, `packages/paypal`). Request
   bodies have explicit size limits (webhook 256 KB, checkout 64 KB, approve 16 KB, dispute actions 32 KB, tracking 8 KB).
