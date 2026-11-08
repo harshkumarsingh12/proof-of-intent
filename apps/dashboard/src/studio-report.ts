@@ -52,8 +52,9 @@ export const initialState = {
         // Four headline numbers. Each is a plain sum of a 0/1 or dollar column, so it follows Studio's filters.
         kpiOpen: kpi("Open disputes", "disputes.open"),
         kpiDue: kpi("Due within 24 hours", "disputes.dueSoon"),
+        kpiOverdue: kpi("Overdue", "disputes.overdue"),
         kpiAtStake: kpi("Dollars at stake", "disputes.atStake"),
-        kpiConceded: kpi("Conceded (agent overreach)", "disputes.conceded"),
+        kpiConceded: kpi("Recommended to concede (agent overreach)", "disputes.conceded"),
         classes: {
           type: "donut-chart",
           dataMapping: {
@@ -113,8 +114,9 @@ export const initialState = {
         },
       },
       widgetLayout: {
-        kpiOpen: { xTrack: 0, yTrack: 0, xSpan: 3, ySpan: 3 },
-        kpiDue: { xTrack: 3, yTrack: 0, xSpan: 3, ySpan: 3 },
+        kpiOpen: { xTrack: 0, yTrack: 0, xSpan: 2, ySpan: 3 },
+        kpiDue: { xTrack: 2, yTrack: 0, xSpan: 2, ySpan: 3 },
+        kpiOverdue: { xTrack: 4, yTrack: 0, xSpan: 2, ySpan: 3 },
         kpiAtStake: { xTrack: 6, yTrack: 0, xSpan: 3, ySpan: 3 },
         kpiConceded: { xTrack: 9, yTrack: 0, xSpan: 3, ySpan: 3 },
         classes: { xTrack: 0, yTrack: 3, xSpan: 4, ySpan: 7 },

@@ -201,6 +201,7 @@ const TEMPLATES: SeedDisputeTemplate[] = [
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
     shopperNotes: "Resolved in merchant's favor; mandate evidence validated by PayPal.",
     evidenceDrafted: true,
+    outcome: { result: "SELLER_FAVOUR", code: "RESOLVED_SELLER_FAVOUR" },
   },
   {
     id: "PP-D-1013",
@@ -217,6 +218,11 @@ const TEMPLATES: SeedDisputeTemplate[] = [
     buyerDisputeReason: "UNAUTHORISED",
     shopperNotes: "Conceded claim automatically based on policy violation.",
     evidenceDrafted: false,
+    outcome: {
+      result: "BUYER_FAVOUR",
+      code: "RESOLVED_BUYER_FAVOUR",
+      refunded: { value: 11000, currency: "USD" },
+    },
   },
   {
     id: "PP-D-1014",
@@ -377,6 +383,7 @@ const TEMPLATES: SeedDisputeTemplate[] = [
     buyerDisputeReason: "UNAUTHORISED",
     shopperNotes: "Resolved with merchant win after PayPal review of signed JWS.",
     evidenceDrafted: true,
+    outcome: { result: "SELLER_FAVOUR", code: "RESOLVED_SELLER_FAVOUR" },
   },
   {
     id: "PP-D-1024",

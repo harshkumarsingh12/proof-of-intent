@@ -25,7 +25,7 @@ Dec 15, so no renewal is needed for judging. Start from `paypaldev/hackathon-pay
 | Agent orders *(built: `/orders` page, AG Grid Community)* | grid (order, platform, shopper present, verdict, reason codes, amount, PayPal status, captured at); KPI tiles | `/orders` + `/verifications` |
 | Verification queue *(read-only "Checkout verdicts" tab on `/orders`; approve / reject waits for step-up links, #35)* | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
 | Disputes *(built: queue #60, detail #61; live data #82, actions #83 #84 #87)* | sorted by due date; class + action chips; SLA countdown; evidence preview (the exact PDF sent); Submit / Escalate / Accept / override | `/disputes`, `/disputes/:id/paypal-actions`, `/disputes/:id/audit` |
-| Analytics *(built, #73)* | disputes by class per week; overreach rate by platform; defended vs conceded; median response window | `/analytics/*` |
+| Analytics *(built, #73)* | disputes by class per week; overreach rate by platform; defend vs concede calls; wins, refunds and amount protected from PayPal's confirmed outcome; median response window | `/analytics/*` |
 
 **Custom widgets** (`apps/dashboard/src/widgets.ts`), each with an AI description:
 1. `mandate-diff`: intent left, cart right, failed constraints highlighted with codes; "only violations" toggle;
@@ -63,7 +63,7 @@ repeated identical tool call by withdrawing that tool and then forcing an answer
 `/ai/studio` allows 60 requests a minute because one question is several requests, and J4 gets the 10 s the spec gave it.
 `redact` no longer cuts digits out of hashes and ids (it had corrupted a mandate hash the chat quoted).
 
-**The opening report, as built.** Four KPI tiles (open disputes, due within 24 hours, dollars at stake, conceded dollars: built-in
+**The opening report, as built.** Five KPI tiles (open disputes, due within 24 hours, overdue, dollars at stake, dollars recommended for conceding: built-in
 `value` widgets, each a plain sum of a 0/1 or dollar column in the `disputes` table, so they follow filters), a donut of disputes
 by class (a click cross-filters every widget), the agent platform cards, the disputes grid, and the mandate diff and evidence
 preview for the selected dispute. The grid (`dispute-grid`, a custom widget around AG Grid Community on the same theme as the
@@ -128,6 +128,16 @@ concede is not offered: only MANDATE_COMPLIANT disputes have an evidence package
 3. Without a license key, behaviour is documented in SETUP.md.
 4. Every number on the analytics page traces to seed data or a sandbox order. *(done, #73: tests check against
    `SEED_DISPUTES` and `SEED_ORDERS`)*
+
+5. Wins, refunds and protected amounts come from how PayPal closed the dispute, never from the copilot's recommendation
+   (#165). `GET /disputes` carries `outcome` (`SELLER_FAVOUR`, `BUYER_FAVOUR` or `OTHER`, PayPal's code, and the amount it
+   says was refunded) once a dispute is `RESOLVED`, read from the stored PayPal object's `dispute_outcome`. A win is a
+   resolved dispute decided for the seller and counts its amount as protected; a loss is one decided for the buyer and counts
+   what PayPal refunded (else the amount). A resolved dispute with no outcome, or closed in neither side's favour (the buyer
+   withdrew), is neither. The "defended" and "conceded" counts and the Studio "recommended to concede" tile stay the
+   copilot's calls and are labelled so. "Due within 24 hours" counts open disputes with a deadline from now to 24 h away;
+   past-deadline ones are the separate "Overdue" tile. *(done: `analytics.test.ts`, `studio-data.test.ts`,
+   `apps/api/src/dispute-outcome.test.ts`)*
 
 ## Out of scope
 

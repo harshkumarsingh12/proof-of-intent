@@ -61,19 +61,19 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
         {/* Card 1: Disputes Defended vs Conceded */}
         <div style={{ ...cardStyle, borderLeft: "4px solid var(--poi-success)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div style={{ ...kpiLabelStyle, color: "var(--poi-success)" }}>Disputes defended vs. conceded</div>
+            <div style={{ ...kpiLabelStyle, color: "var(--poi-success)" }}>Copilot calls: defend vs. concede</div>
           </div>
 
           <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 12px", marginTop: 8 }}>
             <span style={{ fontSize: 32, fontWeight: 700, color: "var(--poi-heading)" }}>
               {data.disputes.defended}
             </span>
-            <span style={{ fontSize: 14, color: "var(--poi-text-muted)" }}>defended</span>
+            <span style={{ fontSize: 14, color: "var(--poi-text-muted)" }}>to defend</span>
             <span style={{ color: "var(--poi-text-subtle)" }}>/</span>
             <span style={{ fontSize: 24, fontWeight: 600, color: "var(--poi-warning)" }}>
               {data.disputes.conceded}
             </span>
-            <span style={{ fontSize: 14, color: "var(--poi-text-muted)" }}>conceded</span>
+            <span style={{ fontSize: 14, color: "var(--poi-text-muted)" }}>to concede</span>
           </div>
 
           {/* Progress bar visual */}
@@ -97,7 +97,7 @@ export function AnalyticsView({ initialData }: { initialData?: AnalyticsSummary 
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginTop: 8, fontSize: 12, color: "var(--poi-text-muted)" }}>
-            <span>Defense win rate (resolved): <strong style={{ color: "var(--poi-success)" }}>{data.disputes.defenseRate}%</strong></span>
+            <span>Defense win rate (confirmed by PayPal): <strong style={{ color: "var(--poi-success)" }}>{data.disputes.defenseRate}%</strong></span>
             <span>Total: {data.disputes.total}</span>
           </div>
         </div>

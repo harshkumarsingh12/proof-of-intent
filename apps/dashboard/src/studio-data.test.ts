@@ -189,6 +189,7 @@ describe("the disputes table the grid, tiles and charts read", () => {
       open: 1,
       overreach: 1,
       dueSoon: 1,
+      overdue: 0,
       atStake: 95.5,
       conceded: 95.5,
     });
@@ -196,20 +197,27 @@ describe("the disputes table the grid, tiles and charts read", () => {
 
   it("counts a resolved dispute as closed: nothing at stake, never due soon, still conceded if it was an overreach", () => {
     const [row] = disputeRows([detail("PP-2", [], { status: "RESOLVED" })], now);
-    expect(row).toMatchObject({ open: 0, dueSoon: 0, atStake: 0, conceded: 95.5 });
+    expect(row).toMatchObject({ open: 0, dueSoon: 0, overdue: 0, atStake: 0, conceded: 95.5 });
   });
 
-  it("is not due soon when the deadline is more than a day away, and is when it is already late", () => {
+  it("is not due soon when the deadline is more than a day away; a late one is overdue, counted apart from due soon (#165)", () => {
     const far = disputeRows(
       [detail("PP-3", [], { sellerResponseDueDate: "2026-11-20T00:00:00.000Z" })],
       now,
     )[0]!;
-    expect([far.dueSoon, far.hoursToDue > 24]).toEqual([0, true]);
+    expect([far.dueSoon, far.overdue, far.hoursToDue > 24]).toEqual([0, 0, true]);
     const late = disputeRows(
       [detail("PP-4", [], { sellerResponseDueDate: "2026-11-06T00:00:00.000Z" })],
       now,
     )[0]!;
-    expect([late.dueSoon, late.hoursToDue < 0]).toEqual([1, true]);
+    expect([late.dueSoon, late.overdue, late.hoursToDue < 0]).toEqual([0, 1, true]);
+    // The edges: exactly now and exactly 24 hours are still "due soon"; one minute past now is overdue; a resolved one is neither.
+    const at = (due: string, status = "WAITING_FOR_SELLER_RESPONSE") =>
+      disputeRows([detail("PP-E", [], { sellerResponseDueDate: due, status })], now)[0]!;
+    expect([at("2026-11-07T12:00:00.000Z").dueSoon, at("2026-11-07T12:00:00.000Z").overdue]).toEqual([1, 0]);
+    expect([at("2026-11-08T12:00:00.000Z").dueSoon, at("2026-11-08T12:00:00.000Z").overdue]).toEqual([1, 0]);
+    expect([at("2026-11-07T11:59:00.000Z").dueSoon, at("2026-11-07T11:59:00.000Z").overdue]).toEqual([0, 1]);
+    expect([at("2026-11-06T00:00:00.000Z", "RESOLVED").dueSoon, at("2026-11-06T00:00:00.000Z", "RESOLVED").overdue]).toEqual([0, 0]);
   });
 
   it("copes with a missing deadline, a compliant dispute (no conceded dollars) and a missing analysis", () => {
@@ -227,6 +235,7 @@ describe("the disputes table the grid, tiles and charts read", () => {
       dueAt: "",
       hoursToDue: 99_999,
       dueSoon: 0,
+      overdue: 0,
       conceded: 0,
       overreach: 0,
       action: "",

@@ -9,7 +9,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { CartMandate, IntentMandate, type DisputeClass, type Money, type ReasonCode } from "@poi/contracts";
 import type { AuditRecord, Db, DisputeRow, DisputeSummary, StoredOrder } from "@poi/db";
-import { evidenceTypeFor, PayPalError } from "@poi/paypal";
+import { evidenceTypeFor, fromPayPalAmount, PayPalError } from "@poi/paypal";
 import type { AppDeps } from "../app";
 
 /** What the worker stores in disputes.recommendation (apps/worker/src/inbox.ts). */
@@ -67,6 +67,29 @@ const notesOf = (d: DisputeSummary | DisputeRow) =>
   (d.paypal as { disputed_transactions?: { items?: { notes?: string }[] }[] } | null)
     ?.disputed_transactions?.[0]?.items?.[0]?.notes;
 
+/**
+ * How PayPal closed the dispute, from the PayPal dispute object we stored (`dispute_outcome`), or nothing while it is open
+ * or PayPal gave no outcome. The dashboard's wins, refunds and protected amounts read this, never the copilot's
+ * recommendation (#165). Both spellings of "favour" appear in PayPal's documentation, so both are read.
+ */
+export function outcomeOf(d: Pick<DisputeSummary, "status" | "paypal">) {
+  if (d.status !== "RESOLVED") return undefined;
+  const o = (
+    d.paypal as {
+      dispute_outcome?: { outcome_code?: string; amount_refunded?: { currency_code?: string; value?: string } };
+    } | null
+  )?.dispute_outcome;
+  const code = o?.outcome_code;
+  if (!code) return undefined;
+  const result = /SELLER_FAVOU?R/.test(code) ? "SELLER_FAVOUR" : /BUYER_FAVOU?R/.test(code) ? "BUYER_FAVOUR" : "OTHER";
+  const r = o?.amount_refunded;
+  const refunded =
+    r?.currency_code && r.value !== undefined && Number.isFinite(Number(r.value))
+      ? fromPayPalAmount({ currency_code: r.currency_code, value: r.value })
+      : undefined;
+  return { result, code, ...(refunded ? { refunded } : {}) } as const;
+}
+
 function item(
   d: DisputeSummary | DisputeRow,
   order: StoredOrder | null,
@@ -75,6 +98,7 @@ function item(
 ) {
   const createdAt = d.createdAt ?? rec.analyzedAt;
   const notes = notesOf(d);
+  const outcome = outcomeOf(d);
   return {
     id: d.id,
     orderId: d.orderId ?? "",
@@ -91,6 +115,7 @@ function item(
     buyerDisputeReason: d.reason ?? "",
     ...(notes ? { shopperNotes: notes } : {}),
     evidenceDrafted: hasPdf,
+    ...(outcome ? { outcome } : {}),
   };
 }
 
