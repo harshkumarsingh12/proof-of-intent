@@ -271,6 +271,45 @@ describe("the guard: an answer may only state prices and SKUs that are in the fa
     expect(answerIsGrounded("Try the TRL-BLK-M for $99.", facts)).toBe(false);
     expect(answerIsGrounded("The red one (JKT-RED-M) is $95.00.", facts)).toBe(false); // red isn't in these facts
   });
+
+  // #166: the SKUs and the prices were checked as two separate sets, so a real SKU next to another product's price passed.
+  // In these facts: WND-GRY-M $62.00, JKT-GRY-M $74.00, SHL-GRY-M $79.00; the store runs $18.00 to $128.00.
+  test("rejects a real SKU written next to another product's real price", () => {
+    for (const text of [
+      "The Stride Running Jacket (JKT-GRY-M) is $62.00.", // $62 is the wind jacket's price
+      "JKT-GRY-M costs $79.00.",
+      "Take the SHL-GRY-M for $74.00, it's a bargain.",
+      "The Packable Wind Jacket is $74.00.", // a title pairs with its price too
+      "WND-GRY-M is $74.00 and JKT-GRY-M is $62.00.", // both real, both swapped
+      "JKT-GRY-M is $128.00.", // the store's dearest price, but not this product's
+    ])
+      expect(answerIsGrounded(text, facts), text).toBe(false);
+  });
+
+  test("accepts each product with its own price, in either order, over several sentences or lines", () => {
+    for (const text of [
+      "JKT-GRY-M is $74.00 and WND-GRY-M is $62.00.",
+      "The Packable Wind Jacket is $62.00 (WND-GRY-M). The Stride Running Jacket is $74.00 (JKT-GRY-M).",
+      "Priced at $62.00: WND-GRY-M\nPriced at $79.00: SHL-GRY-M",
+      "The Stride Running Jacket (JKT-GRY-M) is $74.00, under your $80 limit.",
+      "Both WND-GRY-M ($62.00) and SHL-GRY-M ($79.00) fit.",
+    ])
+      expect(answerIsGrounded(text, facts), text).toBe(true);
+  });
+
+  test("a clause about the whole store may name the cheapest or dearest price beside a product", () => {
+    expect(
+      answerIsGrounded("JKT-GRY-M is $74.00; the dearest thing in the store is $128.00 and the cheapest $18.00.", facts),
+    ).toBe(true);
+  });
+
+  test("a title shared by several products takes the price of any of them, but a SKU names exactly one", () => {
+    const both = gatherFacts(ask("compare the jackets")); // the Stride Running Jacket in black $74.00 and red $95.00
+    expect(answerIsGrounded("The Stride Running Jacket is $74.00 in black and $95.00 in red.", both)).toBe(true);
+    expect(answerIsGrounded("The Stride Running Jacket (JKT-RED-M) is $95.00.", both)).toBe(true);
+    expect(answerIsGrounded("The Stride Running Jacket (JKT-RED-M) is $74.00.", both)).toBe(false);
+    expect(answerIsGrounded("JKT-BLK-M is $62.00.", both)).toBe(false); // $62 is the wind jacket's
+  });
 });
 
 describe("what the model is shown", () => {
