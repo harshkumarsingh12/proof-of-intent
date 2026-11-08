@@ -23,6 +23,10 @@
 - J2 and J3 take named evidence excerpts. The worker supplies product facts and policy findings and keeps
   raw signed mandates, PayPal payloads and audit rows out of the prompt. A replay miss preserves the rule-only
   recommendation and evidence draft.
+- Citation membership does not establish entailment. J2/J3 use the model's valid citation selections to render
+  the source excerpts locally, with buyer allegations labelled unverified. Free-form model prose and section
+  headings cannot assert delivery, cardholder authorization or completed refunds. J3's buyer message is a
+  neutral review template. This source rendering applies to live and replay responses without changing keys.
 
 ## Test
 
