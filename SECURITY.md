@@ -111,5 +111,3 @@ from the repository or from outside, and stay unticked until someone looks at th
 - [x] Seeded demo disputes are read-only (409 `demo_read_only`); the operator acts on real sandbox disputes. _Reworded from
   "operator limited to the scripted disputes", which is not how it works and would contradict the judge flow: judges
   file their own fresh disputes and the operator acts on those (`docs/JUDGE_TESTING.md`)._
-- [ ] Nightly demo reset runs. **Not built:** nothing in the repository does this, and it may not be safe to build on a
-  database that holds judges' real sandbox cases. Decide to scope it carefully or drop it from spec 0008 and this list. Tracked in #203.

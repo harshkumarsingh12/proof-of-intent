@@ -165,7 +165,7 @@ Day-by-day tasks are GitHub issues under each milestone; see [ROADMAP.md](ROADMA
 | R8 | Judges can't run it | M | H | Sumedha | Three access paths; zero-credential defaults; clean-machine test Nov 10 |
 | R9 | Over-claiming in the pitch | M | H | Sumedha | Claims list above; honesty line in the video |
 | R10 | Video over 3:00 or unclear | M | H | Sumedha | Script timed at 2:30; dry runs Nov 9–10 |
-| R11 | Public demo abused (AI spend, junk data) | M | M | Harsh | Rate limits, budget kill switch, viewer role, nightly reset |
+| R11 | Public demo abused (AI spend, junk data) | M | M | Harsh | Rate limits, budget kill switch, viewer role, read-only seeded rows (no nightly reset, #203) |
 | R12 | Secrets committed | L | H | Harsh | gitleaks, gitignore, server secrets outside the checkout |
 | R13 | A teammate is out for a day | M | M | all | Backups per area; package READMEs; contracts let others merge |
 | R14 | A redeploy strands Postgres on a stale network and the demo answers 500 (happened Nov 6 and Nov 7) | H | H | Harsh | Cause found and fixed in the compose file (#121: Dokploy's rewrite drops `networks` inherited through a YAML anchor, so each service now declares it); `/readyz` pings the database #120; confirm with one redeploy, Stop then Deploy recovers (SETUP.md); avoid redeploys near judging |
