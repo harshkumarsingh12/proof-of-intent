@@ -85,6 +85,16 @@ remain available for operator review. The first J2/J3 replay entries are hand-au
 writes `docs/evals/<date>.md`. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
 schema validity 100% after retry.
 
+**Supplemental evaluation (#169).** Keep the milestone 20/12 sets fixed. `scripts/ai/eval-holdout.ts` adds 12
+disjoint public semantic regressions and 10 real-route scenarios with disposable PostgreSQL and mock PayPal.
+Raw model accuracy, raw false approvals and attempts are reported separately from guarded outcomes, plus schema
+validity, case latency and provider telemetry when available. Targets: all 10 system cases, at least 11/12 guarded
+semantic cases, zero raw/guarded mismatch-to-match approvals and 100% valid model cases after retry. System cases
+cover catalog manipulation, multi-order budget races, expired/revoked authority, provider failure and persisted
+completed-payment outcomes. J2's supplied-decision agreement is explicitly explanation faithfulness. No hidden
+benchmark, independent J2 classification accuracy, hosted payment result or measured business benefit is claimed.
+Each run writes matching timestamped Markdown/JSON with the source commit; supplemental runs never publish replay.
+
 ## Acceptance criteria
 
 1. Replay: compliant fixture → `match` ≥ 0.8; rain shell → `partial`. _(done)_
@@ -147,5 +157,5 @@ schema validity 100% after retry.
     `dispute_reason`. J1 fell to 18/20 because two calls (black gloves, tumbler capacity) timed out on both 2 s attempts. That
     is the free endpoint's latency, not a prompt change: the same cases passed in runs 1 and 3.
   - Run 3 (final): passed. Expect the occasional J1 timeout to show up as `unavailable` (a step-up at checkout, never an approval).
-  The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
-  cases are recorded from the passing run.
+    The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
+    cases are recorded from the passing run.
