@@ -3,6 +3,7 @@ import { createDb } from "@poi/db";
 import { createPayPalClient, parseMode } from "@poi/paypal";
 import { beat } from "./heartbeat";
 import { processDisputeEvents, syncDisputes } from "./inbox";
+import { logger } from "./logger";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("the worker needs DATABASE_URL (its inbox is the webhook_events table)");
@@ -21,15 +22,15 @@ const timer = setInterval(async () => {
   busy = true;
   try {
     const n = await processDisputeEvents({ db, aiMode, paypal });
-    if (n) console.log(`worker: handled ${n} dispute event(s)`);
+    if (n) logger.info({ handled: n }, "handled dispute events");
     if (Date.now() - lastSync >= SYNC_MS) {
       lastSync = Date.now();
       const synced = await syncDisputes({ db, aiMode, paypal });
-      if (synced) console.log(`worker: synced ${synced} dispute(s) from list_disputes`);
+      if (synced) logger.info({ synced }, "synced disputes from list_disputes");
     }
     beat(); // only reached when the poll worked: this is what the compose healthcheck reads
   } catch (err) {
-    console.error(`worker: inbox poll failed (${(err as Error).message}); retrying`);
+    logger.error({ err }, "inbox poll failed; retrying");
   } finally {
     busy = false;
   }
@@ -41,4 +42,4 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     void db.close().finally(() => process.exit(0));
   });
 }
-console.log(`worker up: polling dispute events every ${POLL_MS} ms (AI_MODE=${aiMode})`);
+logger.info({ pollMs: POLL_MS, syncMs: SYNC_MS, aiMode }, "worker up: polling dispute events");

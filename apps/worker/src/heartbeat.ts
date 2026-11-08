@@ -5,11 +5,12 @@
  * A failed poll does not beat, which is the point.
  */
 import { writeFileSync } from "node:fs";
+import { logger } from "./logger";
 
 export const HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_FILE ?? "/tmp/worker-heartbeat";
 
 /** Records that a poll just succeeded. A write failure is reported but never stops the worker. */
-export function beat(file = HEARTBEAT_FILE, log: (msg: string) => void = console.error): void {
+export function beat(file = HEARTBEAT_FILE, log: (msg: string) => void = (msg) => logger.error(msg)): void {
   try {
     writeFileSync(file, String(Date.now()));
   } catch (err) {
