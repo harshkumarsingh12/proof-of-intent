@@ -7,3 +7,4 @@ docs
 .env
 .env.*
 *.pem
+docker-compose.override.yml
