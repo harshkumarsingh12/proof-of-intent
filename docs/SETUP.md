@@ -66,7 +66,10 @@ The top-bar search finds a dispute by dispute id, order id or PayPal order id (p
 and banner show the dashboard's `PAYPAL_MODE` (keep it the same as the API's). Pages show the API's disputes; if the
 API can't be reached they fall back to seed data and say so in a banner. Operator actions need `OPERATOR_TOKEN` and
 `OPERATOR_PASSWORD` in `.env` (user `operator` at the browser's login prompt); without them they answer
-"operator actions are not configured" rather than faking success.
+"operator actions are not configured" rather than faking success. With `OPERATOR_TOKEN` set the API also refuses to
+answer reads of orders, disputes and evidence without it (the dashboard sends it for you; `curl` against the API needs
+`-H "authorization: Bearer $OPERATOR_TOKEN"`). The dashboard shows its synthetic data to anyone with the link; set
+`VIEWER_LOGIN_REQUIRED=1` to ask for the operator login first (it needs `OPERATOR_PASSWORD`).
 
 ### Load the mock demo dataset
 

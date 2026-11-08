@@ -238,7 +238,32 @@ export function auditView(rec: AuditRecord): DisputeAuditEntry {
   return entry;
 }
 
+/**
+ * Reads of merchant data (#163): the orders, verdicts, disputes, their audit rows and the evidence PDFs. With
+ * OPERATOR_TOKEN set they need it as a bearer token, which only the dashboard's server holds; a browser reaches them
+ * through the dashboard, never directly. With it unset the API runs open, as the zero-credential mock stack does, and
+ * `/readyz` says `reads: "open"` so a deployment can be checked from outside.
+ */
+export function readsAllowed(req: FastifyRequest, token: string | undefined): boolean {
+  if (!token) return true;
+  const sent = /^Bearer (.+)$/.exec(req.headers.authorization ?? "")?.[1] ?? "";
+  const digest = (s: string) => createHash("sha256").update(s).digest();
+  return timingSafeEqual(digest(sent), digest(token));
+}
+
 export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
+  // Every GET in this plugin returns merchant data; its POSTs carry their own operator check.
+  app.addHook("onRequest", async (req, reply) => {
+    if (req.method !== "GET" || readsAllowed(req, deps.operatorToken)) return;
+    return reply
+      .code(401)
+      .header("www-authenticate", "Bearer")
+      .send({
+        error: "read_unauthorized",
+        message: "A valid operator token is required to read merchant data",
+      });
+  });
+
   const needDb = (reply: FastifyReply): Db | null => {
     if (deps.db) return deps.db;
     reply.code(503).send({ error: "database_not_configured", message: "DATABASE_URL is not set" });

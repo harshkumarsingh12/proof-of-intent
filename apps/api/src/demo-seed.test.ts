@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { createDb } from "@poi/db";
 import { createMockClient } from "@poi/paypal";
 import pg from "pg";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { seedDemo } from "../../../scripts/demo/seed-data";
 import { fetchOrders, orderKpis } from "../../dashboard/src/orders";
 import { buildApp } from "./app";
 
 const adminUrl = process.env.DATABASE_URL;
+
+afterEach(() => vi.unstubAllEnvs());
 
 test("demo seed refuses sandbox mode and remote Postgres before connecting", async () => {
   await expect(seedDemo("postgres://localhost/demo", "sandbox")).rejects.toThrow("PAYPAL_MODE=mock");
@@ -29,6 +31,9 @@ test.runIf(adminUrl)(
 
     const paypal = createMockClient();
     const app = buildApp({ db: createDb(url.toString()), paypal, operatorToken: "test-only" });
+    // Merchant reads need the operator token (#163); the dashboard's server sends the one in its environment.
+    const read = { authorization: "Bearer test-only" };
+    vi.stubEnv("OPERATOR_TOKEN", "test-only");
     try {
       const now = new Date("2026-11-07T09:00:00Z");
       const results = await Promise.all([
@@ -37,16 +42,21 @@ test.runIf(adminUrl)(
       ]);
       expect(results.sort()).toEqual([false, true]);
 
-      const first = await app.inject("/orders?limit=200");
-      const rest = await app.inject("/orders?limit=200&offset=200");
+      const first = await app.inject({ method: "GET", url: "/orders?limit=200", headers: read });
+      const rest = await app.inject({ method: "GET", url: "/orders?limit=200&offset=200", headers: read });
       expect([first.statusCode, rest.statusCode]).toEqual([200, 200]);
       const orders = [...first.json().orders, ...rest.json().orders];
       expect(new Set(orders.map((o) => o.id)).size).toBe(300);
       expect(new Set(orders.map((o) => o.agentPlatform)).size).toBe(4);
 
       // The dashboard's loader reads every page (#99): all 300 orders, every verdict, and the totals.
-      const viaApi = (async (input: string | URL | Request) => {
-        const res = await app.inject(String(input).replace("http://api", ""));
+      const viaApi = (async (input: string | URL | Request, init?: RequestInit) => {
+        // What the dashboard's loader sends (read-auth.ts) reaches the API, so the token it holds is what is tested.
+        const res = await app.inject({
+          method: "GET",
+          url: String(input).replace("http://api", ""),
+          headers: (init?.headers ?? {}) as Record<string, string>,
+        });
         return new Response(res.body, { status: res.statusCode });
       }) as typeof fetch;
       const loaded = await fetchOrders({ apiBaseUrl: "http://api", fetchFn: viaApi });
@@ -73,7 +83,7 @@ test.runIf(adminUrl)(
       expect(late.some((o) => approved.has(o.orderId))).toBe(true);
       for (const o of loaded.orders) expect(o.verdict).toBe(approved.has(o.orderId) ? "APPROVE" : undefined);
 
-      const queue = await app.inject("/disputes");
+      const queue = await app.inject({ method: "GET", url: "/disputes", headers: read });
       expect(queue.statusCode).toBe(200);
       const { disputes } = queue.json();
       expect(disputes).toHaveLength(24);
@@ -81,7 +91,11 @@ test.runIf(adminUrl)(
         { id: "PP-D-1001", decision: "defend", evidenceDrafted: true },
         { id: "PP-D-1002", decision: "concede", evidenceDrafted: false },
       ]);
-      const overreach = await app.inject("/disputes/PP-D-1002/recommendation");
+      const overreach = await app.inject({
+        method: "GET",
+        url: "/disputes/PP-D-1002/recommendation",
+        headers: read,
+      });
       expect(overreach.statusCode).toBe(200);
       expect(overreach.json()).toMatchObject({
         reasons: ["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"],
@@ -91,7 +105,11 @@ test.runIf(adminUrl)(
       // The other overreach disputes come from across the catalog, each failing its own signed limit.
       const others = await Promise.all(
         ["PP-D-1007", "PP-D-1012", "PP-D-1017"].map(async (id) => {
-          const res = await app.inject(`/disputes/${id}/recommendation`);
+          const res = await app.inject({
+            method: "GET",
+            url: `/disputes/${id}/recommendation`,
+            headers: read,
+          });
           return {
             status: res.statusCode,
             reasons: res.json().reasons,
@@ -108,7 +126,11 @@ test.runIf(adminUrl)(
         new Set(disputes.map((d: { amount?: { value: number } }) => d.amount?.value)).size,
       ).toBeGreaterThan(2);
 
-      const preview = await app.inject("/disputes/PP-D-1001/evidence.pdf");
+      const preview = await app.inject({
+        method: "GET",
+        url: "/disputes/PP-D-1001/evidence.pdf",
+        headers: read,
+      });
       expect(preview.statusCode).toBe(200);
       expect(preview.headers["content-type"]).toContain("application/pdf");
       expect(preview.body.startsWith("%PDF-")).toBe(true);

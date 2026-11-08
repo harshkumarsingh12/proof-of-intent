@@ -108,8 +108,7 @@ async function merchantFromEnv(env: NodeJS.ProcessEnv, required: boolean): Promi
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({
-    logger:
-      deps.logStream || process.env.NODE_ENV !== "test" ? loggerOptions(deps.logStream) : false,
+    logger: deps.logStream || process.env.NODE_ENV !== "test" ? loggerOptions(deps.logStream) : false,
     trustProxy: process.env.TRUST_PROXY === "1",
   });
 
@@ -130,16 +129,21 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   // DATABASE_URL (mock demos) there is nothing to ask and it stays ok. /healthz is liveness only and never touches Postgres.
   app.get("/readyz", async (_req, reply) => {
     const paypalMode = parseMode(process.env.PAYPAL_MODE);
-    if (!deps.db) return { status: "ok", paypalMode, database: "not_configured", webhooks: undefined };
+    // Whether merchant reads need the operator token (#163): the one thing an outside check can tell about auth.
+    const reads = deps.operatorToken ? "protected" : "open";
+    if (!deps.db) return { status: "ok", paypalMode, reads, database: "not_configured", webhooks: undefined };
     const up = await databaseAnswers(deps.db, deps.readyDbTimeoutMs ?? 2000, (reason) =>
       app.log.error({ reason }, "readyz: the database did not answer"),
     );
     if (!up) {
-      return reply.code(503).send({ status: "unavailable", paypalMode, database: "unreachable", webhooks: null });
+      return reply
+        .code(503)
+        .send({ status: "unavailable", paypalMode, reads, database: "unreachable", webhooks: null });
     }
     return {
       status: "ok",
       paypalMode,
+      reads,
       database: "configured",
       // Deliveries PayPal has made to POST /webhooks/paypal and passed verification (spec 0004 §Webhooks, #19).
       webhooks: await deps.db.webhookStats().catch(() => null),

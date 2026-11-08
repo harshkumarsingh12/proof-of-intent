@@ -1,6 +1,7 @@
 // Proxies dashboard calls to the merchant API at request time. Server-side, so the container reaches the
-// API on the compose network and the browser stays same-origin (no CORS). Reads are open; the only write is
-// an operator dispute action, which needs the operator login and carries OPERATOR_TOKEN (never sent to browsers).
+// API on the compose network and the browser stays same-origin (no CORS). Reads carry OPERATOR_TOKEN, which the
+// API requires (#163), and are open to viewers unless VIEWER_LOGIN_REQUIRED=1 (middleware.ts). The writes (an
+// operator dispute action, Studio's AI) need the operator login and also carry OPERATOR_TOKEN. It never reaches browsers.
 import { isOperator, isOperatorActionPath, OPERATOR_REALM } from "../../../src/operator";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
   const { path } = await params;
   const target = `${base()}/${path.map(encodeURIComponent).join("/")}${new URL(req.url).search}`;
   try {
-    return relay(await fetch(target, { headers: { accept: "application/json" }, cache: "no-store" }));
+    // The API refuses reads without the operator token (#163); this server holds it, the browser never does.
+    const token = process.env.OPERATOR_TOKEN;
+    return relay(
+      await fetch(target, {
+        headers: { accept: "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        cache: "no-store",
+      }),
+    );
   } catch {
     return unreachable();
   }
@@ -34,10 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ path: s
   const { path } = await params;
   const studio = path.length === 2 && path[0] === "ai" && path[1] === "studio";
   if (!studio && !isOperatorActionPath(path)) {
-    return Response.json(
-      { error: "not_found", message: "Unknown dashboard operation" },
-      { status: 404 },
-    );
+    return Response.json({ error: "not_found", message: "Unknown dashboard operation" }, { status: 404 });
   }
   if (studio && req.headers.get("content-type")?.split(";", 1)[0]?.trim() !== "application/json") {
     return Response.json({ error: "invalid_request", message: "Studio expects JSON" }, { status: 415 });
