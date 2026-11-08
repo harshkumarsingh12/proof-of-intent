@@ -81,7 +81,13 @@ evaluate(input: { intent: IntentMandate; cart: CartMandate; now: string; ledger?
 4. Same input, same output. _(done)_
 5. Red fixture also yields `ATTRIBUTE_MISMATCH`. _(done)_
 6. Budget, recurrence, address and SKU rules. _(done)_
-7. Full line coverage of `packages/policy-engine` before M3.
+7. Every rule in the design table has a passing test for its reason code. Each limit the spec states has a test at
+   exactly the limit: `valid_from <= now`, `now < intent_expiry`, `now < cart_expiry` and `total <= amount_max` from the
+   table, and the `budget_cap` and `recurrence` limits from §Ledger rules (`max_orders`, and both ends of the
+   `(now - window_days, now]` window).
+8. An intent that signs neither a `budget_cap` nor a `recurrence` authorizes one successful purchase: a further cart
+   is `INTENT_ALREADY_USED` (#156). _(done)_
+9. `freshness({ intent, cart, now })` reports exactly the time reasons `evaluate` reports, in the same order (#161). _(done)_
 
 ## Out of scope
 
