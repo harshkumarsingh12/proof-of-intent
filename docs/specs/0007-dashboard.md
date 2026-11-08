@@ -24,7 +24,7 @@ Dec 15, so no renewal is needed for judging. Start from `paypaldev/hackathon-pay
 | Home *(built, #76)* | disputes due in 24 h; tabs: action required, defend, concede, resolved; quick links | seed until `/disputes` |
 | Agent orders *(built: `/orders` page, AG Grid Community)* | grid (order, platform, shopper present, verdict, reason codes, amount, PayPal status, captured at); KPI tiles | `/orders` + `/verifications` |
 | Verification queue *(read-only "Checkout verdicts" tab on `/orders`; approve / reject waits for step-up links, #35)* | STEP_UP carts with time left; row opens the mandate diff; approve / reject | `/verifications` |
-| Disputes *(built: queue #60, detail #61; live data #82, actions #83 #84 #87)* | sorted by due date; class + action chips; SLA countdown; evidence preview (the exact PDF sent); Submit / Escalate / Accept / override | `/disputes`, `/disputes/:id/paypal-actions` |
+| Disputes *(built: queue #60, detail #61; live data #82, actions #83 #84 #87)* | sorted by due date; class + action chips; SLA countdown; evidence preview (the exact PDF sent); Submit / Escalate / Accept / override | `/disputes`, `/disputes/:id/paypal-actions`, `/disputes/:id/audit` |
 | Analytics *(built, #73)* | disputes by class per week; overreach rate by platform; defended vs conceded; median response window | `/analytics/*` |
 
 **Custom widgets** (`apps/dashboard/src/widgets.ts`), each with an AI description:
@@ -101,6 +101,16 @@ runner, and dispute tools return a limited policy finding, draft, or status. Wit
 dashboard offers the standard Analytics and Disputes views.
 
 **Demo polish:** 300 seeded orders across four platforms and 24 disputes; the two scripted disputes pinned on top.
+
+**Audit log panel (#74).** The dispute detail page ends with the dispute's audit log, read from `audit_log` through
+`GET /disputes/:id/audit` on every load and after each action, never from page state. Rows come oldest first with who,
+when and what; the API sends only whitelisted fields (the operator's note, the copilot's recommendation at the time,
+the webhook event type, a failure message), never the raw request body. Accepting the claim when the copilot
+recommended defending is marked as an override, with its note: that is the override record, so it needs no separate
+action. The footer states whether every `paypal.*` row has an `operator.*` row before it (invariant 4), which is also
+how to see that order on a deployed server. Operator identity is the dashboard login: the proxy sends `operator`, and
+the page never takes a name. Seeded sample disputes have no log and say so. Defending a dispute the copilot would
+concede is not offered: only MANDATE_COMPLIANT disputes have an evidence package to send.
 
 ## Acceptance criteria
 

@@ -315,6 +315,82 @@ describe("operator actions", () => {
   });
 });
 
+describe("GET /disputes/:id/audit (#74)", () => {
+  const act = (
+    app: Awaited<ReturnType<typeof setup>>["app"],
+    id: string,
+    action: string,
+    payload: object = {},
+  ) => app.inject({ method: "POST", url: `/disputes/${id}/actions/${action}`, headers: auth, payload });
+
+  test("returns the dispute's rows from audit_log, the operator's before the PayPal call it authorized", async () => {
+    const { app, mem } = await setup();
+    expect(
+      (await act(app, "PP-D-1", "provide-evidence", { note: "Signed mandate attached." })).statusCode,
+    ).toBe(200);
+    const res = await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" });
+    expect(res.statusCode).toBe(200);
+    const { entries } = res.json() as {
+      entries: { id: number; actor: string; action: string; note?: string }[];
+    };
+    expect(entries.map((e) => [e.actor, e.action])).toEqual([
+      ["operator:dashboard", "operator.provide-evidence"],
+      ["api", "paypal.provide-evidence"],
+    ]);
+    expect(entries[0]!.id).toBeLessThan(entries[1]!.id);
+    expect(entries[0]!.note).toBe("Signed mandate attached.");
+    expect(mem.audit).toHaveLength(2); // it reads; it writes nothing
+  });
+
+  test("accepting the claim against a defend recommendation is marked as an override, with its note", async () => {
+    const { app } = await setup();
+    await act(app, "PP-D-1", "accept-claim", { note: "Refunding as a goodwill gesture." });
+    const { entries } = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" })).json();
+    expect(entries[0]).toMatchObject({
+      action: "operator.accept-claim",
+      recommended: "MANDATE_COMPLIANT",
+      override: true,
+      note: "Refunding as a goodwill gesture.",
+    });
+    // The copilot's own recommendation was to concede on PP-D-2, so accepting there is not an override.
+    await act(app, "PP-D-2", "accept-claim");
+    const other = (await app.inject({ method: "GET", url: "/disputes/PP-D-2/audit" })).json();
+    expect(other.entries[0].override).toBeUndefined();
+  });
+
+  test("a failed PayPal call and a webhook are shown with the useful field only, never the raw body", async () => {
+    const { app, mem } = await setup();
+    await mem.db.appendAudit({
+      actor: "paypal",
+      action: "webhook.received",
+      subjectId: "PP-D-1",
+      requestBody: { eventId: "WH-1", eventType: "CUSTOMER.DISPUTE.CREATED", transmissionId: "secret-ish" },
+    });
+    await mem.db.appendAudit({
+      actor: "api",
+      action: "paypal.escalate.failed",
+      subjectId: "PP-D-1",
+      requestBody: { message: "PayPal 422 ESCALATE_NOT_ALLOWED" },
+    });
+    const body = (await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" })).json();
+    expect(body.entries.map((e: { detail?: string }) => e.detail)).toEqual([
+      "CUSTOMER.DISPUTE.CREATED",
+      "PayPal 422 ESCALATE_NOT_ALLOWED",
+    ]);
+    expect(JSON.stringify(body)).not.toContain("transmissionId");
+    expect(JSON.stringify(body)).not.toContain("WH-1");
+  });
+
+  test("another dispute's rows are not included, and an unknown dispute is a 404", async () => {
+    const { app } = await setup();
+    await act(app, "PP-D-2", "accept-claim");
+    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-1/audit" })).json()).toEqual({
+      entries: [],
+    });
+    expect((await app.inject({ method: "GET", url: "/disputes/PP-D-NOPE/audit" })).statusCode).toBe(404);
+  });
+});
+
 describe("shipment tracking (operator)", () => {
   const track = (
     app: Awaited<ReturnType<typeof setup>>["app"],

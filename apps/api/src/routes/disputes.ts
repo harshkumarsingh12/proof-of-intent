@@ -8,7 +8,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { CartMandate, IntentMandate, type DisputeClass, type Money, type ReasonCode } from "@poi/contracts";
-import type { Db, DisputeRow, DisputeSummary, StoredOrder } from "@poi/db";
+import type { AuditRecord, Db, DisputeRow, DisputeSummary, StoredOrder } from "@poi/db";
 import { evidenceTypeFor, PayPalError } from "@poi/paypal";
 import type { AppDeps } from "../app";
 
@@ -196,6 +196,48 @@ export function operator(req: FastifyRequest, reply: FastifyReply, token: string
   return `operator:${typeof name === "string" && /^[\w.@-]{1,64}$/.test(name) ? name : "dashboard"}`;
 }
 
+/** One audit row as the dashboard's panel shows it: who did what and when, with the few fields worth reading. */
+export interface DisputeAuditEntry {
+  id: number;
+  at: string;
+  actor: string;
+  action: string;
+  /** What the copilot recommended when the operator acted (its class), for operator rows. */
+  recommended?: string;
+  /** True when the operator accepted the claim although the copilot recommended defending (docs/specs/0005). */
+  override?: boolean;
+  /** The operator's own note or message, as sent to PayPal. */
+  note?: string;
+  /** Webhook event type, or the failure message of a PayPal call. */
+  detail?: string;
+}
+
+const short = (v: unknown, max = 500) =>
+  typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
+
+/** Whitelists what leaves the API: never the raw request body, which can hold evidence text or ids we do not need. */
+export function auditView(rec: AuditRecord): DisputeAuditEntry {
+  const body = (rec.requestBody ?? {}) as Record<string, unknown>;
+  const recommended = (
+    (rec.priorState ?? {}) as { recommendation?: { class?: string; action?: string } | null }
+  ).recommendation;
+  const entry: DisputeAuditEntry = { id: rec.id, at: rec.at, actor: rec.actor, action: rec.action };
+  if (rec.action.startsWith("operator.")) {
+    if (recommended?.class) entry.recommended = recommended.class;
+    if (rec.action === "operator.accept-claim" && recommended?.action === "PROVIDE_EVIDENCE")
+      entry.override = true;
+    const note = short(body.note) ?? short(body.notes) ?? short(body.message);
+    if (note) entry.note = note;
+  } else if (rec.action === "webhook.received") {
+    const detail = short(body.eventType, 100);
+    if (detail) entry.detail = detail;
+  } else if (rec.action.endsWith(".failed")) {
+    const detail = short(body.message, 300);
+    if (detail) entry.detail = detail;
+  }
+  return entry;
+}
+
 export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   const needDb = (reply: FastifyReply): Db | null => {
     if (deps.db) return deps.db;
@@ -307,6 +349,19 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         .send({ error: "dispute_not_found", message: "No analyzed dispute with this id" });
     }
     return detail(db, d, d.recommendation as Recommendation);
+  });
+
+  // The dispute's audit trail, oldest first, read from audit_log (not from the page's state). The operator's row sits
+  // before the PayPal call it authorized, so this is also how to see invariant 4 on a deployed server.
+  app.get<{ Params: { id: string } }>("/disputes/:id/audit", async (req, reply) => {
+    const db = needDb(reply);
+    if (!db) return;
+    if (!(await db.getDispute(req.params.id))) {
+      return reply
+        .code(404)
+        .send({ error: "dispute_not_found", message: "No analyzed dispute with this id" });
+    }
+    return { entries: (await db.auditTrail(req.params.id)).map(auditView) };
   });
 
   // What PayPal allows on this dispute right now, asked live (get_dispute): the worker's copy can be minutes old,
