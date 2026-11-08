@@ -34,6 +34,8 @@ areas both touch. Skip: bug fixes, refactors inside one package, docs, tests, de
 | [0009](0009-demo-and-submission.md)       | Demo and submission                    | @sumedhag28        | everyone                               | M0        | Accepted    |
 | [0010](0010-voice-and-chat.md)            | Voice ordering and the buyer assistant | @srshriv           | @harshkumarsingh12, @sumedhag28        | M3        | In Progress |
 
-All nine were reviewed at the Oct 31 contracts gate and have been built against since; statuses and "as built"
+| [0011](0011-shared-ai-transport.md) | Shared server-side AI transport | @sumedhag28 | @harshkumarsingh12, @srshriv, @hoursgotviral-dev | M4 | Proposed |
+
+The original nine were reviewed at the Oct 31 contracts gate and have been built against since; statuses and "as built"
 notes updated Nov 6 after M2 (#59, #81–#88). New specs take the next free number from
 [TEMPLATE.md](TEMPLATE.md).
