@@ -10,8 +10,16 @@ Needs Docker.
 git clone https://github.com/harshkumarsingh12/proof-of-intent.git
 cd proof-of-intent
 cp .env.example .env
+openssl rand -hex 32     # run it twice; paste one value after OPERATOR_TOKEN= and the other after OPERATOR_PASSWORD= in .env
 docker compose up --build
 ```
+
+Set both operator values before the first start. The shop needs `OPERATOR_TOKEN` to register its agent key (journey A),
+and the dashboard's operator actions need both (log in as user `operator` with the `OPERATOR_PASSWORD` value).
+
+The first `docker compose up --build` builds four images, which takes several minutes (about 4.5 minutes on a machine
+that already had the base images; longer on a new one). It stays in the foreground: run the later `docker compose exec`
+commands in a second terminal, or start the stack with `docker compose up --build -d`.
 
 | Service              | URL                           |
 | -------------------- | ----------------------------- |
@@ -23,8 +31,7 @@ Ports already taken on your machine? Set `API_HOST_PORT`, `SHOP_HOST_PORT` or `O
 default to 3000, 3001 and 3002), then open the matching `localhost` port. Host ports bind to `127.0.0.1` only.
 
 `PAYPAL_MODE=mock` serves PayPal responses from fixtures and `AI_MODE=replay` serves recorded model responses,
-so journeys A–D run end to end without any account. _(Journeys are wired in as the milestones land; see the
-ledger in the latest CI run for what is open.)_
+so journeys A–D run end to end without any account.
 
 **AG Studio license.** Analytics and Disputes work without a license. Dispute Studio (`/analytics/studio`, a sidebar
 item under Analytics) needs all of: `AG_STUDIO_LICENSE_KEY` (an AI-enabled key; request a free 45-day trial for React at
@@ -103,8 +110,29 @@ pnpm dev:dashboard       # :3002
 Before you push, run what CI runs: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. For the dashboard
 alone: `pnpm vitest run apps/dashboard` and `pnpm --filter @poi/dashboard build`.
 
-Postgres for local work: `docker compose up -d postgres` and set
-`DATABASE_URL=postgres://poi:poi@localhost:5432/poi` (expose the port in a local override if needed).
+The dev servers don't read `.env`, so export what you need in the shell you start them from. With nothing set they run
+with `PAYPAL_MODE=mock`, `AI_MODE=replay` and no database. The dashboard finds the API through `API_INTERNAL_URL`:
+without it, its pages show the built-in sample data under a "Sample data." notice. Port 3000 taken? Give the API another
+one with `PORT` and point the shop and dashboard at it:
+
+```bash
+PORT=3010 pnpm dev:api
+API_INTERNAL_URL=http://localhost:3010 pnpm dev:buyer
+API_INTERNAL_URL=http://localhost:3010 pnpm dev:dashboard
+```
+
+Postgres for local work: Compose doesn't publish Postgres's port, so create a `docker-compose.override.yml` next to
+`docker-compose.yml`. Compose reads it automatically, including for the full stack. It is a local file: don't commit it.
+
+```yaml
+services:
+  postgres:
+    ports: ["127.0.0.1:5432:5432"]
+```
+
+Then run `docker compose up -d postgres` and `export DATABASE_URL=postgres://poi:poi@localhost:5432/poi` in the
+shell where you run `pnpm test` and `pnpm dev:api`. If 5432 is taken, use another host port (for example
+`127.0.0.1:5433:5432` and `localhost:5433`).
 
 ## 3. Your own PayPal sandbox
 
