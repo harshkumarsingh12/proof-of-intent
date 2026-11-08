@@ -7,12 +7,13 @@ import {
   type AgWidgetsConfig,
 } from "ag-studio";
 import { AgStudio, AgStudioProvider } from "ag-studio-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createStudioAi, type StudioExamples } from "../../../src/studio-agent";
 import { dashboardStudioTheme } from "../../../src/studio-theme";
 import type { StudioCheckRow, StudioDisputeRow } from "../../../src/studio-data";
 import { fontStack, pillButton, v } from "../../../src/theme";
-import { publishState } from "../../../src/studio-filters";
+import { publishState, setUnfilteredTotal } from "../../../src/studio-filters";
+import { initialState } from "../../../src/studio-report";
 import { studioWidgets } from "./studio-widgets";
 
 const modules = [AgStudioAiModule];
@@ -22,104 +23,11 @@ const style = { width: "100%", height: 1200 };
 /** Dollar columns show as $1,143.00 in the tiles and charts (Studio's currency format alone prints 1,143.00). */
 const usd = { format: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }) };
 
-/**
- * The opening report: four headline numbers, a donut of disputes by class (a click filters every widget), the agent
- * platform cards, the disputes grid (a click selects a dispute), and the mandate diff and evidence preview for the
- * selected dispute. Everything reads the two tables below.
- */
-/** A headline number: the sum of one column, titled. */
-const kpi = (title: string, field: string) => ({
-  type: "value",
-  dataMapping: { value: [{ id: field, aggregation: "sum" }] },
-  format: { title: { text: title, enabled: true } },
-});
-
-const initialState = {
-  selectedPageId: "disputes",
-  // The filters panel starts collapsed so it does not sit over the widgets on a narrower screen.
-  panels: { filters: { collapsed: true } },
-  pages: [
-    {
-      id: "disputes",
-      layout: { columns: 12, rowHeight: 40 },
-      widgets: {
-        // Four headline numbers. Each is a plain sum of a 0/1 or dollar column, so it follows Studio's filters.
-        kpiOpen: kpi("Open disputes", "disputes.open"),
-        kpiDue: kpi("Due within 24 hours", "disputes.dueSoon"),
-        kpiAtStake: kpi("Dollars at stake", "disputes.atStake"),
-        kpiConceded: kpi("Conceded (agent overreach)", "disputes.conceded"),
-        classes: {
-          type: "donut-chart",
-          dataMapping: {
-            categoryKey: [{ id: "disputes.disputeClass" }],
-            valueKey: [{ id: "disputes.id", aggregation: "count" }],
-          },
-          format: {
-            title: { text: "Disputes by class (click a slice to filter everything)", enabled: true },
-          },
-        },
-        platforms: {
-          type: "agent-platform",
-          dataMapping: {
-            platform: [{ id: "disputes.agentPlatform" }],
-            disputeClass: [{ id: "disputes.disputeClass" }],
-            dispute: [{ id: "disputes.id" }],
-            amount: [{ id: "disputes.amount" }],
-          },
-          format: { title: { text: "Agent platforms: overreach and conceded dollars" } },
-        },
-        grid: {
-          type: "dispute-grid",
-          dataMapping: {
-            dispute: [{ id: "disputes.id" }],
-            disputeClass: [{ id: "disputes.disputeClass" }],
-            platform: [{ id: "disputes.agentPlatform" }],
-            status: [{ id: "disputes.status" }],
-            amount: [{ id: "disputes.amount" }],
-            action: [{ id: "disputes.action" }],
-            dueAt: [{ id: "disputes.dueAt" }],
-            hoursToDue: [{ id: "disputes.hoursToDue" }],
-          },
-          format: { title: { text: "Disputes: pick one to see its limits and evidence" } },
-        },
-        diff: {
-          type: "mandate-diff",
-          dataMapping: {
-            dispute: [{ id: "checks.dispute" }],
-            check: [{ id: "checks.check" }],
-            mandateRule: [{ id: "checks.mandateRule" }],
-            cartActual: [{ id: "checks.cartActual" }],
-            status: [{ id: "checks.status" }],
-            reasonCode: [{ id: "checks.reasonCode" }],
-          },
-          format: { title: { text: "Mandate diff: what the shopper signed against the cart" } },
-        },
-        evidence: {
-          type: "evidence-preview",
-          dataMapping: {
-            dispute: [{ id: "disputes.id" }],
-            disputeClass: [{ id: "disputes.disputeClass" }],
-            coverNote: [{ id: "disputes.coverNote" }],
-          },
-          format: { title: { text: "Evidence preview: the attestation PDF" } },
-        },
-      },
-      widgetLayout: {
-        kpiOpen: { xTrack: 0, yTrack: 0, xSpan: 3, ySpan: 3 },
-        kpiDue: { xTrack: 3, yTrack: 0, xSpan: 3, ySpan: 3 },
-        kpiAtStake: { xTrack: 6, yTrack: 0, xSpan: 3, ySpan: 3 },
-        kpiConceded: { xTrack: 9, yTrack: 0, xSpan: 3, ySpan: 3 },
-        classes: { xTrack: 0, yTrack: 3, xSpan: 4, ySpan: 7 },
-        platforms: { xTrack: 4, yTrack: 3, xSpan: 8, ySpan: 7 },
-        grid: { xTrack: 0, yTrack: 10, xSpan: 12, ySpan: 9 },
-        diff: { xTrack: 0, yTrack: 19, xSpan: 7, ySpan: 10 },
-        evidence: { xTrack: 7, yTrack: 19, xSpan: 5, ySpan: 10 },
-      },
-    },
-  ],
-};
+/** The report's narrowest comfortable width, in pixels. */
+const MIN_REPORT_WIDTH = 1100;
 
 type Mode = "view" | "edit";
+type PageId = "disputes" | "queues";
 
 /**
  * Studio has the AI chat only in edit mode, so "Ask the AI" turns edit mode on, with just the chat and the filters
@@ -155,6 +63,17 @@ export function StudioView({
   aiLive: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("view");
+  // Studio's own page tabs show only in edit mode, so the two pages get buttons of their own that drive its state.
+  const studio = useRef<{ getState(): AgReportState; setState(state: AgReportState): void } | null>(null);
+  const [pageId, setPageId] = useState<PageId>("disputes");
+  const showPage = (id: PageId) => {
+    setMode("view");
+    setPageId(id);
+    const api = studio.current;
+    if (api) api.setState({ ...api.getState(), selectedPageId: id });
+  };
+  // The platform cards compare what a filter leaves with this: all of the disputes.
+  setUnfilteredTotal(disputes.length);
   const ai = useMemo(() => createStudioAi(examples), [examples]);
   const data = useMemo<AgDataSourcesDefinition>(
     () => ({
@@ -210,11 +129,19 @@ export function StudioView({
         <div role="group" aria-label="Studio view" style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            aria-pressed={mode === "view"}
-            style={tab(mode === "view")}
-            onClick={() => setMode("view")}
+            aria-pressed={mode === "view" && pageId === "disputes"}
+            style={tab(mode === "view" && pageId === "disputes")}
+            onClick={() => showPage("disputes")}
           >
             Dashboard
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === "view" && pageId === "queues"}
+            style={tab(mode === "view" && pageId === "queues")}
+            onClick={() => showPage("queues")}
+          >
+            Queues
           </button>
           <button
             type="button"
@@ -230,24 +157,38 @@ export function StudioView({
             ? aiLive
               ? "Ask about a dispute, the counts, what needs attention, or a buyer reply draft. The AI reads disputes; it can't take any action."
               : "Without live AI the chat still answers the common questions from your own data: explain a dispute, draft a buyer reply, counts, what needs attention, what a term means. Open-ended questions need live AI. It only reads; it can't take any action."
-            : "Pick a dispute in either widget and both follow. Switch to Ask the AI to chat about a dispute."}
+            : pageId === "queues"
+              ? "Disputes to defend with evidence, and disputes to concede. Pick one to see its signed limits."
+              : "Pick a dispute in either widget and both follow. Switch to Ask the AI to chat about a dispute."}
         </span>
       </div>
-      <AgStudioProvider modules={modules} licenseKey={licenseKey}>
-        <AgStudio
-          ai={ai}
-          data={data}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom widget registry, see studio-widgets.tsx
-          widgets={((base: AgWidgetsConfig) => studioWidgets(base)) as any}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          initialState={initialState as any as AgReportState}
-          theme={theme}
-          mode={mode}
-          onStateUpdated={(event) => publishState(event.state)}
-          panels={panels as never}
-          style={style}
-        />
-      </AgStudioProvider>
+      {/* Below this width the report would be squeezed, so it keeps its width and scrolls sideways instead. */}
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: MIN_REPORT_WIDTH }}>
+          <AgStudioProvider modules={modules} licenseKey={licenseKey}>
+            <AgStudio
+              ai={ai}
+              data={data}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom widget registry, see studio-widgets.tsx
+              widgets={((base: AgWidgetsConfig) => studioWidgets(base)) as any}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              initialState={initialState as any as AgReportState}
+              theme={theme}
+              mode={mode}
+              onApiReady={(event) => {
+                studio.current = event.api as unknown as NonNullable<typeof studio.current>;
+              }}
+              onStateUpdated={(event) => {
+                publishState(event.state);
+                const selected = event.state.selectedPageId;
+                if (selected === "disputes" || selected === "queues") setPageId(selected);
+              }}
+              panels={panels as never}
+              style={style}
+            />
+          </AgStudioProvider>
+        </div>
+      </div>
     </>
   );
 }

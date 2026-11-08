@@ -44,6 +44,15 @@ export const filterRevision = {
   },
 };
 
+let unfilteredTotal: number | undefined;
+
+/** How many disputes the report has before any filter. The platform cards say when a filter has narrowed what they count. */
+export function setUnfilteredTotal(total: number): void {
+  unfilteredTotal = total;
+}
+
+export const getUnfilteredTotal = (): number | undefined => unfilteredTotal;
+
 /** A number that changes whenever Studio's filters do: put it in a widget's data-loading effect. */
 export function useFilterRevision(): number {
   return useSyncExternalStore(filterRevision.subscribe, filterRevision.get, () => 0);
