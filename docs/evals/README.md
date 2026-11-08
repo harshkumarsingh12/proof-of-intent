@@ -13,6 +13,8 @@ source commit. The configured primary is labelled as configuration. Each case in
 answer to its actual successful provider/model and records every physical provider request, outcome,
 latency and bounded fallback reason. Logical retries and physical provider calls are separate counts.
 Local guards have no model attribution. Telemetry excludes prompts, credentials and provider error bodies.
+Physical request counts are measured at the HTTP fetch boundary; a local preflight failure records an endpoint
+attempt with zero HTTP requests.
 
 Before relying on the configured Groq backup, run `pnpm eval --backup` in the same secure environment.
 This runs the identical 20/12 acceptance set directly against `AI_FALLBACK_*`, with no primary and no

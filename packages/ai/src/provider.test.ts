@@ -262,6 +262,25 @@ describe("the request that reaches the provider", () => {
   }
   const limited = () => Response.json({ error: { message: "rate limit reached" } }, { status: 429 });
 
+  test("a local preflight error is not counted as a physical provider request", async () => {
+    const p = fakeHosts({ "*": () => completion('{"ok":true}') });
+    const attempts: ProviderAttempt[] = [];
+    await expect(
+      createGenerate(
+        cfg({ fallback: groqBackup }),
+        p.fetchImpl,
+      )({
+        system: "s",
+        prompt: "p",
+        schema: z.object({ ok: z.boolean() }),
+        timeoutMs: -1,
+        onAttempt: (a) => attempts.push(a),
+      }),
+    ).rejects.toThrow();
+    expect(p.calls).toHaveLength(0);
+    expect(attempts).toMatchObject([{ role: "primary", outcome: "error", httpRequests: 0 }]);
+  });
+
   test("a broken telemetry observer cannot trigger a fallback or change a valid answer", async () => {
     const p = fakeHosts({ "*": () => completion('{"ok":true}') });
     await expect(
@@ -300,6 +319,7 @@ describe("the request that reaches the provider", () => {
         outcome: "error",
         failure: "http_429",
         elapsedMs: expect.any(Number),
+        httpRequests: 1,
       },
       {
         provider: "groq",
@@ -308,6 +328,7 @@ describe("the request that reaches the provider", () => {
         outcome: "success",
         fallbackReason: "http_429",
         elapsedMs: expect.any(Number),
+        httpRequests: 1,
       },
     ]);
     const serialized = JSON.stringify(attempts);

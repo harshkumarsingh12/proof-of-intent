@@ -102,6 +102,8 @@ export interface ProviderAttempt {
   role: "primary" | "fallback";
   outcome: "success" | "error";
   elapsedMs: number;
+  /** HTTP fetches actually started; local preflight failures have zero. */
+  httpRequests: number;
   failure?: string;
   fallbackReason?: string;
 }
@@ -247,24 +249,24 @@ export function isFailoverError(err: unknown): boolean {
 
 /** The Vercel AI SDK over OpenAI-compatible endpoints. Temperature 0, no SDK retries (we retry once ourselves). */
 export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Generate {
-  const host = (e: Endpoint) =>
+  const host = (e: Endpoint, requestSent: () => void) =>
     createOpenAICompatible({
       name: e.provider,
       baseURL: e.baseURL,
       apiKey: e.apiKey,
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+      fetch: async (input, init) => {
+        requestSent();
+        return (fetchImpl ?? fetch)(input, init);
+      },
     });
-  const primary = host(cfg);
-  const backup = cfg.fallback ? host(cfg.fallback) : undefined;
   return async <T>({ system, prompt, schema, timeoutMs, onAttempt }: GenerateRequest<T>): Promise<T> => {
-    const call = async (
-      provider: ReturnType<typeof host>,
-      e: Endpoint,
-      role: ProviderAttempt["role"],
-      fallbackReason?: string,
-    ) => {
+    const call = async (e: Endpoint, role: ProviderAttempt["role"], fallbackReason?: string) => {
       const start = performance.now();
       let failure: string | undefined;
+      let httpRequests = 0;
+      const provider = host(e, () => {
+        httpRequests++;
+      });
       try {
         const { object } = await generateObject({
           model: provider.chatModel(e.model),
@@ -287,6 +289,7 @@ export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Gener
           role,
           outcome: failure ? "error" : "success",
           elapsedMs: Math.round(performance.now() - start),
+          httpRequests,
           ...(failure ? { failure } : {}),
           ...(fallbackReason ? { fallbackReason } : {}),
         };
@@ -299,12 +302,12 @@ export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Gener
       }
     };
     try {
-      return await call(primary, cfg, "primary");
+      return await call(cfg, "primary");
     } catch (err) {
       // Not sticky on purpose: if the primary comes back it is used again on the next call.
-      if (!cfg.fallback || !backup || !isFailoverError(err)) throw err;
+      if (!cfg.fallback || !isFailoverError(err)) throw err;
       try {
-        return await call(backup, cfg.fallback, "fallback", failureCategory(err));
+        return await call(cfg.fallback, "fallback", failureCategory(err));
       } catch (backupErr) {
         const say = (e: unknown) => (e instanceof Error ? e.message : String(e));
         throw new Error(`${say(err)}; the backup (${cfg.fallback.provider}) also failed: ${say(backupErr)}`);

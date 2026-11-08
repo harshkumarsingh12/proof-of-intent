@@ -43,10 +43,10 @@ export function evaluationReport(
       const path = c.providerAttempts
         .map(
           (a) =>
-            `${a.provider}/${a.model} (${a.role}, ${a.outcome}${a.failure ? `: ${a.failure}` : ""}, ${a.elapsedMs}ms${a.fallbackReason ? `, fallback: ${a.fallbackReason}` : ""})`,
+            `${a.provider}/${a.model} (${a.role}, ${a.outcome}${a.failure ? `: ${a.failure}` : ""}, ${a.httpRequests} HTTP requests, ${a.elapsedMs}ms${a.fallbackReason ? `, fallback: ${a.fallbackReason}` : ""})`,
         )
         .join(" → ");
-      return `| ${[c.job, c.label, c.expected, c.actual, c.passed ? "pass" : "fail", String(c.attempts), String(c.providerAttempts.length), answeredBy, path || "—", String(c.elapsedMs)].map(cell).join(" | ")} |`;
+      return `| ${[c.job, c.label, c.expected, c.actual, c.passed ? "pass" : "fail", String(c.attempts), String(c.providerAttempts.reduce((count, a) => count + a.httpRequests, 0)), answeredBy, path || "—", String(c.elapsedMs)].map(cell).join(" | ")} |`;
     }),
     "",
   ].join("\n");

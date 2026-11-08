@@ -67,6 +67,7 @@ test("reports actual backup attribution, logical retries and physical requests i
       role: "primary",
       outcome: "error",
       elapsedMs: 20,
+      httpRequests: 1,
       failure: "http_429",
     });
     if (first) {
@@ -77,6 +78,7 @@ test("reports actual backup attribution, logical retries and physical requests i
         role: "fallback",
         outcome: "error",
         elapsedMs: 30,
+        httpRequests: 1,
         fallbackReason: "http_429",
         failure: "http_503",
       });
@@ -88,6 +90,7 @@ test("reports actual backup attribution, logical retries and physical requests i
       role: "fallback",
       outcome: "success",
       elapsedMs: 40,
+      httpRequests: 1,
       fallbackReason: "http_429",
     });
     return req.schema.parse(
