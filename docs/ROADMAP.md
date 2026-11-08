@@ -117,7 +117,7 @@ drafting and a `platform_summary` Studio tool.
 | Deliverable                                  | Owner    | Status  |
 | -------------------------------------------- | -------- | ------- |
 | README final, DEMO.md click path             | Sumedha  | Pending |
-| SETUP.md verified on a clean machine         | Sristee  | Pending |
+| SETUP.md verified on a clean machine         | Sristee  | Verified on a fresh clone on Nov 8 (cached Docker images and pnpm store); snags fixed in SETUP.md, `.env.example` bug is #211; a run on a machine that never had the repo is still pending |
 | Video recorded, edited, public on YouTube    | Sumedha  | Pending |
 | Tag `v0.1.0-hackathon`, deployed, monitored  | Harsh    | Pending |
 | Devpost submission with testing instructions | Sumedha  | Pending |
