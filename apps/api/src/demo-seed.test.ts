@@ -98,6 +98,7 @@ test.runIf(adminUrl)(
       });
       expect(overreach.statusCode).toBe(200);
       expect(overreach.json()).toMatchObject({
+        isDemoData: true,
         reasons: ["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"],
         cartLines: [{ color: "red" }],
         cartTotal: { value: 9500, currency: "USD" },
