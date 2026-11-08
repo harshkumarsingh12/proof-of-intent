@@ -84,22 +84,23 @@ from the repository or from outside, and stay unticked until someone looks at th
   `SIGNATURE_INVALID` and `UNKNOWN_KEY` in `apps/api/src/checkout.test.ts`, `packages/mandates/src/mandates.test.ts` and
   `apps/api/src/keys.test.ts`; an expired or not-yet-valid intent through `POST /checkout` in `checkout.test.ts`; an intent
   that expires between checkout and capture in `approve.test.ts`. The full suite is green.
-- [ ] Webhook signature failure returns 400 and is logged. The 400 is tested (`webhooks.test.ts`); the log line (a `warn`
-  with the event id and type, no signature or body) is asserted by the tests in #186. Tick once #186 is merged.
+- [x] Webhook signature failure returns 400 and is logged. The 400 is tested (`webhooks.test.ts`); the log line (a `warn`
+  with the event id and type, no signature or body) is tested in #186 (`apps/api/src/logging.test.ts`, "a forged webhook
+  signature": "is refused with 400 and is logged as a warning, without the forged signature or the body").
 - [x] Upload type and size limits on evidence files. There is no upload endpoint: the only evidence file is the PDF the worker
   generates, sent to PayPal as `application/pdf` with a 10 MB cap (`MAX_EVIDENCE_FILE_BYTES`, `packages/paypal`). Request
   bodies have explicit size limits (webhook 256 KB, checkout 64 KB, approve 16 KB, dispute actions 32 KB, tracking 8 KB).
-- [ ] Logs contain no secrets, full addresses or mandate payloads above debug level. Found and fixed: a step-up link's token
-  was written to the access log and to an explicit log line. Fixed and tested in #186. Tick once #186 is merged. No
-  address is ever stored (only a hash), and request bodies, headers and mandate payloads are not logged. Proxy logs outside
-  this app (Dokploy, Cloudflare) can still record URL paths: needs the server.
+- [x] Logs contain no secrets, full addresses or mandate payloads above debug level. Found and fixed: a step-up link's token
+  was written to the access log and to an explicit log line. Fixed and tested in #186 (`apps/api/src/logging.test.ts`). No
+  address is ever stored (only a hash), and request bodies, headers and mandate payloads are not logged.
+- [ ] Proxy logs outside this app (Dokploy, Cloudflare) can still record URL paths: needs the server, tracked in #202.
 - [x] gitleaks clean on the full history. gitleaks (default rules) scanned 176 commits: no leaks. Separately, every secret
   value in the developer's local `.env` (the same variables the server uses: the signing keys, the AI keys, the PayPal client
   secret, the operator token and the AG Studio license) was searched for in all 180 revisions: none found. The server's own
   `.env` was not read, so a value that exists only there is not covered. `.env` is git-ignored and was never committed.
 - [ ] Postgres not reachable from outside the server; only the proxy is exposed. In `docker-compose.yml`, Postgres publishes
   no port at all, and the api, shop and dashboard publish only to `127.0.0.1`. The server's firewall and Dokploy's
-  settings need the server.
+  settings need the server, tracked in #202.
 - [x] Demo logins: viewer cannot act. On the hosted site, the operator-only API routes (dispute actions, tracking, agent
   keys, `/ai/studio`) answer 401 with no token and with a wrong one, and the dashboard's proxy answers 401 to a viewer or a
   wrong password and 404 to any POST it doesn't allow.
@@ -111,4 +112,4 @@ from the repository or from outside, and stay unticked until someone looks at th
   "operator limited to the scripted disputes", which is not how it works and would contradict the judge flow: judges
   file their own fresh disputes and the operator acts on those (`docs/JUDGE_TESTING.md`)._
 - [ ] Nightly demo reset runs. **Not built:** nothing in the repository does this, and it may not be safe to build on a
-  database that holds judges' real sandbox cases. Decide to scope it carefully or drop it from spec 0008 and this list.
+  database that holds judges' real sandbox cases. Decide to scope it carefully or drop it from spec 0008 and this list. Tracked in #203.
