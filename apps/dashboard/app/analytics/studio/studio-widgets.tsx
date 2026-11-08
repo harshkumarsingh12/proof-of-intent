@@ -36,7 +36,7 @@ import {
   type PlatformGroup,
   type StudioCheckRow,
 } from "../../../src/studio-data";
-import { useFilterRevision } from "../../../src/studio-filters";
+import { getUnfilteredTotal, useFilterRevision } from "../../../src/studio-filters";
 import { useSelectedDispute } from "../../../src/studio-selection";
 import { fontStack, palette, v } from "../../../src/theme";
 import { widgets as widgetInfo } from "../../../src/widgets";
@@ -119,21 +119,10 @@ const NoData = () => (
 );
 
 /**
- * A custom widget draws its own title. Studio hands over `format` from the edit form, but without a `formatShape` it
- * did not carry the title we set in the report state, so each widget falls back to a title of its own.
+ * Studio draws a custom widget's title itself, from the title in the report state or the edit form, but only when
+ * `format.title.enabled` is true, and it is false unless the state says so. So the report state (StudioView) sets
+ * `enabled: true` on each of these and the widgets draw no title of their own, which would show it twice.
  */
-const WidgetTitle = ({
-  format,
-  fallback,
-}: {
-  format?: { title?: { text?: string; enabled?: boolean } };
-  fallback: string;
-}) =>
-  format?.title?.enabled === false ? null : (
-    <div style={{ color: v("heading"), fontWeight: 700, fontSize: 15, lineHeight: "20px", marginBottom: 8 }}>
-      {format?.title?.text || fallback}
-    </div>
-  );
 
 const chip = (bg: string, fg: string, border: string): CSSProperties => ({
   display: "inline-block",
@@ -181,7 +170,6 @@ function MandateDiff(props: AgWidgetParams<any>) {
 
   return (
     <div style={frame}>
-      <WidgetTitle format={props.format} fallback="Mandate diff: what the shopper signed against the cart" />
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
         <label style={{ fontSize: 13 }}>
           Dispute{" "}
@@ -269,7 +257,6 @@ function EvidencePreview(props: AgWidgetParams<any>) {
 
   return (
     <div style={{ ...frame, display: "flex", flexDirection: "column", gap: 8 }}>
-      <WidgetTitle format={props.format} fallback="Evidence preview: the attestation PDF" />
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ fontSize: 13 }}>
           Dispute{" "}
@@ -341,10 +328,13 @@ function AgentPlatform(props: AgWidgetParams<any>) {
   });
   if (groups.length === 0) return <NoData />;
   const cards = platformCards(groups);
+  // A class or platform filter changes what these cards count, so say so instead of letting 0% or 100% read as fact.
+  const shown = cards.reduce((n, c) => n + c.disputes, 0);
+  const all = getUnfilteredTotal();
+  const narrowed = all !== undefined && shown < all;
 
   return (
     <div style={frame}>
-      <WidgetTitle format={props.format} fallback="Agent platforms: overreach and conceded dollars" />
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
         {cards.map((c) => {
           const hot = c.overreachRate > 0.25;
@@ -365,7 +355,7 @@ function AgentPlatform(props: AgWidgetParams<any>) {
                 </div>
               )}
               <div style={{ fontSize: 13, lineHeight: "18px", color: v("textMuted") }}>
-                {c.disputes} disputes
+                {c.disputes} {c.disputes === 1 ? "dispute" : "disputes"}
               </div>
               <div
                 style={{
@@ -377,7 +367,9 @@ function AgentPlatform(props: AgWidgetParams<any>) {
               >
                 {Math.round(c.overreachRate * 100)}%
               </div>
-              <div style={{ fontSize: 12, lineHeight: "16px", color: v("textMuted") }}>overreach rate</div>
+              <div style={{ fontSize: 12, lineHeight: "16px", color: v("textMuted") }}>
+                overreach rate ({c.overreach} of {c.disputes})
+              </div>
               <div style={{ fontSize: 13, lineHeight: "18px", marginTop: 6 }}>
                 Conceded:{" "}
                 <strong>${c.concededAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
@@ -386,6 +378,11 @@ function AgentPlatform(props: AgWidgetParams<any>) {
           );
         })}
       </div>
+      {narrowed && (
+        <div style={{ marginTop: 8, fontSize: 12, lineHeight: "16px", color: v("textMuted") }}>
+          A filter is on: these rates are of the {shown} disputes it leaves, not all {all}.
+        </div>
+      )}
     </div>
   );
 }
@@ -522,7 +519,6 @@ function DisputeGrid(props: AgWidgetParams<any>) {
 
   return (
     <div style={{ ...frame, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
-      <WidgetTitle format={props.format} fallback="Disputes: pick one to see its limits and evidence" />
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <input
           aria-label="Filter disputes"

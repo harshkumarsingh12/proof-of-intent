@@ -44,8 +44,8 @@ overreach rate and conceded dollars. Every widget and every data-mapping slot ca
 (ag-studio 3.0.0): a data-mapping slot holds the hydrated field (`{ fieldId, key, name, ... }`), not `{ id }`, and
 `getData` wants those objects back (aggregates are the same object with `type: "implicitMeasure"` and an
 `aggregation`); `use(widgetApi.getData(...))` suspends forever because each render makes a new promise, so the widgets
-load in an effect; `ag-studio-react` ships no overlay components; a custom widget draws its own title. Not done: a
-`formatShape` for the widgets (the docs don't show how to build one outside Studio, and the AI harness works without it),
+load in an effect; `ag-studio-react` ships no overlay components; Studio draws a custom widget's title itself, from the report state or the edit form, but only when `format.title.enabled` is true (it is false unless the state says so, and a widget that draws its own title shows it twice). Not done: a
+`formatShape` for the widgets (ag-studio 3.0.0 exports the shape builder as a type only and hands it to AI command factories, never to a custom widget, so there is no supported way to build one; the title and its text already carry through without it, and the AI harness works without it),
 cross-filtering between widgets, and the dispute selector driving the other two.
 
 **Studio chat, navigation and linked widgets, as built.** *Finding it:* "Dispute Studio" is a sidebar item under Analytics
@@ -77,6 +77,15 @@ need `title.enabled: true` for the title set in the report state to show; `curre
 carries a `$` `Intl.NumberFormat` in `formatOptions`. The chat's `list_disputes` now reads our own table (class, action, amount,
 deadline, whether a response is due), so "What needs my attention?" works in mock mode too; PayPal's list is the fallback when
 there is no database.
+
+**Studio follow-ups (#125).** The report has two pages, switched by "Dashboard" and "Queues" buttons above Studio
+(Studio's own page tabs show only in edit mode): the second has a defend queue and a concede queue, two dispute grids each
+narrowed by a widget-level filter on the copilot's decision (`src/studio-report.ts`), plus the mandate diff. Each custom
+widget's title is `enabled: true` in the report state, which is what makes it show. The platform cards say "2 of 6" under
+each rate, and when a filter leaves fewer disputes than the report has they add "A filter is on: these rates are of the N
+disputes it leaves, not all M", so a class filter reading 0% or 100% is not taken for a fact. Below 1100px the report keeps
+its width and scrolls sideways instead of squeezing. The dashboard has an icon (`app/icon.svg`), so a page load no longer
+logs a 404 for it.
 
 **Theme, as built:** `src/studio-theme.ts` builds the Studio theme from `palette` (Studio wants literal colors, so it
 reads the palette, not the CSS variables), and the filters panel starts collapsed so it doesn't sit over the widgets.
