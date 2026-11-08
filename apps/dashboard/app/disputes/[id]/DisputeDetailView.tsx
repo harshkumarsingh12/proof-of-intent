@@ -12,6 +12,7 @@ import {
 } from "../../../src/api";
 import { card, kpiLabel, pillButton } from "../../../src/theme";
 import { SampleDataNotice } from "../../SampleDataNotice";
+import { AuditPanel } from "./AuditPanel";
 
 export function DisputeDetailView({
   dispute,
@@ -744,6 +745,12 @@ export function DisputeDetailView({
           </div>
         )}
       </div>
+
+      <AuditPanel
+        disputeId={dispute.id}
+        isDemoData={isDemoData}
+        refreshKey={`${submitted}-${conceded}-${escalating}-${actionError ?? ""}`}
+      />
 
       {/* PDF Modal Preview */}
       {pdfModalOpen && (
