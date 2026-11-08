@@ -80,6 +80,28 @@ const withLines = (cart: CartMandate, lines: CartMandate["contents"]["lines"]): 
 
 const usd = (value: number) => ({ value, currency: "USD" });
 
+describe("policy engine: quantity_max.per_order", () => {
+  // per_line 2 lets every line below through, so only the order's total quantity can fail.
+  const perOrderIntent = withConstraints({ quantity_max: { per_line: 2, per_order: 3 } });
+  // Only quantities change; the total stays the compliant one, so no money rule can fire.
+  const withQuantities = (...quantities: number[]): CartMandate => {
+    const [line] = compliantCart.contents.lines;
+    if (!line) throw new Error("the compliant cart fixture has no line");
+    return {
+      ...compliantCart,
+      contents: { ...compliantCart.contents, lines: quantities.map((quantity) => ({ ...line, quantity })) },
+    };
+  };
+
+  test("every line within per_line but the order over per_order is rejected", () => {
+    expect(run(withQuantities(2, 2), perOrderIntent).reasons).toEqual(["QUANTITY_EXCEEDS_MAX"]);
+  });
+
+  test("boundary: an order exactly at per_order passes", () => {
+    expect(run(withQuantities(2, 1), perOrderIntent)).toEqual({ pass: true, reasons: [] });
+  });
+});
+
 describe("policy engine: attributes", () => {
   test("the red $95 jacket also gives ATTRIBUTE_MISMATCH (journey B's two codes)", () => {
     expect(run(overreachingCart).reasons).toEqual(["AMOUNT_EXCEEDS_MAX", "ATTRIBUTE_MISMATCH"]);
@@ -204,6 +226,10 @@ describe("policy engine: recurrence", () => {
 
   test("captures after now are ignored, so a replay at capture time matches checkout", () => {
     expect(at("2026-11-01T12:00:00Z", "2026-11-03T00:00:00Z").pass).toBe(true);
+  });
+
+  test("boundary: a capture at exactly now is in the window", () => {
+    expect(at(NOW, "2026-11-01T12:00:00Z").reasons).toEqual(["RECURRENCE_EXCEEDED"]);
   });
 
   test("max_orders 1 with no ledger allows the first order", () => {
