@@ -9,7 +9,7 @@
     "start": "next start -p 3001"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "0.2.16",
+    "@poi/ai-transport": "workspace:*",
     "@poi/contracts": "workspace:*",
     "@poi/mandates": "workspace:*",
     "ai": "4.3.19",
@@ -22,6 +22,9 @@
   },
   "devDependencies": {
     "@poi/ledger": "workspace:*",
+    "@poi/db": "workspace:*",
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
     "@poi/policy-engine": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0"

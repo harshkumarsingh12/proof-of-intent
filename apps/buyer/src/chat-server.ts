@@ -6,28 +6,10 @@
  */
 import type { LanguageModelV1 } from "ai";
 import { parseAgentMode } from "./agent";
-import { ChatRequest, looksSensitive, runChat, type ChatResult } from "./chat";
+import { ChatRequest, looksSensitive, runChat } from "./chat";
 import { clientIp, createChatLimiter, type Limiter } from "./rate-limit";
 
 const MAX_BODY_CHARS = 8_000;
-const DEFAULT_DAILY_CHAT_CALLS = 150;
-
-const chatDay = { day: "", used: 0 };
-
-/**
- * A separate, lower cap than the shop's overall model budget (AI_DAILY_CALL_LIMIT), so a busy chat can't use up the
- * calls the checkout agent needs. `BUYER_CHAT_DAILY_LIMIT=0` answers everything from the store's data. Per process.
- */
-export function takeChatCall(env: NodeJS.ProcessEnv = process.env, now = new Date()): boolean {
-  const raw = Number(env.BUYER_CHAT_DAILY_LIMIT);
-  const limit =
-    env.BUYER_CHAT_DAILY_LIMIT?.trim() && Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_DAILY_CHAT_CALLS;
-  const day = now.toISOString().slice(0, 10);
-  if (chatDay.day !== day) Object.assign(chatDay, { day, used: 0 });
-  if (chatDay.used >= limit) return false;
-  chatDay.used++;
-  return true;
-}
 
 export interface ChatHttp {
   status: number;
@@ -102,15 +84,12 @@ export async function handleChat(
   } catch {
     mode = "replay";
   }
-  let result: ChatResult;
-  if (mode === "live" && !takeChatCall(env, now())) {
-    result = await runChat({ request: parsed.data, mode: "replay", env });
-    result = {
-      ...result,
-      note: "The assistant has reached today's limit, so this answer comes straight from the store's data.",
-    };
-  } else {
-    result = await runChat({ request: parsed.data, mode, env, ...(deps.model ? { model: deps.model } : {}) });
-  }
+  // The transport reserves the global and chat allowances together before each physical provider request.
+  const result = await runChat({
+    request: parsed.data,
+    mode,
+    env,
+    ...(deps.model ? { model: deps.model } : {}),
+  });
   return { status: 200, body: result };
 }

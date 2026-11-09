@@ -1,6 +1,6 @@
 import { MockLanguageModelV1 } from "ai/test";
 import { describe, expect, test, vi } from "vitest";
-import { handleChat, takeChatCall, type ChatDeps } from "./chat-server";
+import { handleChat, type ChatDeps } from "./chat-server";
 import { clientIp, createChatLimiter, createLimiter } from "./rate-limit";
 
 const headers = (h: Record<string, string> = {}) => new Headers(h);
@@ -76,40 +76,6 @@ describe("rate limit and the daily cap", () => {
     expect(Number(limited.headers?.["retry-after"])).toBeGreaterThan(0);
     expect(limited.body).toMatchObject({ error: "rate_limited" });
     expect((await from("2.2.2.2")).status).toBe(200);
-  });
-
-  test("a spent daily chat cap still answers, from the store's data, and says so", async () => {
-    const env = on({ AI_MODE: "live", BUYER_CHAT_DAILY_LIMIT: "0" });
-    const model = new MockLanguageModelV1({
-      doGenerate: async () => {
-        throw new Error("the model must not be called past the cap");
-      },
-    });
-    const res = await send("show me grey running jackets under $80", { env, model });
-    expect(res.status).toBe(200);
-    const out = res.body as { source: string; text: string; note: string };
-    expect(out.source).toBe("scripted");
-    expect(out.text).toContain("JKT-GRY-M");
-    expect(out.note).toMatch(/today's limit/);
-  });
-
-  test("the daily cap counts per day and per process, with a default and an off switch", () => {
-    const env = { BUYER_CHAT_DAILY_LIMIT: "2" } as NodeJS.ProcessEnv;
-    const day = new Date("2031-05-01T10:00:00Z");
-    expect([takeChatCall(env, day), takeChatCall(env, day), takeChatCall(env, day)]).toEqual([
-      true,
-      true,
-      false,
-    ]);
-    expect(takeChatCall(env, new Date("2031-05-02T00:00:01Z"))).toBe(true);
-    expect(
-      takeChatCall({ BUYER_CHAT_DAILY_LIMIT: "0" } as NodeJS.ProcessEnv, new Date("2031-06-01T00:00:00Z")),
-    ).toBe(false);
-    const dflt = new Date("2031-07-01T00:00:00Z");
-    expect(
-      Array.from({ length: 150 }, () => takeChatCall({} as NodeJS.ProcessEnv, dflt)).every(Boolean),
-    ).toBe(true);
-    expect(takeChatCall({} as NodeJS.ProcessEnv, dflt)).toBe(false);
   });
 });
 

@@ -1,3 +1,4 @@
+import { createOperation, failureCategory, runWithinOperation } from "@poi/ai-transport";
 /**
  * The buyer-side shop assistant (docs/specs/0010). It answers questions about the store, the shopper's limits and why
  * the merchant refused or held a cart. It is read-only: no tool signs, buys, proposes a checkout or touches a wallet.
@@ -22,10 +23,8 @@ import {
   draftIntent,
   liveModelFromEnv,
   priceUsd,
-  providerOptionsFor,
   redact,
   searchCatalog,
-  withBudget,
   type CatalogHit,
   type IntentDraft,
 } from "./agent";
@@ -373,14 +372,19 @@ const STORE_WIDE = /\b(?:cheapest|dearest|priciest|lowest|highest|most expensive
  * guard can't pair up is refused too: the shopper then gets the plain answer straight from the data.
  */
 function amountsBelongToTheirProducts(text: string, known: ChatProduct[], facts: ChatFacts): boolean {
-  const priced = new Set([...known.map((p) => p.price_cents), facts.store.cheapest_cents, facts.store.dearest_cents]);
+  const priced = new Set([
+    ...known.map((p) => p.price_cents),
+    facts.store.cheapest_cents,
+    facts.store.dearest_cents,
+  ]);
   for (const clause of text.split(CLAUSE)) {
     const lower = clause.toLowerCase();
     // A SKU names one product. A title can name several (the same jacket in two colors, at two prices), so a title
     // accepts the price of any product that carries it.
     const anchors: { at: number; end: number; prices: Set<number> }[] = [];
     const find = (needle: string, prices: Set<number>) => {
-      for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, at + 1)) anchors.push({ at, end: at + needle.length, prices });
+      for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, at + 1))
+        anchors.push({ at, end: at + needle.length, prices });
     };
     for (const p of known) {
       find(p.sku.toLowerCase(), new Set([p.price_cents]));
@@ -454,29 +458,33 @@ export async function runChat({ request, mode, model, env = process.env }: RunCh
 
   let text: string;
   try {
-    const chosen = withBudget(model ?? liveModelFromEnv(env));
-    const result = await generateText({
-      model: chosen,
-      system: SYSTEM,
-      prompt: [
-        dataBlock("facts", factsForModel(facts)),
-        dataBlock(
-          "conversation",
-          request.messages.map((m) => ({ role: m.role, text: redact(m.content) })),
-        ),
-        "Answer the shopper's last message.",
-      ].join("\n\n"),
-      temperature: 0,
-      maxTokens: 400,
-      maxRetries: 0,
-      abortSignal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-      providerOptions: providerOptionsFor(env.AI_PROVIDER?.trim() || "nvidia"),
-    });
+    const operation = createOperation("buyer.chat", { timeoutMs: CHAT_TIMEOUT_MS });
+    const chosen = model ?? liveModelFromEnv(env, operation);
+    const result = await runWithinOperation(operation, () =>
+      generateText({
+        model: chosen,
+        system: SYSTEM,
+        prompt: [
+          dataBlock("facts", factsForModel(facts)),
+          dataBlock(
+            "conversation",
+            request.messages.map((m) => ({ role: m.role, text: redact(m.content) })),
+          ),
+          "Answer the shopper's last message.",
+        ].join("\n\n"),
+        temperature: 0,
+        maxTokens: 400,
+        maxRetries: 0,
+        abortSignal: operation.signal,
+      }),
+    );
     text = result.text.replace(/\s+\n/g, "\n").trim();
-  } catch {
+  } catch (error) {
     return plain(
       "scripted",
-      "The assistant's model isn't available right now, so this answer comes straight from the store's data.",
+      failureCategory(error) === "budget_exhausted"
+        ? "The assistant has reached today's limit, so this answer comes straight from the store's data."
+        : "The assistant's model isn't available right now, so this answer comes straight from the store's data.",
     );
   }
   if (!text)

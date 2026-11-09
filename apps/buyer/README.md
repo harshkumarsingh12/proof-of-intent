@@ -55,7 +55,9 @@ information and limits for you to review, and its one button, "Use these limits"
 by plain code and the model only phrases them (the free models don't reliably look things up themselves); a guard replaces an answer
 that states a price or SKU the store doesn't have; a refusal is always explained in fixed text including "nothing was charged"; and
 asked to buy, sign or pay it always says it can't. Limits: 10 questions a minute and 60 an hour per address, and
-`BUYER_CHAT_DAILY_LIMIT` live model calls a day (past either, or with no model, it answers from the store's data and says so).
+`BUYER_CHAT_DAILY_LIMIT` persisted live provider calls per merchant/UTC day (default 150), within the shared global cap.
+The chat and global allowances are reserved atomically; denied chat calls leave checkout capacity untouched.
+Past either allowance, or with no model, chat answers from the store's data and says so.
 `pnpm chat:eval` checks the hard cases against the real model; `CHAT=1 pnpm smoke:shop` drives it in Chrome.
 
 **Buyer agent** (`src/agent.ts`, #37). Three tools and nothing else: `create_intent_mandate` (a draft only: the
@@ -66,6 +68,14 @@ carts per run and six model calls. `AI_MODE=replay` (default) uses a scripted ch
 shop says so; `AI_MODE=live` uses `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY` through the Vercel AI SDK and counts
 every call against `AI_DAILY_CALL_LIMIT`. A live failure answers 503 `agent_unavailable` and the shopper picks a
 cart by hand, which is also how the red $95 demo cart is proposed.
+
+Live buyer routes use the server-only `@poi/ai-transport` package. Give buyer, API and worker the same
+`DATABASE_URL`, trusted `MERCHANT_ID` and `AI_DAILY_CALL_LIMIT`; migrate the database before enabling live mode.
+Buyer uses a two-connection database pool, never browser database access. Do not prefix secrets or the database URL
+with `NEXT_PUBLIC_`. Limits survive restarts, count each physical primary/fallback/tool-loop request, and use the
+lowest cap observed that UTC day. Raising a cap takes effect the following day. Missing storage fails closed;
+replay still works without storage or provider credentials. One 20-second deadline covers the complete buyer job,
+including database waits and tools, and cannot restart at each model step. See [spec 0011](../../docs/specs/0011-shared-ai-transport.md), proposal #221.
 
 The agent explains itself: the shop lists each search and proposal with the agent's own one-sentence reason and the
 merchant's answer. Before asking the merchant, `request_checkout` checks the product against the signed price,

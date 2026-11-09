@@ -1,5 +1,5 @@
 import { MockLanguageModelV1 } from "ai/test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { IntentMandate } from "@poi/contracts";
 import { MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
 import { evaluate } from "@poi/policy-engine";
@@ -14,11 +14,7 @@ import {
   limitBreaks,
   limitsOf,
   draftTools,
-  fallbackFromEnv,
-  isFailoverError,
-  isModelUnavailableError,
   parseAgentMode,
-  providerOptionsFor,
   redact,
   requestCheckout,
   runChoose,
@@ -26,19 +22,9 @@ import {
   scriptedDraft,
   scriptedPicks,
   searchCatalog,
-  takeModelCall,
   toolNames,
-  withBudget,
-  withFallback,
   type RunContext,
 } from "./agent";
-// The buyer keeps its own copy of the provider rules (it doesn't depend on packages/ai); these tests keep them identical.
-import {
-  fallbackFromEnv as sharedFallbackFromEnv,
-  isFailoverError as sharedIsFailoverError,
-  isModelUnavailableError as sharedIsModelUnavailableError,
-  providerOptionsFor as sharedProviderOptionsFor,
-} from "../../../packages/ai/src/runtime";
 import { proposeCart } from "./cart";
 import { CATALOG, PRESETS } from "./catalog";
 import { buildIntent, type IntentForm } from "./intent";
@@ -376,8 +362,15 @@ describe("scripted agent (AI_MODE=replay)", () => {
     // A stated price is never replaced.
     expect(scriptedDraft("a grey running jacket under $55").priceDefaulted).toBeUndefined();
     // No color or no item: left open, not guessed.
-    expect(scriptedDraft("a running jacket under $80").form).toMatchObject({ category: "running-jacket", color: "" });
-    expect(scriptedDraft("something grey under $80").form).toMatchObject({ category: "", color: "grey", maxPrice: "80" });
+    expect(scriptedDraft("a running jacket under $80").form).toMatchObject({
+      category: "running-jacket",
+      color: "",
+    });
+    expect(scriptedDraft("something grey under $80").form).toMatchObject({
+      category: "",
+      color: "grey",
+      maxPrice: "80",
+    });
     // Nothing stated at all: it still fills a form (the fallback cap, anything, any color) instead of refusing.
     const nothing = scriptedDraft("surprise me");
     expect(nothing.form).toMatchObject({ maxPrice: String(FALLBACK_MAX_PRICE_USD), category: "", color: "" });
@@ -494,7 +487,9 @@ describe("live agent (scripted model, no network)", () => {
     });
 
     test("a price the shopper did state is kept, including one spoken in words", async () => {
-      expect((await draftVia("grey socks under $15", { max_price_usd: 15 })).draft.priceDefaulted).toBeUndefined();
+      expect(
+        (await draftVia("grey socks under $15", { max_price_usd: 15 })).draft.priceDefaulted,
+      ).toBeUndefined();
       const spoken = await draftVia("a grey running jacket under seventy dollars", {
         max_price_usd: 70,
         category: "running-jacket",
@@ -505,8 +500,15 @@ describe("live agent (scripted model, no network)", () => {
     });
 
     test("what the model did set is left as it chose, and nothing is guessed that the words don't name", () => {
-      const args = { description: "trainers under $90", max_price_usd: 90, category: "running-shoe" } as const;
-      expect(groundInWords(args, "trainers under $90")).toMatchObject({ category: "running-shoe", max_price_usd: 90 });
+      const args = {
+        description: "trainers under $90",
+        max_price_usd: 90,
+        category: "running-shoe",
+      } as const;
+      expect(groundInWords(args, "trainers under $90")).toMatchObject({
+        category: "running-shoe",
+        max_price_usd: 90,
+      });
       expect(groundInWords({ description: "x" }, "something nice")).toMatchObject({
         category: undefined,
         color: undefined,
@@ -567,32 +569,6 @@ describe("live agent (scripted model, no network)", () => {
 });
 
 describe("model hygiene", () => {
-  test("the daily budget turns the agent off", () => {
-    const env = { AI_DAILY_CALL_LIMIT: "2" } as NodeJS.ProcessEnv;
-    const day = new Date("2031-01-01T00:00:00Z");
-    takeModelCall(env, day);
-    takeModelCall(env, day);
-    expect(() => takeModelCall(env, day)).toThrow(AgentUnavailableError);
-    expect(() => takeModelCall(env, new Date("2031-01-02T00:00:00Z"))).not.toThrow();
-  });
-
-  test("every model call is counted against the budget", async () => {
-    let taken = 0;
-    const counted = withBudget(
-      new MockLanguageModelV1({
-        doGenerate: async () => ({
-          rawCall: { rawPrompt: null, rawSettings: {} },
-          finishReason: "stop",
-          usage: { promptTokens: 1, completionTokens: 1 },
-          text: "ok",
-        }),
-      }),
-      () => void taken++,
-    );
-    await runDraft({ text: "x", mode: "live", model: counted }).catch(() => undefined);
-    expect(taken).toBeGreaterThan(0);
-  });
-
   test("emails and phone numbers are stripped before the model sees the shopper's words", () => {
     expect(redact("grey jacket, mail me at jo@example.com or +1 (555) 123-4567")).toBe(
       "grey jacket, mail me at [email] or [number]",
@@ -603,155 +579,5 @@ describe("model hygiene", () => {
     expect(parseAgentMode(undefined)).toBe("replay");
     expect(parseAgentMode("live")).toBe("live");
     expect(() => parseAgentMode("mock")).toThrow();
-  });
-});
-
-describe("provider rules (copy of packages/ai)", () => {
-  afterEach(() => vi.unstubAllEnvs());
-
-  const okModel = (record?: (params: unknown) => void) =>
-    new MockLanguageModelV1({
-      doGenerate: async (params) => {
-        record?.(params);
-        return {
-          rawCall: { rawPrompt: null, rawSettings: {} },
-          finishReason: "stop",
-          usage: { promptTokens: 1, completionTokens: 1 },
-          text: "ok",
-        };
-      },
-    });
-
-  test("the live chooser is told an open limit means anything, instead of seeing a missing field", async () => {
-    const seen: unknown[] = [];
-    await runChoose({
-      intent: intentFor({
-        description: "a running jacket",
-        maxPrice: "100",
-        category: "running-jacket",
-        color: "",
-        validDays: 7,
-        confirmEachCart: false,
-      }),
-      mode: "live",
-      checkout: async () => approve,
-      model: okModel((params) => seen.push(params)),
-    }).catch(() => undefined);
-    const text = JSON.stringify(seen[0]);
-    expect(text).toMatch(/color\\+":\s*\\+"any/);
-    expect(text).toMatch(/means the shopper left it open/);
-  });
-
-  test("the drafting prompt asks only for what the shopper stated", async () => {
-    const seen: unknown[] = [];
-    await runDraft({ text: "a jacket", mode: "live", model: okModel((params) => seen.push(params)) }).catch(
-      () => undefined,
-    );
-    const text = JSON.stringify(seen[0]);
-    expect(text).toMatch(/Set only what the shopper actually stated/);
-    expect(text).not.toMatch(/Pick the closest/);
-  });
-
-  test("the thinking switch and the gone-model rule match packages/ai exactly", () => {
-    for (const provider of ["nvidia", "gemini", "groq", "openrouter", "other"])
-      expect(providerOptionsFor(provider)).toEqual(sharedProviderOptionsFor(provider));
-    for (const err of [
-      Object.assign(new Error("x"), { statusCode: 404 }),
-      Object.assign(new Error("x"), { statusCode: 410 }),
-      Object.assign(new Error("x"), { statusCode: 429 }),
-      new Error("The model `m` does not exist"),
-      new Error("invalid api key"),
-      new Error("The operation was aborted due to timeout"),
-      undefined,
-    ])
-      expect(isModelUnavailableError(err)).toBe(sharedIsModelUnavailableError(err));
-  });
-
-  test("what counts as a failover, and how the backup is read from the environment, match packages/ai exactly", () => {
-    for (const err of [
-      ...[400, 401, 403, 404, 408, 410, 422, 429, 500, 503].map((statusCode) =>
-        Object.assign(new Error(`HTTP ${statusCode}`), { statusCode }),
-      ),
-      Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }),
-      new Error("fetch failed"),
-      new Error("getaddrinfo EAI_AGAIN host"),
-      new Error("invalid api key"),
-      new Error("No object generated"),
-      undefined,
-    ])
-      expect(isFailoverError(err)).toBe(sharedIsFailoverError(err));
-
-    const primary = { provider: "nvidia", model: "m-1", apiKey: "key", baseURL: "https://nv.test/v1" };
-    const quiet = vi.spyOn(console, "warn").mockImplementation(() => {});
-    for (const env of [
-      {},
-      { AI_FALLBACK_MODEL: "m-2" },
-      { AI_FALLBACK_MODEL: "m-1" },
-      { AI_FALLBACK_PROVIDER: "groq", AI_FALLBACK_MODEL: "g-1", AI_FALLBACK_API_KEY: "gsk" },
-      { AI_FALLBACK_PROVIDER: "groq", AI_FALLBACK_MODEL: "g-1" },
-      { AI_FALLBACK_PROVIDER: "groq", AI_FALLBACK_API_KEY: "gsk" },
-      { AI_FALLBACK_PROVIDER: "other", AI_FALLBACK_MODEL: "x", AI_FALLBACK_API_KEY: "k" },
-      {
-        AI_FALLBACK_PROVIDER: "other",
-        AI_FALLBACK_MODEL: "x",
-        AI_FALLBACK_API_KEY: "k",
-        AI_FALLBACK_BASE_URL: "https://o.test/v1",
-      },
-    ] as NodeJS.ProcessEnv[])
-      expect(fallbackFromEnv(env, primary)).toEqual(sharedFallbackFromEnv(env, primary));
-    quiet.mockRestore();
-  });
-
-  test("the agent's model call carries the thinking switch for nvidia and nothing for another provider", async () => {
-    const seen: Record<string, unknown>[] = [];
-    const record = (params: unknown) => seen.push(params as Record<string, unknown>);
-    vi.stubEnv("AI_PROVIDER", "nvidia");
-    await runDraft({ text: "x", mode: "live", model: okModel(record) }).catch(() => undefined);
-    vi.stubEnv("AI_PROVIDER", "groq");
-    await runDraft({ text: "x", mode: "live", model: okModel(record) }).catch(() => undefined);
-    expect(seen[0]?.providerMetadata).toEqual({
-      nvidia: { chat_template_kwargs: { enable_thinking: false } },
-    });
-    expect(seen.at(-1)?.providerMetadata).toBeUndefined();
-  });
-
-  test("a primary that fails in a way a backup can fix is answered by the backup, once; other failures surface", async () => {
-    const calls: string[] = [];
-    const model = (name: string, fail?: unknown) =>
-      new MockLanguageModelV1({
-        modelId: name,
-        doGenerate: async () => {
-          calls.push(name);
-          if (fail) throw fail;
-          return {
-            rawCall: { rawPrompt: null, rawSettings: {} },
-            finishReason: "stop" as const,
-            usage: { promptTokens: 1, completionTokens: 1 },
-            text: name,
-          };
-        },
-      });
-    const http = (statusCode: number) => Object.assign(new Error(`HTTP ${statusCode}`), { statusCode });
-    const params = { inputFormat: "prompt", mode: { type: "regular" }, prompt: [] } as never;
-
-    for (const fail of [http(404), http(429), http(503), new Error("fetch failed")]) {
-      calls.length = 0;
-      const withBackup = withFallback(model("primary", fail), model("backup"));
-      expect((await withBackup.doGenerate(params)).text).toBe("backup");
-      expect(calls).toEqual(["primary", "backup"]);
-    }
-
-    // A bad key or a rejected request is not hidden by the backup.
-    for (const fail of [http(400), http(401), http(403)]) {
-      calls.length = 0;
-      await expect(withFallback(model("primary", fail), model("backup")).doGenerate(params)).rejects.toThrow(
-        /HTTP/,
-      );
-      expect(calls).toEqual(["primary"]);
-    }
-
-    // No backup configured: the very same model comes back, untouched.
-    const only = model("only");
-    expect(withFallback(only)).toBe(only);
   });
 });
