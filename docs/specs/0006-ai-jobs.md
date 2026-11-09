@@ -75,6 +75,16 @@ thresholds, which turns "the model didn't answer" into "the shopper's cart is wr
 **Prompts:** `packages/ai/prompts/*.md` with front matter (`version`, `model`, `schema`). Each verdict records its
 prompt version in the audit log.
 
+**J1 latency decision (Nov 9, #168).** Retain the 2 s per-endpoint attempt budget and one logical retry;
+accept a shopper confirmation when neither attempt returns a trustworthy answer. The Nov 7 passing report's
+rain-shell case took 3,878 ms and tumbler case 3,595 ms across retries, so 2 s is not a total checkout latency
+promise. With no backup the model can consume roughly 4 s plus local overhead; a configured backup can add
+one endpoint call per logical attempt (roughly 8 s in the worst case). We do not increase these timeouts or
+rely on warm-up calls for correctness. `AiUnavailableError` maps to `STEP_UP`, never automatic capture.
+Reports retain case elapsed time, logical retries and individual provider attempt latency. A shared overall
+deadline and persistent physical-call accounting are separate work in #174. The existing measured figures
+remain historical evidence; changes to instrumentation do not constitute a new live model result.
+
 **J2 and J3 as built.** The worker supplies named excerpts of the dispute and verified purchase facts. J2
 keeps the worker's deterministic class and action and stores cited reasons and evidence suggestions on the
 recommendation. J3 drafts the preview cover note and buyer message for verified compliant orders. Both drop
@@ -89,7 +99,11 @@ authorization or refund completion. The same rendering applies to live and repla
 keys are unchanged. This closes the unsupported-paraphrase path without claiming a semantic entailment score.
 
 **Evals:** J1 set of 20 (7 match, 7 partial, 6 mismatch); J2 set of 12 covering all four classes. `pnpm eval`
-writes `docs/evals/<date>.md`. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
+writes uniquely timestamped `docs/evals/<timestamp>-primary.md` and matching JSON metrics, recording the source
+commit. Each case records physical provider/model attempts, outcomes, fallback reasons and latencies separately
+from logical retries; configured primary names are never treated as answer attribution. `pnpm eval --backup`
+runs the identical fixed set against the configured fallback alone and does not rewrite canonical replay files.
+The backup must pass independently before being treated as evaluated. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
 schema validity 100% after retry.
 
 ## Acceptance criteria

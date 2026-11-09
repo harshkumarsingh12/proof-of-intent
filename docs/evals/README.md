@@ -4,9 +4,24 @@ Run `pnpm eval` with `AI_MODEL` and `AI_API_KEY` in the environment. Set `AI_PRO
 NVIDIA and `AI_BASE_URL` for a custom OpenAI-compatible endpoint. With a local `.env`, the equivalent command
 is `pnpm exec tsx --env-file=.env scripts/ai/eval.ts`.
 
-The command runs the 20 J1 and 12 J2 cases and writes a dated report here. A passing run also adds its live
+The command runs the 20 J1 and 12 J2 cases and writes a timestamped report here (`<UTC timestamp>-primary.md`, or `-backup.md` with `--backup`). A passing run also adds its live
 answers to the J1 and J2 replay files. The report separates J2 agreement with the supplied policy decision
 from J1 prediction accuracy. Publish numbers in the root README after verifying the live report.
+
+Each run writes a unique UTC-timestamped Markdown report and matching JSON case metrics, including the
+source commit. The configured primary is labelled as configuration. Each case instead attributes the
+answer to its actual successful provider/model and records every physical provider request, outcome,
+latency and bounded fallback reason. Logical retries and physical provider calls are separate counts.
+Local guards have no model attribution. Telemetry excludes prompts, credentials and provider error bodies.
+Physical request counts are measured at the HTTP fetch boundary; a local preflight failure records an endpoint
+attempt with zero HTTP requests.
+
+Before relying on the configured Groq backup, run `pnpm eval --backup` in the same secure environment.
+This runs the identical 20/12 acceptance set directly against `AI_FALLBACK_*`, with no primary and no
+further fallback. It requires a fully configured backup and writes a separate `*-backup.md`/`.json` pair.
+Backup-only runs never rewrite canonical replay files. Return both primary and backup reports, their
+JSON metrics and the primary run's replay files together. A failed or missing backup run means the
+backup is unverified; a passing primary does not validate it.
 
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
 
@@ -75,7 +90,7 @@ secret store. Record the source commit with `git rev-parse HEAD` so the report c
    replay coverage for the supported demo carts. Keep the report and both replay files from that passing
    run together. Running the demo recorder afterward requires another full evaluation before publishing.
 
-Return the dated `docs/evals/<date>.md`, `packages/ai/replay/j1-semantic-fit.json`,
+Return the report `docs/evals/<UTC timestamp>-<primary|backup>.md` with its matching `.json`, `packages/ai/replay/j1-semantic-fit.json`,
 `packages/ai/replay/j2-dispute-classification.json`, the source commit and the configured provider/model
 names. Include any changed prompt files. Verify these artifacts together, then quote the measured figures
-and link the dated report in the root README. The report, matching replay and README figures complete #43.
+and link that report in the root README. The report, matching replay and README figures complete #43.

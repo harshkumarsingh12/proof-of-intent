@@ -1,7 +1,13 @@
 import { classifyDispute, j2ReplayKey, type DisputeClassification } from "./dispute-jobs";
 import { J1_EVAL_CASES, J2_EVAL_CASES } from "./eval-cases";
 import { j1ReplayKey, semanticFit, type SemanticFit } from "./j1";
-import { isAiUnavailable, type Generate, type GenerateRequest, type ReplayFile } from "./runtime";
+import {
+  isAiUnavailable,
+  type Generate,
+  type GenerateRequest,
+  type ProviderAttempt,
+  type ReplayFile,
+} from "./runtime";
 
 interface CaseResult {
   job: "J1" | "J2";
@@ -13,14 +19,22 @@ interface CaseResult {
   guarded: boolean;
   attempts: number;
   elapsedMs: number;
+  providerAttempts: ProviderAttempt[];
 }
 
 async function observe<T>(generate: Generate, run: (instrumented: Generate) => Promise<T>) {
   let attempts = 0;
   let schemaValid = false;
+  const providerAttempts: ProviderAttempt[] = [];
   const instrumented: Generate = async <V>(request: GenerateRequest<V>) => {
     attempts++;
-    const result = await generate(request);
+    const result = await generate({
+      ...request,
+      onAttempt: (attempt) => {
+        providerAttempts.push(attempt);
+        request.onAttempt?.(attempt);
+      },
+    });
     schemaValid ||= request.schema.safeParse(result).success;
     return result;
   };
@@ -29,7 +43,13 @@ async function observe<T>(generate: Generate, run: (instrumented: Generate) => P
     if (!isAiUnavailable(error)) throw error;
     return undefined;
   });
-  return { result, schemaValid, attempts, elapsedMs: Math.round(performance.now() - start) };
+  return {
+    result,
+    schemaValid,
+    attempts,
+    providerAttempts,
+    elapsedMs: Math.round(performance.now() - start),
+  };
 }
 
 export async function evaluateJobs(generate: Generate) {

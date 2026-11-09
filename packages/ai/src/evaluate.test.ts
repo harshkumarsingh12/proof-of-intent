@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { DisputeClassification } from "./dispute-jobs";
 import { J1_EVAL_CASES, J2_EVAL_CASES } from "./eval-cases";
 import { evaluateJobs } from "./evaluate";
+import { evaluationReport } from "./eval-report";
 import type { Generate, GenerateRequest } from "./runtime";
 
 test("the golden sets have the milestone's labels and coverage", () => {
@@ -60,4 +61,74 @@ test("the harness counts retries, skips the local guard and rejects false approv
   // `grounding_version` to its result; an entry that kept it would be refused on every later replay read.
   for (const [key, entry] of Object.entries(result.j2Replay))
     expect(DisputeClassification.safeParse(entry.output).success, key).toBe(true);
+});
+
+test("reports actual backup attribution, logical retries and physical requests independently", async () => {
+  let first = true;
+  const model: Generate = async <T>(req: GenerateRequest<T>) => {
+    req.onAttempt?.({
+      provider: "nvidia",
+      model: "configured-primary",
+      role: "primary",
+      outcome: "error",
+      elapsedMs: 20,
+      httpRequests: 1,
+      failure: "http_429",
+    });
+    if (first) {
+      first = false;
+      req.onAttempt?.({
+        provider: "groq",
+        model: "backup",
+        role: "fallback",
+        outcome: "error",
+        elapsedMs: 30,
+        httpRequests: 1,
+        fallbackReason: "http_429",
+        failure: "http_503",
+      });
+      throw new Error("unavailable");
+    }
+    req.onAttempt?.({
+      provider: "groq",
+      model: "backup",
+      role: "fallback",
+      outcome: "success",
+      elapsedMs: 40,
+      httpRequests: 1,
+      fallbackReason: "http_429",
+    });
+    return req.schema.parse(
+      req.prompt.startsWith("<decision>")
+        ? {
+            class: J2_EVAL_CASES[0]!.input.decision.class,
+            recommended_action: J2_EVAL_CASES[0]!.input.decision.action,
+            confidence: 0.9,
+            reasons: [{ text: "Policy finding", cites: ["policy_evaluation"] }],
+            evidence_plan: [],
+          }
+        : {
+            fit: "partial",
+            confidence: 0.9,
+            reasons: [],
+            matched_attributes: [],
+            conflicting_attributes: [],
+          },
+    );
+  };
+  const result = await evaluateJobs(model);
+  expect(result.cases[0]).toMatchObject({ attempts: 2 });
+  expect(result.cases[0]!.providerAttempts).toHaveLength(4);
+  expect(result.cases.find((c) => c.guarded)!.providerAttempts).toEqual([]);
+  const report = evaluationReport(result, {
+    runId: "test",
+    sourceCommit: "abc",
+    profile: "primary",
+    endpoint: { provider: "nvidia", model: "configured-primary" },
+    prompts: ["j1-v1", "j2-v2"],
+  });
+  expect(report).toContain("| 2 | 4 | groq/backup |");
+  expect(report).toContain("fallback: http_429");
+  expect(report).toContain("local guard");
+  expect(report).not.toContain("| nvidia/configured-primary |");
 });

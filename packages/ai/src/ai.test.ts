@@ -131,6 +131,18 @@ describe("J1 semantic fit: live", () => {
     expect(generate).toHaveBeenCalledTimes(2);
   });
 
+  test("both J1 timeout attempts keep the 2 s endpoint budget and require a human decision", async () => {
+    const timeouts: number[] = [];
+    const generate: Generate = async (request) => {
+      timeouts.push(request.timeoutMs);
+      throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    };
+    await expect(semanticFit(words, compliantCart, "live", { generate })).rejects.toBeInstanceOf(
+      AiUnavailableError,
+    );
+    expect(timeouts).toEqual([2_000, 2_000]);
+  });
+
   test("a 'match' the model contradicts with its own conflicting attributes becomes partial", async () => {
     const { generate } = fakeModel(answer("match", 0.95, ["color: red vs grey"]));
     expect((await semanticFit(words, compliantCart, "live", { generate })).fit).toBe("partial");

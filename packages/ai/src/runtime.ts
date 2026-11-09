@@ -92,6 +92,29 @@ export interface GenerateRequest<T> {
   prompt: string;
   schema: z.ZodType<T>;
   timeoutMs: number;
+  /** Request-scoped telemetry. Never includes prompts, credentials, URLs or provider error bodies. */
+  onAttempt?: (attempt: ProviderAttempt) => void;
+}
+
+export interface ProviderAttempt {
+  provider: string;
+  model: string;
+  role: "primary" | "fallback";
+  outcome: "success" | "error";
+  elapsedMs: number;
+  /** HTTP fetches actually started; local preflight failures have zero. */
+  httpRequests: number;
+  failure?: string;
+  fallbackReason?: string;
+}
+
+/** A bounded diagnostic category, rather than a possibly sensitive provider error message. */
+export function failureCategory(error: unknown): string {
+  const status = (error as { statusCode?: number } | null)?.statusCode;
+  if (typeof status === "number") return `http_${status}`;
+  if (isModelUnavailableError(error)) return "model_unavailable";
+  if ((error as { name?: string } | null)?.name === "TimeoutError") return "timeout";
+  return isFailoverError(error) ? "connection_or_timeout" : "invalid_response_or_request";
 }
 
 /** One model call returning an object the schema accepted. Injected in tests; the AI SDK in production. */
@@ -226,36 +249,65 @@ export function isFailoverError(err: unknown): boolean {
 
 /** The Vercel AI SDK over OpenAI-compatible endpoints. Temperature 0, no SDK retries (we retry once ourselves). */
 export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Generate {
-  const host = (e: Endpoint) =>
+  const host = (e: Endpoint, requestSent: () => void) =>
     createOpenAICompatible({
       name: e.provider,
       baseURL: e.baseURL,
       apiKey: e.apiKey,
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+      fetch: async (input, init) => {
+        requestSent();
+        return (fetchImpl ?? fetch)(input, init);
+      },
     });
-  const primary = host(cfg);
-  const backup = cfg.fallback ? host(cfg.fallback) : undefined;
-  return async <T>({ system, prompt, schema, timeoutMs }: GenerateRequest<T>): Promise<T> => {
-    const call = async (provider: ReturnType<typeof host>, e: Endpoint) => {
-      const { object } = await generateObject({
-        model: provider.chatModel(e.model),
-        schema,
-        system,
-        prompt,
-        temperature: 0,
-        maxRetries: 0,
-        abortSignal: AbortSignal.timeout(timeoutMs),
-        providerOptions: providerOptionsFor(e.provider),
+  return async <T>({ system, prompt, schema, timeoutMs, onAttempt }: GenerateRequest<T>): Promise<T> => {
+    const call = async (e: Endpoint, role: ProviderAttempt["role"], fallbackReason?: string) => {
+      const start = performance.now();
+      let failure: string | undefined;
+      let httpRequests = 0;
+      const provider = host(e, () => {
+        httpRequests++;
       });
-      return object as T;
+      try {
+        const { object } = await generateObject({
+          model: provider.chatModel(e.model),
+          schema,
+          system,
+          prompt,
+          temperature: 0,
+          maxRetries: 0,
+          abortSignal: AbortSignal.timeout(timeoutMs),
+          providerOptions: providerOptionsFor(e.provider),
+        });
+        return object as T;
+      } catch (error) {
+        failure = failureCategory(error);
+        throw error;
+      } finally {
+        const attempt: ProviderAttempt = {
+          provider: e.provider,
+          model: e.model,
+          role,
+          outcome: failure ? "error" : "success",
+          elapsedMs: Math.round(performance.now() - start),
+          httpRequests,
+          ...(failure ? { failure } : {}),
+          ...(fallbackReason ? { fallbackReason } : {}),
+        };
+        // An optional observer must not turn a successful answer into another paid provider call.
+        try {
+          onAttempt?.(attempt);
+        } catch {
+          // Telemetry is advisory; callers must not use this hook for authorization or budget enforcement.
+        }
+      }
     };
     try {
-      return await call(primary, cfg);
+      return await call(cfg, "primary");
     } catch (err) {
       // Not sticky on purpose: if the primary comes back it is used again on the next call.
-      if (!cfg.fallback || !backup || !isFailoverError(err)) throw err;
+      if (!cfg.fallback || !isFailoverError(err)) throw err;
       try {
-        return await call(backup, cfg.fallback);
+        return await call(cfg.fallback, "fallback", failureCategory(err));
       } catch (backupErr) {
         const say = (e: unknown) => (e instanceof Error ? e.message : String(e));
         throw new Error(`${say(err)}; the backup (${cfg.fallback.provider}) also failed: ${say(backupErr)}`);
