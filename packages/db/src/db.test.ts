@@ -56,6 +56,7 @@ describe.runIf(ADMIN_URL)("db", () => {
       "0005_shared_vault_id.sql",
       "0006_reservations.sql",
       "0007_inbox_retries.sql",
+      "0008_ai_usage.sql",
     ]);
     expect(await db.migrate()).toEqual([]);
   });

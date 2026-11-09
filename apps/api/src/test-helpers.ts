@@ -59,6 +59,9 @@ export function memoryDb() {
   const db: Db = {
     ping: async () => {},
     claimNonce: async (n) => (nonces.has(n) ? false : (nonces.add(n), true)),
+    reserveAiCall: async () => {
+      throw new Error("Inject a test usage store; persistent AI limits require PostgreSQL");
+    },
     appendAudit: async (e) => void audit.push(e),
     // Row order stands in for time: ids and timestamps both increase with insertion.
     auditTrail: async (subjectId) =>
