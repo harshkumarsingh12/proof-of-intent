@@ -29,11 +29,25 @@ export function serverApiBaseUrl(): string {
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
   fetchFn?: typeof fetch;
+  limit?: number;
+  offset?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface DisputePagingInfo {
+  total?: number;
+  limit?: number;
+  offset?: number;
+  page?: number;
+  pageSize?: number;
+  hasMore?: boolean;
 }
 
 export interface FetchDisputesResponse {
   disputes: DisputeItem[];
   isFallback: boolean;
+  paging?: DisputePagingInfo;
 }
 
 /**
@@ -45,8 +59,16 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
+  const params = new URLSearchParams();
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
+  if (options?.offset !== undefined) params.set("offset", String(options.offset));
+  if (options?.page !== undefined) params.set("page", String(options.page));
+  if (options?.pageSize !== undefined) params.set("page_size", String(options.pageSize));
+  const qs = params.toString();
+  const url = `${baseUrl}/disputes${qs ? `?${qs}` : ""}`;
+
   try {
-    const res = await runner(`${baseUrl}/disputes`, {
+    const res = await runner(url, {
       method: "GET",
       headers: readHeaders(),
     });
@@ -56,8 +78,44 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
       if (Array.isArray(data)) {
         return { disputes: data as DisputeItem[], isFallback: false };
       }
-      if (data && Array.isArray((data as { disputes: DisputeItem[] }).disputes)) {
-        return { disputes: (data as { disputes: DisputeItem[] }).disputes, isFallback: false };
+      if (data && typeof data === "object") {
+        const payload = data as {
+          disputes?: DisputeItem[];
+          total?: number;
+          limit?: number;
+          offset?: number;
+          page?: number;
+          page_size?: number;
+          pageSize?: number;
+          hasMore?: boolean;
+          has_more?: boolean;
+        };
+        if (Array.isArray(payload.disputes)) {
+          const hasPaging =
+            payload.total !== undefined ||
+            payload.hasMore !== undefined ||
+            payload.has_more !== undefined ||
+            payload.limit !== undefined ||
+            payload.offset !== undefined;
+
+          const paging: DisputePagingInfo | undefined = hasPaging
+            ? {
+                total: payload.total,
+                limit: payload.limit,
+                offset: payload.offset,
+                page: payload.page,
+                pageSize: payload.pageSize ?? payload.page_size,
+                hasMore:
+                  payload.hasMore ??
+                  payload.has_more ??
+                  (payload.total !== undefined
+                    ? payload.total > (payload.offset ?? 0) + payload.disputes.length
+                    : undefined),
+              }
+            : undefined;
+
+          return { disputes: payload.disputes, isFallback: false, paging };
+        }
       }
     }
   } catch {

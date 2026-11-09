@@ -269,4 +269,79 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     expect(platforms.has("Errandly")).toBe(true);
     expect(platforms.has("Tote")).toBe(true);
   });
+
+  describe("pagination parameters and partial data indicator (issue #173)", () => {
+    it("passes limit and offset parameters to GET /disputes", async () => {
+      let calledUrl = "";
+      const mockFetch = (async (url: string) => {
+        calledUrl = url;
+        return {
+          ok: true,
+          json: async () => ({ disputes: [] }),
+        };
+      }) as unknown as typeof fetch;
+
+      await fetchDisputesDetailed({
+        apiBaseUrl: "http://example.test",
+        fetchFn: mockFetch,
+        limit: 25,
+        offset: 50,
+      });
+
+      expect(calledUrl).toBe("http://example.test/disputes?limit=25&offset=50");
+    });
+
+    it("parses paging metadata from API response when present and detects partial data", async () => {
+      const mockPagedFetch = (async () => ({
+        ok: true,
+        json: async () => ({
+          disputes: [{ id: "PP-D-1" }, { id: "PP-D-2" }],
+          total: 100,
+          limit: 2,
+          offset: 0,
+          hasMore: true,
+        }),
+      })) as unknown as typeof fetch;
+
+      const res = await fetchDisputesDetailed({
+        apiBaseUrl: "http://example.test",
+        fetchFn: mockPagedFetch,
+      });
+
+      expect(res.isFallback).toBe(false);
+      expect(res.disputes).toHaveLength(2);
+      expect(res.paging).toBeDefined();
+      expect(res.paging?.total).toBe(100);
+      expect(res.paging?.hasMore).toBe(true);
+
+      // Partial data condition holds
+      const isPartial = Boolean(
+        res.paging?.hasMore || (res.paging?.total !== undefined && res.paging.total > res.disputes.length)
+      );
+      expect(isPartial).toBe(true);
+    });
+
+    it("leaves paging undefined when API returns unpaged disputes payload (current API shape)", async () => {
+      const mockUnpagedFetch = (async () => ({
+        ok: true,
+        json: async () => ({
+          disputes: [{ id: "PP-D-1" }],
+        }),
+      })) as unknown as typeof fetch;
+
+      const res = await fetchDisputesDetailed({
+        apiBaseUrl: "http://example.test",
+        fetchFn: mockUnpagedFetch,
+      });
+
+      expect(res.isFallback).toBe(false);
+      expect(res.paging).toBeUndefined();
+
+      // Does not fake partial data when paging info is absent
+      const isPartial = Boolean(
+        res.paging?.hasMore || (res.paging?.total !== undefined && res.paging.total > res.disputes.length)
+      );
+      expect(isPartial).toBe(false);
+    });
+  });
 });
