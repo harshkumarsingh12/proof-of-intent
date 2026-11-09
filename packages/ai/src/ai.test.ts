@@ -16,7 +16,7 @@ import {
   type Generate,
 } from "./index";
 import { J1_CASES } from "./j1-cases";
-import { dataBlock, createGenerate, generateWithRetry } from "./runtime";
+import { dataBlock, createGenerate, generateWithRetry, createOperation } from "./runtime";
 
 const words = greyJacketIntent.natural_language_description;
 
@@ -105,18 +105,20 @@ describe("J1 semantic fit: replay", () => {
 });
 
 describe("J1 semantic fit: live", () => {
-  test("one overall deadline is shared across retries, including non-cooperative generators", async () => {
+  test("one overall deadline is shared across retries and rejects a late successful answer", async () => {
     let calls = 0;
+    let now = 0;
+    const operation = createOperation("J1", { timeoutMs: 50, clock: () => now });
     const ids: string[] = [];
     const generate: Generate = async (request) => {
       calls++;
       ids.push(request.operation!.id);
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      now += 30;
       if (calls === 1) throw new Error("first attempt failed");
       return request.schema.parse(answer("match", 0.9));
     };
     await expect(
-      generateWithRetry("J1", generate, { system: "s", prompt: "p", schema: SemanticFit, timeoutMs: 25 }),
+      generateWithRetry("J1", generate, { system: "s", prompt: "p", schema: SemanticFit, timeoutMs: 25, operation }),
     ).rejects.toBeInstanceOf(AiUnavailableError);
     expect(calls).toBe(2);
     expect(new Set(ids).size).toBe(1);
