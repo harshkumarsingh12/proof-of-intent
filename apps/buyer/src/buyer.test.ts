@@ -441,3 +441,30 @@ describe("agent paying alone", () => {
     expect((await paymentSentFor(false)).human_present).toBe(false);
   });
 });
+
+describe("shop page layout structure (issue #178)", () => {
+  test("shop starts with the shopper request and puts the signing key in an expandable details panel", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const shopFlowSource = await fs.readFile(
+      path.resolve(__dirname, "../app/shop/ShopFlow.tsx"),
+      "utf8",
+    );
+
+    // Section 1 is the shopper's limits request
+    const section1Idx = shopFlowSource.indexOf('id="limits"');
+    expect(section1Idx).toBeGreaterThan(0);
+    expect(shopFlowSource).toContain('<span className="num">1</span> Say what you want, then sign it');
+
+    // Signing key card is in an expandable details panel further down
+    const detailsIdx = shopFlowSource.indexOf('<details className="panel key-card"');
+    expect(detailsIdx).toBeGreaterThan(0);
+    // The details panel is placed after the request section
+    expect(detailsIdx).toBeGreaterThan(section1Idx);
+    expect(shopFlowSource).toContain("Your signing key &amp; PayPal wallet");
+
+    // The subsequent steps follow in order
+    const section2Idx = shopFlowSource.indexOf('<span className="num">2</span> The agent proposes a cart');
+    expect(section2Idx).toBeGreaterThan(detailsIdx);
+  });
+});
