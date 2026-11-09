@@ -215,7 +215,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
         evidencePlan: [
           "Compile signed intent mandate JWS",
           "Include cart mandate hash verification",
-          "Attach carrier shipment tracking confirmation",
+          "Attach carrier tracking if the merchant has it (none is recorded for this order)",
           "Generate attestation PDF",
         ],
       },
@@ -237,11 +237,11 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
           },
           {
             heading: "4. Fulfillment & Tracking",
-            body: "Carrier tracking confirms delivery to the mandate shipping address hash.",
+            body: "No carrier tracking is recorded for this order, so these records do not establish delivery.",
           },
         ],
         buyerMessage:
-          "Your order for the Stride Running Jacket was fulfilled according to your signed mandate (max $80, grey running jacket). Delivery was confirmed by carrier tracking.",
+          "Your order for the Stride Running Jacket matched the limits you signed (max $80, grey running jacket). We are reviewing your dispute using the purchase record.",
         attestationHash: "82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d",
         customId: "poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831",
         pdfFilename: "evidence-PP-D-1001.pdf",

@@ -87,7 +87,7 @@ const TEMPLATES: SeedDisputeTemplate[] = [
     reasons: [],
     agentPlatform: "Northstar",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
-    shopperNotes: "Tracking confirms delivery to mandate shipping address.",
+    shopperNotes: "No carrier tracking recorded yet; delivery is not established.",
     evidenceDrafted: true,
   },
   {
@@ -365,7 +365,7 @@ const TEMPLATES: SeedDisputeTemplate[] = [
     reasons: [],
     agentPlatform: "Northstar",
     buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
-    shopperNotes: "Delivery confirmed with signature.",
+    shopperNotes: "No signed delivery receipt recorded yet; delivery is not established.",
     evidenceDrafted: true,
   },
   {
