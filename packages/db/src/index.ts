@@ -187,7 +187,11 @@ export interface Db {
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
   /** Atomic physical AI-call reservation. UTC day comes from Postgres; lower caps persist through restarts. */
-  reserveAiCall(merchantId: string, limit: number): Promise<AiUsageReservation>;
+  reserveAiCall(
+    merchantId: string,
+    limit: number,
+    feature?: { name: string; limit: number },
+  ): Promise<AiUsageReservation>;
   appendAudit(entry: AuditEntry): Promise<void>;
   /** Every audit row for a subject, oldest first. The evidence timeline is built from these. */
   auditTrail(subjectId: string): Promise<AuditRecord[]>;
@@ -299,10 +303,18 @@ const MIGRATIONS_DIR = join(import.meta.dirname, "../migrations");
 /** Any fixed 64-bit key; serializes concurrent migrate() calls (api and worker start together). */
 const MIGRATION_LOCK = 7_007_001;
 
-export function createDb(databaseUrl: string, options: { maxConnections?: number; allowExitOnIdle?: boolean } = {}): Db {
+export function createDb(
+  databaseUrl: string,
+  options: { maxConnections?: number; allowExitOnIdle?: boolean } = {},
+): Db {
   const max = options.maxConnections ?? 10;
-  if (!Number.isSafeInteger(max) || max < 1) throw new TypeError("Database pool size must be a positive integer");
-  const pool = new pg.Pool({ connectionString: databaseUrl, max, allowExitOnIdle: options.allowExitOnIdle ?? false });
+  if (!Number.isSafeInteger(max) || max < 1)
+    throw new TypeError("Database pool size must be a positive integer");
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max,
+    allowExitOnIdle: options.allowExitOnIdle ?? false,
+  });
   // An idle connection can die under us (Postgres restart, failover, an admin terminating it). pg reports that
   // as an 'error' event on the pool, and with no listener Node treats it as uncaught and kills the process.
   // The pool already discards the dead client and opens a new one on the next query, so logging is enough.
@@ -322,11 +334,20 @@ export function createDb(databaseUrl: string, options: { maxConnections?: number
       return res.rowCount === 1;
     },
 
-    async reserveAiCall(merchantId, limit) {
+    async reserveAiCall(merchantId, limit, feature) {
       if (!merchantId.trim() || merchantId.length > 128)
         throw new TypeError("AI usage requires a non-empty merchant id of at most 128 characters");
       if (!Number.isSafeInteger(limit) || limit < 0)
         throw new TypeError("AI daily call limit must be a nonnegative safe integer");
+      if (
+        feature &&
+        (!/^[a-z][a-z0-9._-]{0,63}$/.test(feature.name) ||
+          !Number.isSafeInteger(feature.limit) ||
+          feature.limit < 0)
+      )
+        throw new TypeError(
+          "AI feature allowance requires a bounded name and nonnegative safe integer limit",
+        );
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
@@ -342,13 +363,37 @@ export function createDb(databaseUrl: string, options: { maxConnections?: number
            RETURNING utc_day::text`,
           [merchantId, limit],
         );
+        if (feature)
+          await client.query(
+            `INSERT INTO ai_feature_usage (merchant_id, utc_day, feature, daily_limit)
+           VALUES ($1, $2::date, $3, $4)
+           ON CONFLICT (merchant_id, utc_day, feature) DO UPDATE
+             SET daily_limit = LEAST(ai_feature_usage.daily_limit, EXCLUDED.daily_limit), updated_at = now()`,
+            [merchantId, row!.utc_day, feature.name, feature.limit],
+          );
         const taken = await client.query<{ used: string; daily_limit: string }>(
           `UPDATE ai_daily_usage SET used = used + 1, updated_at = now()
            WHERE merchant_id = $1 AND utc_day = $2::date AND used < daily_limit
            RETURNING used, daily_limit`,
           [merchantId, row!.utc_day],
         );
-        const allowed = taken.rowCount === 1;
+        let allowed = taken.rowCount === 1;
+        if (allowed && feature) {
+          const featureTaken = await client.query(
+            `UPDATE ai_feature_usage SET used = used + 1, updated_at = now()
+             WHERE merchant_id = $1 AND utc_day = $2::date AND feature = $3 AND used < daily_limit`,
+            [merchantId, row!.utc_day, feature.name],
+          );
+          if (featureTaken.rowCount !== 1) {
+            // The merchant/day lock keeps the provisional increment invisible until this transaction commits.
+            await client.query(
+              "UPDATE ai_daily_usage SET used = used - 1 WHERE merchant_id = $1 AND utc_day = $2::date",
+              [merchantId, row!.utc_day],
+            );
+            taken.rows.length = 0;
+            allowed = false;
+          }
+        }
         const counter =
           taken.rows[0] ??
           (

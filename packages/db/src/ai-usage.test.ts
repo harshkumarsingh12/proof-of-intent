@@ -103,4 +103,53 @@ describe.runIf(adminUrl)("persistent AI usage (spec 0011)", () => {
     await unavailable.close();
     await expect(unavailable.reserveAiCall("merchant-failure", 1)).rejects.toThrow();
   });
+  test("a chat sub-cap preserves checkout capacity across pools and restarts", async () => {
+    const other = createDb(url.toString());
+    const chat = { name: "buyer.chat", limit: 1 };
+    try {
+      const attempts = await Promise.all(
+        Array.from({ length: 12 }, (_, i) => (i % 2 ? db : other).reserveAiCall("merchant-chat", 3, chat)),
+      );
+      expect(attempts.filter((r) => r.allowed)).toHaveLength(1);
+      expect(attempts.every((r) => r.used === 1)).toBe(true);
+    } finally {
+      await other.close();
+    }
+    expect(await db.reserveAiCall("merchant-chat", 3, chat)).toMatchObject({ allowed: false, used: 1 });
+    expect(await db.reserveAiCall("merchant-chat", 3)).toMatchObject({ allowed: true, used: 2 });
+    expect(await db.reserveAiCall("merchant-chat", 3)).toMatchObject({ allowed: true, used: 3 });
+    expect(await db.reserveAiCall("merchant-chat", 3, { name: "other", limit: 10 })).toMatchObject({
+      allowed: false,
+      used: 3,
+    });
+    const rows = (
+      await raw.query(
+        "SELECT feature, used FROM ai_feature_usage WHERE merchant_id='merchant-chat' ORDER BY feature",
+      )
+    ).rows;
+    expect(rows.map((r) => [r.feature, Number(r.used)])).toEqual([
+      ["buyer.chat", 1],
+      ["other", 0],
+    ]);
+  });
+  test("lower feature caps persist, including when the global cap is already spent", async () => {
+    const chat = { name: "buyer.chat", limit: 5 };
+    await db.reserveAiCall("merchant-feature-lower", 1, chat);
+    expect(await db.reserveAiCall("merchant-feature-lower", 1, { ...chat, limit: 0 })).toMatchObject({
+      allowed: false,
+      used: 1,
+    });
+    const row = (
+      await raw.query(
+        "SELECT daily_limit, used FROM ai_feature_usage WHERE merchant_id='merchant-feature-lower'",
+      )
+    ).rows[0];
+    expect([Number(row.daily_limit), Number(row.used)]).toEqual([0, 1]);
+    await expect(
+      db.reserveAiCall("merchant-invalid-feature", 1, { name: "bad scope", limit: 1 }),
+    ).rejects.toThrow();
+    await expect(
+      db.reserveAiCall("merchant-invalid-feature", 1, { name: "buyer.chat", limit: 1.5 }),
+    ).rejects.toThrow();
+  });
 });
