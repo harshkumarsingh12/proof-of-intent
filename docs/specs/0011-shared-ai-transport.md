@@ -52,7 +52,7 @@ remain in the transport package. The persistent storage interface is implemented
 ```ts
 type AiUsageReservation = { allowed: boolean; used: number; limit: number };
 // The store derives UTC day from the database clock, not caller-supplied shopper text.
-reserveAiCall(merchantId: string, limit: number): Promise<AiUsageReservation>;
+reserveAiCall(merchantId: string, limit: number, feature?: { name: string; limit: number }): Promise<AiUsageReservation>;
 ```
 
 Add the next available database migration at implementation time. Table `ai_daily_usage` has primary key
@@ -72,6 +72,13 @@ the same configured limit. Each reservation also applies the stored day's lowest
 process with a higher value cannot increase that day's cap. Persist a lower limit even when no call is allowed.
 Raising a limit takes effect the next UTC day;
 lowering it takes effect immediately and never erases prior usage.
+
+Preserve buyer chat's smaller `BUYER_CHAT_DAILY_LIMIT` allowance (default 150, zero disables live chat).
+Persist it in `ai_feature_usage`, keyed by merchant, UTC day and server-owned feature name, with a cascading
+foreign key to the global day's counter. Reserve global and feature allowances in one transaction under the
+global merchant/day lock. Both must have capacity; a denied feature call consumes neither. Apply the same
+lowest-observed-cap rule even when the global cap is already exhausted. Chat's cap must survive restarts,
+and chat denials must leave remaining global capacity available for checkout.
 
 Transport events carry request-local operation id, logical retry index, physical attempt index, job, provider,
 model, primary/fallback role, bounded fallback/failure category, elapsed time and outcome. No prompts, signed
@@ -94,6 +101,8 @@ events and preserve actual model attribution introduced for #171. Observers cann
    without database or provider credentials and consume no calls.
 7. Build both Next.js apps to prove no transport, database or provider secret enters client bundles. Run lint,
    typecheck and the full suite against disposable PostgreSQL 16; request affected owners' review.
+8. Independent chat processes cannot exceed their persisted feature cap or the global cap. A chat cap of
+   zero makes no provider request and returns the labelled store-data answer, without consuming checkout capacity.
 
 ## Implementation handoff
 
