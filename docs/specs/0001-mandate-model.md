@@ -97,7 +97,8 @@ to the merchant's server: one JSON file per order, and a verifier that says whic
   by a merchant key the server no longer holds, or when a registered key is gone, rather than building a partial package. The
   Payment Mandate is found by the cart it committed to (`findPaymentMandateForCart`), the earliest one when the same cart was
   paid for again (#159). The dashboard offers the download on a live dispute's mandate card.
-- **Not in the package:** the shopper's approval countersignature (`CartApproval`), the audit log and the PayPal webhook events.
+- **Not in the package:** the shopper's approval countersignature (`CartApproval`), the audit log and the PayPal webhook events. A
+  next revision that signs the package with the merchant key, records the ledger and adds the approval is proposed in spec 0012.
 
 ## Acceptance criteria
 
