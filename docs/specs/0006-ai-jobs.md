@@ -75,16 +75,12 @@ thresholds, which turns "the model didn't answer" into "the shopper's cart is wr
 **Prompts:** `packages/ai/prompts/*.md` with front matter (`version`, `model`, `schema`). Each verdict records its
 prompt version in the audit log.
 
-**J1 latency decision (Nov 9, #168).** Retain the 2 s per-endpoint attempt budget and one logical retry;
-accept a shopper confirmation when neither attempt returns a trustworthy answer. The Nov 7 passing report's
-rain-shell case took 3,878 ms and tumbler case 3,595 ms across retries, so 2 s is not a total checkout latency
-promise. With no backup the model can consume roughly 4 s plus local overhead; a configured backup can add
-one endpoint call per logical attempt (roughly 8 s in the worst case). We do not increase these timeouts or
-rely on warm-up calls for correctness. `AiUnavailableError` maps to `STEP_UP`, never automatic capture.
-Reports retain case elapsed time, logical retries and individual provider attempt latency. A shared overall
-deadline and persistent physical-call accounting are separate work in #174. The existing measured figures
-remain historical evidence; changes to instrumentation do not constitute a new live model result.
-
+**J1 latency decision (Nov 9, #168/#174).** Retain the 2 s per-endpoint allowance and human confirmation on
+unavailability. The shared transport now caps the complete J1 operation at 4 s, including usage reservation,
+primary, fallback and retry. A backup does not get a fresh overall allowance. The Nov 7 rain-shell and tumbler
+measurements remain historical; instrumentation changes do not constitute a fresh live result. J2 has a 10 s
+overall deadline and J3/J4 20 s; J4's follow-up answer shares its original deadline. Persistent usage counts
+actual HTTP requests across processes and restarts (spec 0011), replacing per-process counters.
 **J2 and J3 as built.** The worker supplies named excerpts of the dispute and verified purchase facts. J2
 keeps the worker's deterministic class and action and stores cited reasons and evidence suggestions on the
 recommendation. J3 drafts the preview cover note and buyer message for verified compliant orders. Both drop

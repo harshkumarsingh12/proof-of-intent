@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { checkEndpoint } from "./check";
+import { checkEndpoint as checkedEndpoint } from "./check";
 import {
-  createGenerate,
+  createGenerate as liveGenerate,
   fallbackFromEnv,
   isFailoverError,
   isModelUnavailableError,
@@ -13,6 +13,13 @@ import {
   type ProviderAttempt,
 } from "./runtime";
 
+// Explicit test storage: production factories never fall back to an in-memory cap.
+const testUsage = {
+  reserve: async (_merchant: string, limit: number) => ({ allowed: limit > 0, used: 1, limit }),
+};
+const createGenerate = (cfg: LiveConfig, fetchImpl?: typeof fetch) =>
+  liveGenerate(cfg, fetchImpl, { usage: testUsage });
+const checkEndpoint = (cfg: Endpoint, fetchImpl?: typeof fetch) => checkedEndpoint(cfg, fetchImpl, testUsage);
 const env = (over: Record<string, string>) =>
   ({ AI_MODEL: "m-1", AI_API_KEY: "key", ...over }) as NodeJS.ProcessEnv;
 
@@ -319,6 +326,10 @@ describe("the request that reaches the provider", () => {
         outcome: "error",
         failure: "http_429",
         elapsedMs: expect.any(Number),
+        operationId: expect.any(String),
+        job: "structured",
+        retryIndex: 0,
+        attemptIndex: 1,
         httpRequests: 1,
       },
       {
@@ -328,6 +339,10 @@ describe("the request that reaches the provider", () => {
         outcome: "success",
         fallbackReason: "http_429",
         elapsedMs: expect.any(Number),
+        operationId: expect.any(String),
+        job: "structured",
+        retryIndex: 0,
+        attemptIndex: 2,
         httpRequests: 1,
       },
     ]);

@@ -13,6 +13,11 @@
   `AI_API_KEY` through the Vercel AI SDK (thinking off for nemotron, temperature 0, one retry).
 - No trustworthy answer throws `AiUnavailableError`; check with `isAiUnavailable(err)`, which also covers the
   stubs. Callers hand the decision to a person.
+- Live J1/J2/J3/J4 and provider checks use `@poi/ai-transport`, with persisted per-merchant physical-call
+  reservations. Live mode needs `DATABASE_URL` and migration 0008. Run the database migrations before live
+  evaluation/recording commands. Replay and deterministic Studio answers need no provider or usage reservation.
+  Job deadlines include primary, fallback and retry: J1 4 s, J2 10 s, J3/J4 20 s. J4's follow-up text uses the
+  same operation deadline. Endpoint timeouts still bound individual calls.
 - `GenerateRequest.onAttempt` receives request-scoped physical provider/model attempts, outcomes, elapsed
   time and bounded failure/fallback categories. It excludes prompts and provider error bodies. Evaluations
   use this to attribute answers to the actual model; see [primary and backup evaluation steps](../../docs/evals/README.md).

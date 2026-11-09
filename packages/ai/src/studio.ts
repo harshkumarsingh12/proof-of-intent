@@ -3,6 +3,7 @@ import {
   AiUnavailableError,
   dataBlock,
   generateFromEnv,
+  createOperation,
   generateWithRetry,
   readReplay,
   redact,
@@ -193,6 +194,7 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
     redact(turn.instructions),
   ].join("\n");
   const model = generate ?? generateFromEnv("J4");
+  const operation = createOperation("J4", { timeoutMs: 20_000, endpointTimeoutMs: 10_000 });
   const ask = (extraSystem?: string, tools = turn.tools) =>
     generateWithRetry("J4", model, {
       system: extraSystem ? `${system}\n${extraSystem}` : system,
@@ -205,6 +207,7 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
       schema: StudioAnswer,
       // Spec 0006 gives J4 10 s. Summarising a long tool result (24 disputes) took longer than the 5 s that was here.
       timeoutMs: 10_000,
+      operation,
     });
   const askText = (extraSystem: string) =>
     generateWithRetry("J4", model, {
@@ -216,6 +219,7 @@ export async function runStudioTurn(turn: StudioTurn, mode: AiMode, generate?: G
       }),
       schema: textOnly,
       timeoutMs: 10_000,
+      operation,
     });
   let answer = await ask();
   const { toolChoice } = turn;

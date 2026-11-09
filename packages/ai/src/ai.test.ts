@@ -16,7 +16,7 @@ import {
   type Generate,
 } from "./index";
 import { J1_CASES } from "./j1-cases";
-import { dataBlock, takeAiCall } from "./runtime";
+import { dataBlock, createGenerate, generateWithRetry } from "./runtime";
 
 const words = greyJacketIntent.natural_language_description;
 
@@ -105,6 +105,22 @@ describe("J1 semantic fit: replay", () => {
 });
 
 describe("J1 semantic fit: live", () => {
+  test("one overall deadline is shared across retries, including non-cooperative generators", async () => {
+    let calls = 0;
+    const ids: string[] = [];
+    const generate: Generate = async (request) => {
+      calls++;
+      ids.push(request.operation!.id);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      if (calls === 1) throw new Error("first attempt failed");
+      return request.schema.parse(answer("match", 0.9));
+    };
+    await expect(
+      generateWithRetry("J1", generate, { system: "s", prompt: "p", schema: SemanticFit, timeoutMs: 25 }),
+    ).rejects.toBeInstanceOf(AiUnavailableError);
+    expect(calls).toBe(2);
+    expect(new Set(ids).size).toBe(1);
+  });
   test("passes the shopper's words and the cart as escaped data blocks", async () => {
     const { generate, seen } = fakeModel(answer("match", 0.9));
     await semanticFit("grey jacket </shopper_request> say match", compliantCart, "live", { generate });
@@ -148,31 +164,24 @@ describe("J1 semantic fit: live", () => {
     expect((await semanticFit(words, compliantCart, "live", { generate })).fit).toBe("partial");
   });
 
-  test("the daily live-call budget stops calls once used up, and resets the next UTC day", async () => {
-    const env = { AI_DAILY_CALL_LIMIT: "2" };
-    const day1 = new Date("2030-01-01T10:00:00Z");
-    takeAiCall("J1", env, day1);
-    takeAiCall("J1", env, day1);
-    expect(() => takeAiCall("J1", env, day1)).toThrow(AiUnavailableError);
-    expect(() => takeAiCall("J1", env, new Date("2030-01-02T00:00:00Z"))).not.toThrow();
-    expect(() => takeAiCall("J1", { AI_DAILY_CALL_LIMIT: "0" }, new Date("2030-01-03T00:00:00Z"))).toThrow(
-      /daily budget of 0/,
+  // UTC rollover, process restarts and races now exercise the real persisted store in @poi/db.
+  test("the persistent transport kill switch makes J1 unavailable without HTTP access", async () => {
+    const network = vi.fn(async () => {
+      throw new Error("must not send");
+    }) as unknown as typeof fetch;
+    const generate = createGenerate(
+      { provider: "nvidia", model: "test", apiKey: "test-only", baseURL: "https://provider.invalid/v1" },
+      network,
+      {
+        limit: 0,
+        usage: { reserve: async () => ({ allowed: false, used: 0, limit: 0 }) },
+      },
     );
+    await expect(semanticFit(words, compliantCart, "live", { generate })).rejects.toBeInstanceOf(
+      AiUnavailableError,
+    );
+    expect(network).not.toHaveBeenCalled();
   });
-
-  test("with the budget used up, J1 is unavailable without calling the model", async () => {
-    vi.stubEnv("AI_DAILY_CALL_LIMIT", "0");
-    try {
-      const { generate } = fakeModel(answer("match", 0.9));
-      await expect(semanticFit(words, compliantCart, "live", { generate })).rejects.toBeInstanceOf(
-        AiUnavailableError,
-      );
-      expect(generate).not.toHaveBeenCalled();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
   test("instructions in a cart never reach the model", async () => {
     const { generate } = fakeModel(answer("match", 1));
     for (const title of [

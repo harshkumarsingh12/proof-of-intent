@@ -3,7 +3,13 @@
  * the Studio chat all use one) and a tool call (the buyer agent's search and checkout tools). It talks to one endpoint at
  * a time, never the backup logic, so a working primary can't hide a broken backup. Keys are never printed.
  */
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+  createOperation,
+  createTransportModel,
+  dailyCallLimit,
+  usageStoreFromEnv,
+  type UsageStore,
+} from "@poi/ai-transport";
 import { generateObject, generateText, tool } from "ai";
 import { z } from "zod";
 import { providerOptionsFor, type Endpoint } from "./runtime";
@@ -41,14 +47,18 @@ async function timed(run: () => Promise<string>): Promise<CheckStep> {
   }
 }
 
-export async function checkEndpoint(e: Endpoint, fetchImpl?: typeof fetch): Promise<CheckResult> {
-  const host = createOpenAICompatible({
-    name: e.provider,
-    baseURL: e.baseURL,
-    apiKey: e.apiKey,
-    ...(fetchImpl ? { fetch: fetchImpl } : {}),
+export async function checkEndpoint(
+  e: Endpoint,
+  fetchImpl?: typeof fetch,
+  usage?: UsageStore,
+): Promise<CheckResult> {
+  const operation = createOperation("ai:check", { timeoutMs: 90_000, endpointTimeoutMs: TIMEOUT_MS });
+  const model = createTransportModel(e, operation, {
+    usage: usage ?? usageStoreFromEnv(),
+    merchantId: process.env.MERCHANT_ID ?? "merchant-trailhead",
+    limit: dailyCallLimit(),
+    fetch: fetchImpl,
   });
-  const model = host.chatModel(e.model);
   const providerOptions = providerOptionsFor(e.provider);
 
   const structured = await timed(async () => {

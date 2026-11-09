@@ -221,9 +221,9 @@ importers:
 
   packages/ai:
     dependencies:
-      '@ai-sdk/openai-compatible':
-        specifier: 0.2.16
-        version: 0.2.16(zod@3.25.76)
+      '@poi/ai-transport':
+        specifier: workspace:*
+        version: link:../ai-transport
       '@poi/contracts':
         specifier: workspace:*
         version: link:../contracts

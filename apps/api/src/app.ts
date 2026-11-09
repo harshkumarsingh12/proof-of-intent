@@ -4,7 +4,7 @@
  */
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
-import { parseAiMode, semanticFit, type AiMode } from "@poi/ai";
+import { parseAiMode, semanticFit, validateLiveEnvironment, type AiMode } from "@poi/ai";
 import { createDb, type Db } from "@poi/db";
 import { generateSigningKeyPair } from "@poi/mandates";
 import { createPayPalClient, parseMode, type PayPalClient } from "@poi/paypal";
@@ -71,6 +71,8 @@ async function databaseAnswers(db: Db, timeoutMs: number, log: (reason: string) 
  */
 export async function depsFromEnv(env = process.env): Promise<AppDeps> {
   const paypalMode = parseMode(env.PAYPAL_MODE);
+  const aiMode = parseAiMode(env.AI_MODE);
+  if (aiMode === "live") validateLiveEnvironment(env);
   const buyer = buyerBaseFromEnv(env);
   if (paypalMode === "sandbox" && buyer.defaulted) {
     // PayPal sends a shopper back here after they approve a wallet, and step-up links open here too.
@@ -83,7 +85,7 @@ export async function depsFromEnv(env = process.env): Promise<AppDeps> {
     paypal: createPayPalClient(paypalMode),
     db: env.DATABASE_URL ? createDb(env.DATABASE_URL) : undefined,
     merchant: await merchantFromEnv(env, paypalMode === "sandbox"),
-    aiMode: parseAiMode(env.AI_MODE),
+    aiMode,
     operatorToken: env.OPERATOR_TOKEN || undefined,
     stepUp: { linkBase: buyer.url },
   };

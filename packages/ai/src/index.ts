@@ -14,6 +14,7 @@ export {
   liveConfigFromEnv,
   parseAiMode,
   providerOptionsFor,
+  validateLiveEnvironment,
   redact,
   type AiMode,
   type Generate,

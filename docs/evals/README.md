@@ -1,5 +1,9 @@
 # Evals
 
+After #174, live evaluations and recorders also require a disposable `DATABASE_URL` with migration 0008
+applied (`pnpm --filter @poi/db migrate`). All physical model requests share the persistent merchant/day cap,
+including fallback and diagnostic checks. Replay needs neither live credentials nor usage reservations.
+
 Run `pnpm eval` with `AI_MODEL` and `AI_API_KEY` in the environment. Set `AI_PROVIDER` for a provider other than
 NVIDIA and `AI_BASE_URL` for a custom OpenAI-compatible endpoint. With a local `.env`, the equivalent command
 is `pnpm exec tsx --env-file=.env scripts/ai/eval.ts`.

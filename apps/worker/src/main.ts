@@ -1,4 +1,4 @@
-import { parseAiMode } from "@poi/ai";
+import { parseAiMode, validateLiveEnvironment } from "@poi/ai";
 import { createDb } from "@poi/db";
 import { createPayPalClient, parseMode } from "@poi/paypal";
 import { beat } from "./heartbeat";
@@ -9,6 +9,7 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("the worker needs DATABASE_URL (its inbox is the webhook_events table)");
 const db = createDb(url);
 const aiMode = parseAiMode(process.env.AI_MODE);
+if (aiMode === "live") validateLiveEnvironment();
 const paypal = createPayPalClient(parseMode(process.env.PAYPAL_MODE));
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 5000);
 /** list_disputes catch-up, for webhooks PayPal never delivered. */
