@@ -15,11 +15,13 @@ async function scenario(run: (s: Awaited<ReturnType<typeof setup>>) => Promise<v
   const name = `poi_eval_${randomUUID().replace(/-/g, "")}`;
   const url = new URL(process.env.DATABASE_URL!);
   const admin = new pg.Client({ connectionString: url.toString() });
+  admin.on("error", (e) => console.log(`DIAG admin client error: ${(e as { code?: string }).code} ${e.message}`));
   await admin.connect();
   await admin.query(`CREATE DATABASE ${name}`);
   url.pathname = `/${name}`;
   const db = createDb(url.toString());
   const raw = new pg.Pool({ connectionString: url.toString() });
+  raw.on("error", (e) => console.log(`DIAG raw pool error: ${(e as { code?: string }).code} ${e.message}`));
   let s: Awaited<ReturnType<typeof setup>> | undefined;
   try {
     s = await setup(db, raw, url.toString());
