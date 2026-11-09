@@ -742,7 +742,7 @@ export function DisputeDetailView({
                   }}
                 >
                   {conceded
-                    ? "✓ Claim accepted, refund issued"
+                    ? "✓ Claim accepted; refund not yet confirmed by PayPal"
                     : conceding
                       ? "Accepting claim..."
                       : `Accept claim & refund (${formatMoney(dispute.amount)})`}
@@ -815,9 +815,9 @@ export function DisputeDetailView({
                 }}
               >
                 {conceded
-                  ? "✓ Claim conceded and refund issued"
+                  ? "✓ Claim accepted; refund not yet confirmed by PayPal"
                   : conceding
-                    ? "Issuing refund..."
+                    ? "Accepting claim..."
                     : `Accept Claim & Refund (${formatMoney(dispute.amount)})`}
               </button>
             </div>

@@ -39,3 +39,30 @@ test("confidence is independent of record availability and is never described as
   for (const absent of [null, undefined, NaN, Infinity, -1, 2])
     expect(confidenceDescription(absent)).toContain("unavailable");
 });
+
+// #170: nothing the dashboard shows as evidence, a buyer reply or a shopper note may assert delivery, cardholder
+// authorization or a completed refund that the records don't establish.
+test("no sample dispute asserts delivery, authorization or a refund the records don't establish (#170)", async () => {
+  const { SEED_DISPUTES } = await import("./seed-disputes");
+  const unsupported = [
+    /deliver(y|ed)\s+(was\s+)?confirmed/i,
+    /confirms?\s+delivery/i,
+    /authori[sz]ed\s+by\s+the\s+cardholder/i,
+    /refund\s+(was\s+)?(issued|completed)/i,
+  ];
+  for (const { id } of SEED_DISPUTES) {
+    const d = getDisputeDetail(id)!;
+    const shown = [
+      d.shopperNotes ?? "",
+      d.evidenceDraftInfo?.coverNote ?? "",
+      d.evidenceDraftInfo?.buyerMessage ?? "",
+      ...(d.evidenceDraftInfo?.attestationSections ?? []).map((s) => s.body),
+      ...d.classificationInfo.reasons.map((r) => r.text),
+      ...d.classificationInfo.evidencePlan,
+    ].join("\n");
+    for (const re of unsupported) {
+      if (re.source.includes("deliver") && d.deliveryEvidence === "CONFIRMED") continue;
+      expect(shown, `${id}: ${re}`).not.toMatch(re);
+    }
+  }
+});
