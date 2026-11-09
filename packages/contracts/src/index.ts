@@ -267,6 +267,13 @@ export type StepUpApproveResponse = z.infer<typeof StepUpApproveResponse>;
 export const DisputeClass = z.enum(["MANDATE_COMPLIANT", "AGENT_OVERREACH", "INTENT_MISREAD", "NO_MANDATE"]);
 export type DisputeClass = z.infer<typeof DisputeClass>;
 
+/** Server-side AI usage reservation, shared by the database and transport (spec 0011). */
+export interface AiUsageReservation {
+  allowed: boolean;
+  used: number;
+  limit: number;
+}
+
 /** Thrown by stubs so a half-built path fails loudly and says who to ask. */
 export class NotImplementedError extends Error {
   constructor(what: string, owner: string, spec: string) {

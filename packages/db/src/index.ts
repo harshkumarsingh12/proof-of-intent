@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
+import type { AiUsageReservation } from "@poi/contracts";
 
 export interface AuditEntry {
   actor: string;
@@ -185,6 +186,8 @@ export interface Db {
   ping(): Promise<void>;
   /** Inserts the nonce; returns false if it was already used. */
   claimNonce(nonce: string): Promise<boolean>;
+  /** Atomic physical AI-call reservation. UTC day comes from Postgres; lower caps persist through restarts. */
+  reserveAiCall(merchantId: string, limit: number): Promise<AiUsageReservation>;
   appendAudit(entry: AuditEntry): Promise<void>;
   /** Every audit row for a subject, oldest first. The evidence timeline is built from these. */
   auditTrail(subjectId: string): Promise<AuditRecord[]>;
@@ -296,8 +299,10 @@ const MIGRATIONS_DIR = join(import.meta.dirname, "../migrations");
 /** Any fixed 64-bit key; serializes concurrent migrate() calls (api and worker start together). */
 const MIGRATION_LOCK = 7_007_001;
 
-export function createDb(databaseUrl: string): Db {
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
+export function createDb(databaseUrl: string, options: { maxConnections?: number; allowExitOnIdle?: boolean } = {}): Db {
+  const max = options.maxConnections ?? 10;
+  if (!Number.isSafeInteger(max) || max < 1) throw new TypeError("Database pool size must be a positive integer");
+  const pool = new pg.Pool({ connectionString: databaseUrl, max, allowExitOnIdle: options.allowExitOnIdle ?? false });
   // An idle connection can die under us (Postgres restart, failover, an admin terminating it). pg reports that
   // as an 'error' event on the pool, and with no listener Node treats it as uncaught and kills the process.
   // The pool already discards the dead client and opens a new one on the next query, so logging is enough.
@@ -315,6 +320,54 @@ export function createDb(databaseUrl: string): Db {
         nonce,
       ]);
       return res.rowCount === 1;
+    },
+
+    async reserveAiCall(merchantId, limit) {
+      if (!merchantId.trim() || merchantId.length > 128)
+        throw new TypeError("AI usage requires a non-empty merchant id of at most 128 characters");
+      if (!Number.isSafeInteger(limit) || limit < 0)
+        throw new TypeError("AI daily call limit must be a nonnegative safe integer");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SET LOCAL statement_timeout = '2000ms'");
+        // The upsert locks this merchant/day until commit, including when a lower limit denies the call.
+        const {
+          rows: [row],
+        } = await client.query<{ utc_day: string }>(
+          `INSERT INTO ai_daily_usage (merchant_id, utc_day, daily_limit)
+           VALUES ($1, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date, $2)
+           ON CONFLICT (merchant_id, utc_day) DO UPDATE
+             SET daily_limit = LEAST(ai_daily_usage.daily_limit, EXCLUDED.daily_limit), updated_at = now()
+           RETURNING utc_day::text`,
+          [merchantId, limit],
+        );
+        const taken = await client.query<{ used: string; daily_limit: string }>(
+          `UPDATE ai_daily_usage SET used = used + 1, updated_at = now()
+           WHERE merchant_id = $1 AND utc_day = $2::date AND used < daily_limit
+           RETURNING used, daily_limit`,
+          [merchantId, row!.utc_day],
+        );
+        const allowed = taken.rowCount === 1;
+        const counter =
+          taken.rows[0] ??
+          (
+            await client.query<{ used: string; daily_limit: string }>(
+              "SELECT used, daily_limit FROM ai_daily_usage WHERE merchant_id = $1 AND utc_day = $2::date",
+              [merchantId, row!.utc_day],
+            )
+          ).rows[0]!;
+        await client.query(
+          "DELETE FROM ai_daily_usage WHERE utc_day < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - 7",
+        );
+        await client.query("COMMIT");
+        return { allowed, used: Number(counter.used), limit: Number(counter.daily_limit) };
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
     },
 
     async appendAudit(entry) {

@@ -4,6 +4,13 @@
 
 Postgres schema, migrations and the append-only audit log. Driver: `pg`.
 
+`reserveAiCall(merchantId, limit)` ([spec 0011](../../docs/specs/0011-shared-ai-transport.md)) reserves one
+physical AI call in PostgreSQL. Migration 0008 adds the merchant/UTC-day counters. A capped update inside a
+row-locked transaction handles independent processes; a lower observed limit persists even when a call is
+denied. Zero disables calls, failed calls retain their reservation, restarts do not reset usage and prior days
+do not consume today's allowance. Old counters are pruned after seven days. Database/configuration errors
+reject rather than granting capacity. Live callers must await a reservation before network access.
+
 ```ts
 import { createDb } from "@poi/db";
 
