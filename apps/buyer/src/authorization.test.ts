@@ -68,6 +68,20 @@ describe("authorization card (#176): what the signed intent allows", () => {
     expect(card(orders).Spending).toBe("At most $80 per purchase");
   });
 
+  test("a budget and an order count signed together are both shown, as the policy engine enforces both", () => {
+    const base = intentFor();
+    const both = {
+      ...base,
+      constraints: {
+        ...base.constraints,
+        budget_cap: { value: 20000, currency: "USD" },
+        recurrence: { max_orders: 2, window_days: 7 },
+      },
+    };
+    expect(card(both).Purchases).toBe("Up to 2 every 7 days, within the budget");
+    expect(card(both).Spending).toBe("Up to $200 in total, at most $80 per purchase");
+  });
+
   test("paying alone names the one agent platform it was signed for", () => {
     const alone = card(intentFor({ payAlone: true }, "ShopBot"));
     expect(alone.Agent).toBe("Only ShopBot may pay without you");

@@ -34,10 +34,12 @@ export function authorizationRows(
     },
     {
       label: "Purchases",
-      value: budget_cap
-        ? "As many as fit the budget"
-        : recurrence
-          ? `Up to ${recurrence.max_orders} every ${recurrence.window_days} days`
+      // The policy engine enforces both limits when both are signed, so the row names both: "as many as fit" alone would
+      // promise more orders than a signed recurrence allows.
+      value: recurrence
+        ? `Up to ${recurrence.max_orders} every ${recurrence.window_days} days${budget_cap ? ", within the budget" : ""}`
+        : budget_cap
+          ? "As many as fit the budget"
           : "One",
     },
     {
