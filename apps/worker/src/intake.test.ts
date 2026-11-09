@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { AuditEntry } from "@poi/db";
 import {
   consumeVerifiedDisputeEvents,
+  DEFAULT_MAX_DISPUTE_PAGES,
+  fetchAllDisputePages,
   InMemoryDisputeJobStore,
   intakeDisputeEvent,
+  type DisputeCatchUpClient,
   type DisputeWebhookEvent,
 } from "./intake";
 import { JOBS } from "./pipeline";
@@ -147,5 +150,86 @@ describe("dispute intake", () => {
       resource: {},
     };
     await expect(intakeDisputeEvent(noDisputeId, { db, jobStore })).rejects.toThrow("no dispute id");
+  });
+});
+
+describe("dispute catch-up pagination (issue #173)", () => {
+  it("follows next-page links across multiple pages until all disputes are read", async () => {
+    const pages: Record<string, { items: Array<{ dispute_id: string }>; links?: Array<{ href: string; rel: string }> }> = {
+      initial: {
+        items: [{ dispute_id: "PP-D-1" }, { dispute_id: "PP-D-2" }],
+        links: [{ href: "https://api.sandbox.paypal.com/v1/customer/disputes?page=2", rel: "next" }],
+      },
+      "https://api.sandbox.paypal.com/v1/customer/disputes?page=2": {
+        items: [{ dispute_id: "PP-D-3" }],
+        links: [{ href: "https://api.sandbox.paypal.com/v1/customer/disputes?page=3", rel: "next" }],
+      },
+      "https://api.sandbox.paypal.com/v1/customer/disputes?page=3": {
+        items: [{ dispute_id: "PP-D-4" }, { dispute_id: "PP-D-5" }],
+      },
+    };
+
+    const mockClient: DisputeCatchUpClient = {
+      listDisputes: async (options) => {
+        const key = options?.nextUrl ?? "initial";
+        return pages[key] ?? { items: [] };
+      },
+    };
+
+    const result = await fetchAllDisputePages(mockClient);
+    expect(result.items.map((d) => d.dispute_id)).toEqual([
+      "PP-D-1",
+      "PP-D-2",
+      "PP-D-3",
+      "PP-D-4",
+      "PP-D-5",
+    ]);
+    expect(result.pagesRead).toBe(3);
+    expect(result.hitMaxPages).toBe(false);
+  });
+
+  it("stops at maxPages safety limit and logs when hit", async () => {
+    const logs: string[] = [];
+    const infiniteClient: DisputeCatchUpClient = {
+      listDisputes: async (options) => ({
+        items: [{ dispute_id: `PP-D-PAGE-${options?.page ?? 1}` }],
+        links: [{ href: `https://api.paypal.test/disputes?page=${(options?.page ?? 1) + 1}`, rel: "next" }],
+      }),
+    };
+
+    const result = await fetchAllDisputePages(infiniteClient, {
+      maxPages: 3,
+      log: (msg) => logs.push(msg),
+    });
+
+    expect(result.pagesRead).toBe(3);
+    expect(result.hitMaxPages).toBe(true);
+    expect(result.items).toHaveLength(3);
+    expect(logs.some((l) => l.includes("safety limit of 3 pages"))).toBe(true);
+  });
+
+  it("handles single-page responses without next link", async () => {
+    const client: DisputeCatchUpClient = {
+      listDisputes: async () => ({
+        items: [{ dispute_id: "PP-D-SINGLE" }],
+      }),
+    };
+
+    const result = await fetchAllDisputePages(client);
+    expect(result.items).toHaveLength(1);
+    expect(result.pagesRead).toBe(1);
+    expect(result.hitMaxPages).toBe(false);
+  });
+
+  it("handles legacy plain array responses", async () => {
+    const client: DisputeCatchUpClient = {
+      listDisputes: async () => [{ dispute_id: "PP-D-LEGACY" }],
+    };
+
+    const result = await fetchAllDisputePages(client);
+    expect(result.items).toHaveLength(1);
+    expect(result.pagesRead).toBe(1);
+    expect(result.hitMaxPages).toBe(false);
+    expect(DEFAULT_MAX_DISPUTE_PAGES).toBe(10);
   });
 });

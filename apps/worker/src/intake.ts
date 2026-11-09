@@ -199,3 +199,69 @@ export async function consumeVerifiedDisputeEvents(
   }
   return results;
 }
+
+export const DEFAULT_MAX_DISPUTE_PAGES = 10;
+
+export interface DisputeItemRef {
+  dispute_id: string;
+  update_time?: string;
+  status?: string;
+}
+
+export interface PagedDisputesPayload {
+  items?: DisputeItemRef[];
+  links?: Array<{ href: string; rel: string; method?: string }>;
+}
+
+export interface DisputeCatchUpClient {
+  listDisputes(options?: { nextUrl?: string; page?: number }): Promise<
+    DisputeItemRef[] | PagedDisputesPayload
+  >;
+}
+
+export interface FetchDisputePagesResult {
+  items: DisputeItemRef[];
+  pagesRead: number;
+  hitMaxPages: boolean;
+}
+
+/**
+ * Follows next-page links until all pages of disputes are read,
+ * capped by a sensible safety limit to prevent infinite loops.
+ */
+export async function fetchAllDisputePages(
+  client: DisputeCatchUpClient,
+  options?: {
+    maxPages?: number;
+    log?: (msg: string) => void;
+  },
+): Promise<FetchDisputePagesResult> {
+  const maxPages = options?.maxPages ?? DEFAULT_MAX_DISPUTE_PAGES;
+  const log = options?.log ?? ((msg: string) => console.warn(msg));
+  const items: DisputeItemRef[] = [];
+  let nextUrl: string | undefined;
+  let pageCount = 0;
+  let hitMaxPages = false;
+
+  do {
+    pageCount++;
+    const res = await client.listDisputes(nextUrl ? { nextUrl, page: pageCount } : undefined);
+    const pageItems = Array.isArray(res) ? res : res.items ?? [];
+    items.push(...pageItems);
+
+    if (!Array.isArray(res) && res.links) {
+      const nextLink = res.links.find((l) => l.rel === "next");
+      nextUrl = nextLink?.href;
+    } else {
+      nextUrl = undefined;
+    }
+
+    if (nextUrl && pageCount >= maxPages) {
+      hitMaxPages = true;
+      log(`dispute catch-up hit safety limit of ${maxPages} pages; stopping pagination`);
+      break;
+    }
+  } while (nextUrl);
+
+  return { items, pagesRead: pageCount, hitMaxPages };
+}

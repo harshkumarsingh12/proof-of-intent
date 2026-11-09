@@ -15,6 +15,7 @@ import { fromPayPalAmount, PayPalError, type PayPalClient, type PayPalDispute } 
 import { importJWK, type JWK } from "jose";
 import { disputeFacts, runDisputeClassifier, type DisputeRecord, type OrderRecord } from "./classifier";
 import { buildConstraintChecks, draftEvidenceForDefend, type EvidencePackageResult } from "./evidence";
+import { fetchAllDisputePages } from "./intake";
 import { logger } from "./logger";
 
 export interface InboxDeps {
@@ -79,7 +80,11 @@ export async function syncDisputes(deps: InboxDeps): Promise<number> {
   if (!deps.paypal) return 0;
   const log = deps.log ?? ((msg: string) => logger.warn(msg));
   let handled = 0;
-  for (const item of await deps.paypal.listDisputes()) {
+  const { items, hitMaxPages } = await fetchAllDisputePages(deps.paypal, { log });
+  if (hitMaxPages) {
+    log("dispute sync hit maximum page limit; some disputes may require next polling cycle");
+  }
+  for (const item of items) {
     const held = await deps.db.getDispute(item.dispute_id);
     const stale =
       !held ||
