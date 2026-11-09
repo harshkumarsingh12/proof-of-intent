@@ -12,6 +12,9 @@ existing AI provider variables. The default database pool has two connections an
 `AI_DAILY_CALL_LIMIT` defaults to 500, accepts only nonnegative safe integers, and zero disables provider calls.
 Retries, fallbacks and model steps consume separately. Counters survive process restarts and use the database's
 UTC day. Explicit `UsageStore`/fetch injection is for tests or trusted server composition, never model arguments.
+Buyer chat also reserves its own persisted `BUYER_CHAT_DAILY_LIMIT` allowance (default 150) in the same transaction.
+A denied chat attempt consumes neither allowance, leaving remaining global capacity available for checkout.
+Feature names come from server-owned operation labels; shopper input cannot select a different budget.
 
 Events identify the operation/job/retry, endpoint role and provider/model, HTTP request count, elapsed time and
 bounded failure category. Prompts, URLs, headers, keys and provider error bodies are excluded. Observer failures

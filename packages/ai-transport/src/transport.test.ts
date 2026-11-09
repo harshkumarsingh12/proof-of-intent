@@ -5,6 +5,7 @@ import {
   createOperation,
   createTransportModel,
   dailyCallLimit,
+  chatDailyLimit,
   modelFromEnv,
   guardedTools,
   runWithinOperation,
@@ -209,8 +210,12 @@ test("aborts and broken observers do not trigger additional provider requests", 
 test("live defaults require persistent storage; limit parsing rejects invalid configuration", () => {
   expect(dailyCallLimit({})).toBe(500);
   expect(dailyCallLimit({ AI_DAILY_CALL_LIMIT: "0" })).toBe(0);
-  for (const value of ["-1", "1.5", "NaN", "Infinity", "1e3", "9007199254740992"])
+  expect(chatDailyLimit({})).toBe(150);
+  expect(chatDailyLimit({ BUYER_CHAT_DAILY_LIMIT: "0" })).toBe(0);
+  for (const value of ["-1", "1.5", "NaN", "Infinity", "1e3", "9007199254740992"]) {
     expect(() => dailyCallLimit({ AI_DAILY_CALL_LIMIT: value })).toThrow();
+    expect(() => chatDailyLimit({ BUYER_CHAT_DAILY_LIMIT: value })).toThrow();
+  }
   expect(() => modelFromEnv("test", { timeoutMs: 100, env: { AI_MODEL: "m", AI_API_KEY: "k" } })).toThrow(
     /database_not_configured/,
   );
