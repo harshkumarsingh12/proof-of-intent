@@ -28,6 +28,8 @@ import {
   evidencePdfPath,
   hasEvidence,
   isUrgent,
+  lifecycleStages,
+  nextPermittedAction,
   NO_MANDATE_LABEL,
   platformCards,
   statusLabel,
@@ -36,6 +38,13 @@ import {
   type PlatformGroup,
   type StudioCheckRow,
 } from "../../../src/studio-data";
+import {
+  actionLabel as auditActionLabel,
+  actorLabel,
+  fetchDisputeAudit,
+  operatorRowsPrecedePayPal,
+  type DisputeAuditEntry,
+} from "../../../src/audit";
 import { getUnfilteredTotal, useFilterRevision } from "../../../src/studio-filters";
 import { useSelectedDispute } from "../../../src/studio-selection";
 import { fontStack, palette, v } from "../../../src/theme";
@@ -60,6 +69,11 @@ const slot = (mapping: Partial<Record<string, Mapped[]>>, key: string): Mapped =
   const item = mapping[key]?.[0];
   if (!item?.fieldId) throw new Error(`data mapping "${key}" is empty`);
   return item;
+};
+
+const optionalSlot = (mapping: Partial<Record<string, Mapped[]>>, key: string): Mapped | undefined => {
+  const item = mapping[key]?.[0];
+  return item?.fieldId ? item : undefined;
 };
 
 const idOf = (item: Mapped): string => String(item.fieldId);
@@ -237,31 +251,82 @@ function MandateDiff(props: AgWidgetParams<any>) {
 
 // ---------- evidence preview ----------
 
-const EVIDENCE_FIELDS = ["dispute", "disputeClass", "coverNote"] as const;
+const EVIDENCE_FIELDS = [
+  "dispute",
+  "disputeClass",
+  "coverNote",
+  "action",
+  "status",
+  "dueAt",
+  "hoursToDue",
+  "missingEvidence",
+  "outcome",
+] as const;
 
 function EvidencePreview(props: AgWidgetParams<any>) {
-  const items = EVIDENCE_FIELDS.map((k) => slot(props.dataMapping, k));
+  const items = EVIDENCE_FIELDS.map((k) =>
+    k === "dispute" || k === "disputeClass" || k === "coverNote"
+      ? slot(props.dataMapping, k)
+      : optionalSlot(props.dataMapping, k),
+  ).filter((x): x is Mapped => x !== undefined);
+
   const ids = items.map(idOf);
   const { rows: raw, error } = useRows(props, items);
   const [picked, setPicked] = useSelectedDispute();
+  const [auditState, setAuditState] = useState<{
+    entries?: DisputeAuditEntry[];
+    unavailable?: boolean;
+    loading?: boolean;
+  }>({ loading: true });
 
   if (error) return <Status>{`Couldn't load the disputes: ${error}`}</Status>;
   if (!raw) return <Status>Loading the disputes…</Status>;
   const rows = raw.map((row: Record<string, unknown>) => {
-    const [dispute = "", disputeClass = "", coverNote = ""] = cells(row, ids).map((x) => String(x ?? ""));
-    return { dispute, disputeClass, coverNote };
+    const values = cells(row, ids).map((x) => String(x ?? ""));
+    const dispute = values[0] ?? "";
+    const disputeClass = values[1] ?? "";
+    const coverNote = values[2] ?? "";
+    const action = values[3] ?? "";
+    const status = values[4] ?? "";
+    const dueAt = values[5] ?? "";
+    const hoursToDue = Number(values[6] ?? 0);
+    const missingEvidence = values[7] ?? "";
+    const outcome = values[8] ?? "";
+    return { dispute, disputeClass, coverNote, action, status, dueAt, hoursToDue, missingEvidence, outcome };
   });
   if (rows.length === 0) return <NoData />;
-  const current = rows.find((r: { dispute: string }) => r.dispute === picked) ?? rows[0];
+  const current = rows.find((r) => r.dispute === picked) ?? rows[0];
   if (!current) return <NoData />;
 
+  useEffect(() => {
+    if (!current?.dispute) return;
+    let cancelled = false;
+    setAuditState({ loading: true });
+    void fetchDisputeAudit(current.dispute).then((result) => {
+      if (cancelled) return;
+      if ("entries" in result) {
+        setAuditState({ entries: result.entries, loading: false });
+      } else {
+        setAuditState({ unavailable: true, loading: false });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [current?.dispute]);
+
+  const operatorAction = auditState.entries?.find((e) => e.action.startsWith("operator."));
+  const operatorActionText = operatorAction ? auditActionLabel(operatorAction) : undefined;
+  const stages = lifecycleStages(current, operatorActionText);
+
   return (
-    <div style={{ ...frame, display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ ...frame, display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Selector and Links */}
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ fontSize: 13 }}>
           Dispute{" "}
           <select value={current.dispute} onChange={(e) => setPicked(e.target.value)}>
-            {rows.map((r: { dispute: string }) => (
+            {rows.map((r) => (
               <option key={r.dispute}>{r.dispute}</option>
             ))}
           </select>
@@ -280,6 +345,99 @@ function EvidencePreview(props: AgWidgetParams<any>) {
           Open in dispute detail
         </a>
       </div>
+
+      {/* Operator Tasks: Next permitted action & deadline together (#181) */}
+      <div
+        data-testid="studio-operator-tasks"
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          fontSize: 12,
+          padding: "6px 10px",
+          background: v("surfaceMuted"),
+          borderRadius: 6,
+          border: `1px solid ${v("border")}`,
+        }}
+      >
+        <span>
+          <strong style={{ color: v("textMuted") }}>Next permitted action:</strong>{" "}
+          <span style={{ fontWeight: 600, color: v("heading") }}>
+            {nextPermittedAction(current.action, current.status)}
+          </span>
+        </span>
+        <span>·</span>
+        <span>
+          <strong style={{ color: v("textMuted") }}>Deadline:</strong>{" "}
+          <span style={{ fontWeight: 600, color: isUrgent(current) ? v("danger") : v("text") }}>
+            {dueLabel(current)}
+            {current.dueAt ? ` (${new Date(current.dueAt).toLocaleDateString()})` : ""}
+          </span>
+        </span>
+      </div>
+
+      {/* Flagged missing supporting records banner (#181) */}
+      {current.missingEvidence && (
+        <div
+          data-testid="studio-missing-evidence"
+          style={{
+            padding: "8px 12px",
+            borderRadius: 6,
+            background: v("warningBg"),
+            border: `1px solid ${v("warningBorder")}`,
+            color: v("warning"),
+            fontSize: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 15 }}>⚠️</span>
+          <div>
+            <strong>Missing supporting records:</strong> {current.missingEvidence}
+          </div>
+        </div>
+      )}
+
+      {/* Lifecycle stages: Clear difference between recommendation, action submitted, and outcome confirmed (#181) */}
+      <div
+        data-testid="studio-lifecycle-stages"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+          gap: 8,
+          padding: "8px 10px",
+          background: v("surface"),
+          borderRadius: 6,
+          border: `1px solid ${v("border")}`,
+          fontSize: 12,
+        }}
+      >
+        {stages.map((s) => (
+          <div key={s.stage}>
+            <div style={{ color: v("textMuted"), fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>
+              {s.label}
+            </div>
+            <div
+              style={{
+                fontWeight: 600,
+                color: s.confirmed
+                  ? s.stage === "outcome_confirmed"
+                    ? v("success")
+                    : v("heading")
+                  : v("textMuted"),
+                marginTop: 2,
+              }}
+            >
+              {s.confirmed ? (s.stage === "outcome_confirmed" ? "✓ " : "") : "⏳ "}
+              {s.detail}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Supporting Evidence: Cover Note */}
       {current.coverNote && (
         <details style={{ fontSize: 13 }} open>
           <summary style={{ cursor: "pointer", fontWeight: 600, color: v("heading") }}>
@@ -288,6 +446,8 @@ function EvidencePreview(props: AgWidgetParams<any>) {
           <p style={{ margin: "6px 0 0", color: v("text"), lineHeight: "20px" }}>{current.coverNote}</p>
         </details>
       )}
+
+      {/* Supporting Evidence: Attestation PDF */}
       {hasEvidence(current.disputeClass) ? (
         <iframe
           key={current.dispute}
@@ -302,6 +462,55 @@ function EvidencePreview(props: AgWidgetParams<any>) {
           dispute detail.
         </p>
       )}
+
+      {/* Operator Audit Trail in the workflow (#181) */}
+      <details
+        data-testid="studio-audit-trail"
+        style={{ fontSize: 13, borderTop: `1px solid ${v("border")}`, paddingTop: 8 }}
+        open
+      >
+        <summary style={{ cursor: "pointer", fontWeight: 600, color: v("heading") }}>
+          Operator audit trail ({(auditState.entries ?? []).length}{" "}
+          {(auditState.entries ?? []).length === 1 ? "entry" : "entries"})
+        </summary>
+        <div style={{ marginTop: 8 }}>
+          {auditState.loading ? (
+            <p style={{ margin: 0, fontSize: 12, color: v("textMuted") }}>Loading the audit log…</p>
+          ) : auditState.unavailable ? (
+            <p style={{ margin: 0, fontSize: 12, color: v("textMuted") }}>
+              Audit trail not available for this dispute.
+            </p>
+          ) : (auditState.entries ?? []).length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: v("textMuted") }}>
+              Nothing has been recorded for this dispute yet.
+            </p>
+          ) : (
+            <>
+              <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+                {(auditState.entries ?? []).map((e) => (
+                  <li
+                    key={e.id}
+                    data-testid="studio-audit-row"
+                    style={{ borderLeft: `3px solid ${v("border")}`, paddingLeft: 10, fontSize: 12 }}
+                  >
+                    <div style={{ fontWeight: 600, color: v("heading") }}>{auditActionLabel(e)}</div>
+                    <div style={{ color: v("textMuted"), fontSize: 11 }}>
+                      {actorLabel(e.actor)} · {new Date(e.at).toLocaleString()} · #{e.id}
+                      {e.recommended ? ` · copilot said ${e.recommended}` : ""}
+                    </div>
+                    {e.note && <div style={{ marginTop: 2, fontSize: 11 }}>&ldquo;{e.note}&rdquo;</div>}
+                  </li>
+                ))}
+              </ol>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: v("textMuted") }}>
+                {operatorRowsPrecedePayPal(auditState.entries ?? [])
+                  ? "Each operator click is recorded before the PayPal call it authorized."
+                  : "Warning: a PayPal call is recorded with no operator click before it."}
+              </p>
+            </>
+          )}
+        </div>
+      </details>
     </div>
   );
 }
@@ -675,8 +884,28 @@ export const customWidgetDefinitions: any[] = [
       coverNote: aiField("The cover note drafted to go with the evidence PDF, empty when there is none.", [
         "category",
       ]),
+      action: aiField("The copilot's recommended PayPal action, such as PROVIDE_EVIDENCE or ACCEPT_CLAIM.", [
+        "category",
+      ]),
+      status: aiField("PayPal's dispute status, such as WAITING_FOR_SELLER_RESPONSE or RESOLVED.", [
+        "category",
+      ]),
+      dueAt: aiField("When the seller's response is due, as an ISO date.", ["category"]),
+      hoursToDue: aiField("Hours until the response is due; negative once it is late.", ["numeric"]),
+      missingEvidence: aiField("Missing supporting records flagged for the dispute.", ["category"]),
+      outcome: aiField("PayPal's confirmed outcome when the dispute is resolved.", ["category"]),
     },
-    { dispute: "Dispute", disputeClass: "Class", coverNote: "Cover note" },
+    {
+      dispute: "Dispute",
+      disputeClass: "Class",
+      coverNote: "Cover note",
+      action: "Recommended action",
+      status: "Status",
+      dueAt: "Respond by",
+      hoursToDue: "Hours to respond",
+      missingEvidence: "Missing evidence",
+      outcome: "Outcome",
+    },
     EvidencePreview,
     { width: 520, height: 420 },
   ),
