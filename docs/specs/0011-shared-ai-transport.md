@@ -40,6 +40,12 @@ fallback. Database waits use the same remaining allowance. Late completions are 
 | J4 model path                |                          10 s |                                          20 s |
 | Buyer choose, draft and chat | remaining operation allowance | 20 s per operation, including tool-loop steps |
 
+The overall allowance is the bound; the per-endpoint allowances are ceilings that do not add up. A primary that
+uses its whole allowance leaves the fallback only what remains of the overall allowance, so a worst case is never
+the sum of the per-endpoint figures (for J1, not 2 s + 2 s + a retry in 4 s). The acceptance criterion below that
+spends four calls is reachable when calls fail fast, and a slow primary can leave no time for the retry. Spec 0006's
+description of the backup's added latency must state the overall allowance as the limit once this spec is accepted.
+
 J1's unavailable result still requires shopper confirmation. Other unavailable jobs retain rule-only evidence
 or a clear manual response. These deadlines bound waiting locally; an already accepted remote request may still
 consume provider resources. Its reserved call remains charged.
