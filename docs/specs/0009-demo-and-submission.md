@@ -37,6 +37,10 @@ cases are visible through the normal dispute and evidence preview routes. The sa
 inspection. See [SETUP.md](../SETUP.md#load-the-mock-demo-dataset).
 
 **Video:** script and production rules in [DEMO.md](../DEMO.md). Recorded in replay mode against the sandbox.
+The script follows one signed authorization through an invalid proposal, a valid completed payment and the
+operator's evidence inspection. Seeded historical cases remain labelled on screen, including when served from
+the API. Sandbox action tests use separate identified cases; an action on one case is never shown as an outcome
+of another. Production handoff and independent verification are tracked in [SUBMISSION.md](../SUBMISSION.md).
 
 ## Acceptance criteria
 

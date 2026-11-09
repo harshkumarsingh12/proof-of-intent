@@ -121,19 +121,64 @@ export function DisputeDetailView({
     [dispute.constraintChecks]
   );
 
+  // Derived evidence badges & missing records per issue #172
+  const mandateCompliance =
+    dispute.mandateCompliance ??
+    (dispute.disputeClass === "MANDATE_COMPLIANT"
+      ? "COMPLIANT"
+      : dispute.disputeClass === "AGENT_OVERREACH"
+      ? "NON_COMPLIANT"
+      : dispute.disputeClass === "NO_MANDATE"
+      ? "NO_MANDATE"
+      : dispute.disputeClass === "INTENT_MISREAD"
+      ? "MISREAD"
+      : "NON_COMPLIANT");
+  const deliveryEvidence = dispute.deliveryEvidence ?? "not available";
+  const missingRecords =
+    dispute.missingEvidence ??
+    (dispute.buyerDisputeReason === "MERCHANDISE_OR_SERVICE_NOT_RECEIVED"
+      ? ["Proof of Fulfillment (carrier tracking)"]
+      : []);
+  const responseReadiness =
+    dispute.responseReadiness ?? (missingRecords.length === 0 ? "READY" : "INCOMPLETE");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {isDemoData && (
         <SampleDataNotice>
-          This dispute comes from the built-in demo set. Live disputes appear here once the merchant API serves them.
+          Historical seeded case. This is fictional, read-only demo data, not a payment or refund from the current checkout.
         </SampleDataNotice>
+      )}
+
+      {/* Flagged Missing Supporting Records Banner */}
+      {missingRecords.length > 0 && (
+        <div
+          data-testid="missing-records-flag"
+          style={{
+            padding: "12px 16px",
+            borderRadius: 6,
+            background: "rgba(245, 158, 11, 0.1)",
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            color: "var(--poi-warning)",
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <div>
+            <strong>Missing supporting records for {dispute.buyerDisputeReason}:</strong>{" "}
+            {missingRecords.join(", ")}
+          </div>
+        </div>
       )}
 
       {/* Header Bar */}
       <div style={cardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "var(--poi-heading)", fontFamily: "monospace" }}>
                 {dispute.id}
               </h1>
@@ -142,6 +187,17 @@ export function DisputeDetailView({
               </span>
               <span style={statusBadgeStyle(dispute.status)}>{dispute.status.replace(/_/g, " ")}</span>
               <span style={platformBadgeStyle}>{dispute.agentPlatform}</span>
+
+              {/* Three separate badges per issue #172 */}
+              <span data-testid="badge-mandate-compliance" style={mandateBadgeStyle(mandateCompliance)}>
+                Mandate: {mandateCompliance.replace(/_/g, " ")}
+              </span>
+              <span data-testid="badge-delivery-evidence" style={deliveryBadgeStyle(deliveryEvidence)}>
+                Delivery: {deliveryEvidence}
+              </span>
+              <span data-testid="badge-response-readiness" style={readinessBadgeStyle(responseReadiness)}>
+                Readiness: {responseReadiness}
+              </span>
             </div>
 
             <div style={{ marginTop: 8, fontSize: 13, color: "var(--poi-text-muted)", display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -918,6 +974,72 @@ const decisionBadgeStyle = (dec: string): React.CSSProperties => {
     background: "var(--poi-surface-muted)",
     color: "var(--poi-text-muted)",
     border: "1px solid var(--poi-border)",
+  };
+};
+
+const mandateBadgeStyle = (status: string): React.CSSProperties => {
+  const isCompliant = status === "COMPLIANT";
+  const isWarning = status === "MISREAD";
+  const isDanger = status === "NON_COMPLIANT" || status === "NO_MANDATE";
+
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "3px 8px",
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    background: isCompliant
+      ? "var(--poi-success-bg)"
+      : isWarning
+      ? "var(--poi-warning-bg)"
+      : isDanger
+      ? "var(--poi-danger-bg)"
+      : "var(--poi-surface-muted)",
+    color: isCompliant
+      ? "var(--poi-success)"
+      : isWarning
+      ? "var(--poi-warning)"
+      : isDanger
+      ? "var(--poi-danger)"
+      : "var(--poi-text)",
+    border: isCompliant
+      ? "1px solid var(--poi-success-border)"
+      : isWarning
+      ? "1px solid var(--poi-warning-border)"
+      : isDanger
+      ? "1px solid var(--poi-danger-border)"
+      : "1px solid var(--poi-border)",
+  };
+};
+
+const deliveryBadgeStyle = (status: string): React.CSSProperties => {
+  const isConfirmed = status.toLowerCase() === "confirmed";
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "3px 8px",
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    background: isConfirmed ? "var(--poi-success-bg)" : "var(--poi-surface-muted)",
+    color: isConfirmed ? "var(--poi-success)" : "var(--poi-text-muted)",
+    border: isConfirmed ? "1px solid var(--poi-success-border)" : "1px solid var(--poi-border)",
+  };
+};
+
+const readinessBadgeStyle = (status: string): React.CSSProperties => {
+  const isReady = status === "READY";
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "3px 8px",
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    background: isReady ? "var(--poi-success-bg)" : "var(--poi-warning-bg)",
+    color: isReady ? "var(--poi-success)" : "var(--poi-warning)",
+    border: isReady ? "1px solid var(--poi-success-border)" : "1px solid var(--poi-warning-border)",
   };
 };
 

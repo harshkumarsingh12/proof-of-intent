@@ -4,11 +4,51 @@ Run `pnpm eval` with `AI_MODEL` and `AI_API_KEY` in the environment. Set `AI_PRO
 NVIDIA and `AI_BASE_URL` for a custom OpenAI-compatible endpoint. With a local `.env`, the equivalent command
 is `pnpm exec tsx --env-file=.env scripts/ai/eval.ts`.
 
-The command runs the 20 J1 and 12 J2 cases and writes a dated report here. A passing run also adds its live
+The command runs the 20 J1 and 12 J2 cases and writes a timestamped report here (`<UTC timestamp>-primary.md`, or `-backup.md` with `--backup`). A passing run also adds its live
 answers to the J1 and J2 replay files. The report separates J2 agreement with the supplied policy decision
 from J1 prediction accuracy. Publish numbers in the root README after verifying the live report.
 
+Each run writes a unique UTC-timestamped Markdown report and matching JSON case metrics, including the
+source commit. The configured primary is labelled as configuration. Each case instead attributes the
+answer to its actual successful provider/model and records every physical provider request, outcome,
+latency and bounded fallback reason. Logical retries and physical provider calls are separate counts.
+Local guards have no model attribution. Telemetry excludes prompts, credentials and provider error bodies.
+Physical request counts are measured at the HTTP fetch boundary; a local preflight failure records an endpoint
+attempt with zero HTTP requests.
+
+Before relying on the configured Groq backup, run `pnpm eval --backup` in the same secure environment.
+This runs the identical 20/12 acceptance set directly against `AI_FALLBACK_*`, with no primary and no
+further fallback. It requires a fully configured backup and writes a separate `*-backup.md`/`.json` pair.
+Backup-only runs never rewrite canonical replay files. Return both primary and backup reports, their
+JSON metrics and the primary run's replay files together. A failed or missing backup run means the
+backup is unverified; a passing primary does not validate it.
+
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
+
+## Supplemental semantic and completed-payment evaluation (#169)
+
+Commit the source first. Use disposable PostgreSQL 16 (a role allowed to create/drop test databases) and the
+team's configured provider environment, then run `pnpm exec tsx scripts/ai/eval-holdout.ts`. The command creates
+isolated databases and uses mock PayPal; never point it at production. `--backup` runs the configured fallback
+alone. `--system-only` needs no model credentials and explicitly does not validate a live model.
+
+The additional 12 semantic cases are disjoint from the golden set and prompt examples. They are public
+regressions, not a hidden benchmark. Reports retain raw model outputs/predictions separately from guarded
+system predictions and exclude local pre-model guards from the model denominator. Ten PostgreSQL scenarios
+exercise the real API: product price/title/attribute manipulation, concurrent spending reservations, expired
+authority, provider failure, expiry/revocation before approval, and both human-approved and unattended completed
+payments with persisted capture IDs. Payment proposals are not counted as completed payments.
+
+Require all 10 system scenarios, at least 11/12 guarded semantic cases, zero raw or guarded mismatch-to-match
+approvals, and 100% schema validity after retry for model cases. Report raw accuracy independently, even if
+guards improve the result. The timestamped Markdown/JSON pair identifies the commit; provider attempts are
+included when the #171 transport hook is available and otherwise remain explicitly unobserved. These runs never
+rewrite canonical replay files or change the scored 20 J1 / 12 J2 sets. Return primary and backup artifacts for
+review before publishing new figures. A system-only pass is local safety evidence, not a live or hosted result.
+
+Known separate gap: [#225](https://github.com/harshkumarsingh12/proof-of-intent/issues/225) reproduces a pending
+capture being marked completed by the sandbox adapter. The ten scenarios above use the mock payment provider;
+their pass does not validate provider settlement-state handling. Keep that limitation with any published result.
 
 ## Studio starter recordings
 
@@ -75,7 +115,7 @@ secret store. Record the source commit with `git rev-parse HEAD` so the report c
    replay coverage for the supported demo carts. Keep the report and both replay files from that passing
    run together. Running the demo recorder afterward requires another full evaluation before publishing.
 
-Return the dated `docs/evals/<date>.md`, `packages/ai/replay/j1-semantic-fit.json`,
+Return the report `docs/evals/<UTC timestamp>-<primary|backup>.md` with its matching `.json`, `packages/ai/replay/j1-semantic-fit.json`,
 `packages/ai/replay/j2-dispute-classification.json`, the source commit and the configured provider/model
 names. Include any changed prompt files. Verify these artifacts together, then quote the measured figures
-and link the dated report in the root README. The report, matching replay and README figures complete #43.
+and link that report in the root README. The report, matching replay and README figures complete #43.

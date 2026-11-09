@@ -75,15 +75,46 @@ thresholds, which turns "the model didn't answer" into "the shopper's cart is wr
 **Prompts:** `packages/ai/prompts/*.md` with front matter (`version`, `model`, `schema`). Each verdict records its
 prompt version in the audit log.
 
+**J1 latency decision (Nov 9, #168).** Retain the 2 s per-endpoint attempt budget and one logical retry;
+accept a shopper confirmation when neither attempt returns a trustworthy answer. The Nov 7 passing report's
+rain-shell case took 3,878 ms and tumbler case 3,595 ms across retries, so 2 s is not a total checkout latency
+promise. With no backup the model can consume roughly 4 s plus local overhead; a configured backup can add
+one endpoint call per logical attempt (roughly 8 s in the worst case). We do not increase these timeouts or
+rely on warm-up calls for correctness. `AiUnavailableError` maps to `STEP_UP`, never automatic capture.
+Reports retain case elapsed time, logical retries and individual provider attempt latency. A shared overall
+deadline and persistent physical-call accounting are separate work in #174. The existing measured figures
+remain historical evidence; changes to instrumentation do not constitute a new live model result.
+
 **J2 and J3 as built.** The worker supplies named excerpts of the dispute and verified purchase facts. J2
 keeps the worker's deterministic class and action and stores cited reasons and evidence suggestions on the
 recommendation. J3 drafts the preview cover note and buyer message for verified compliant orders. Both drop
 items with missing or unknown citations. When a job is unavailable, the rule-only recommendation and evidence
 remain available for operator review. The first J2/J3 replay entries are hand-authored demo fixtures.
 
+**Citation safety correction (Nov 9, #170).** Existing bundle keys establish where to look, not whether the
+model's sentence follows from them. J2/J3 therefore select cited excerpts and render their source text locally;
+model-written prose and headings are not published as evidence. Buyer notes are explicitly unverified
+allegations. J3 uses a neutral buyer-review template. A capture record does not prove delivery, cardholder
+authorization or refund completion. The same rendering applies to live and replay output; prompts and replay
+keys are unchanged. This closes the unsupported-paraphrase path without claiming a semantic entailment score.
+
 **Evals:** J1 set of 20 (7 match, 7 partial, 6 mismatch); J2 set of 12 covering all four classes. `pnpm eval`
-writes `docs/evals/<date>.md`. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
+writes uniquely timestamped `docs/evals/<timestamp>-primary.md` and matching JSON metrics, recording the source
+commit. Each case records physical provider/model attempts, outcomes, fallback reasons and latencies separately
+from logical retries; configured primary names are never treated as answer attribution. `pnpm eval --backup`
+runs the identical fixed set against the configured fallback alone and does not rewrite canonical replay files.
+The backup must pass independently before being treated as evaluated. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
 schema validity 100% after retry.
+
+**Supplemental evaluation (#169).** Keep the milestone 20/12 sets fixed. `scripts/ai/eval-holdout.ts` adds 12
+disjoint public semantic regressions and 10 real-route scenarios with disposable PostgreSQL and mock PayPal.
+Raw model accuracy, raw false approvals and attempts are reported separately from guarded outcomes, plus schema
+validity, case latency and provider telemetry when available. Targets: all 10 system cases, at least 11/12 guarded
+semantic cases, zero raw/guarded mismatch-to-match approvals and 100% valid model cases after retry. System cases
+cover catalog manipulation, multi-order budget races, expired/revoked authority, provider failure and persisted
+completed-payment outcomes. J2's supplied-decision agreement is explicitly explanation faithfulness. No hidden
+benchmark, independent J2 classification accuracy, hosted payment result or measured business benefit is claimed.
+Each run writes matching timestamped Markdown/JSON with the source commit; supplemental runs never publish replay.
 
 ## Acceptance criteria
 
@@ -147,5 +178,5 @@ schema validity 100% after retry.
     `dispute_reason`. J1 fell to 18/20 because two calls (black gloves, tumbler capacity) timed out on both 2 s attempts. That
     is the free endpoint's latency, not a prompt change: the same cases passed in runs 1 and 3.
   - Run 3 (final): passed. Expect the occasional J1 timeout to show up as `unavailable` (a step-up at checkout, never an approval).
-  The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
-  cases are recorded from the passing run.
+    The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
+    cases are recorded from the passing run.

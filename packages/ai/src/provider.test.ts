@@ -10,6 +10,7 @@ import {
   providerOptionsFor,
   type Endpoint,
   type LiveConfig,
+  type ProviderAttempt,
 } from "./runtime";
 
 const env = (over: Record<string, string>) =>
@@ -260,6 +261,99 @@ describe("the request that reaches the provider", () => {
     return { calls, fetchImpl };
   }
   const limited = () => Response.json({ error: { message: "rate limit reached" } }, { status: 429 });
+
+  test("a local preflight error is not counted as a physical provider request", async () => {
+    const p = fakeHosts({ "*": () => completion('{"ok":true}') });
+    const attempts: ProviderAttempt[] = [];
+    await expect(
+      createGenerate(
+        cfg({ fallback: groqBackup }),
+        p.fetchImpl,
+      )({
+        system: "s",
+        prompt: "p",
+        schema: z.object({ ok: z.boolean() }),
+        timeoutMs: -1,
+        onAttempt: (a) => attempts.push(a),
+      }),
+    ).rejects.toThrow();
+    expect(p.calls).toHaveLength(0);
+    expect(attempts).toMatchObject([{ role: "primary", outcome: "error", httpRequests: 0 }]);
+  });
+
+  test("a broken telemetry observer cannot trigger a fallback or change a valid answer", async () => {
+    const p = fakeHosts({ "*": () => completion('{"ok":true}') });
+    await expect(
+      createGenerate(
+        cfg({ fallback: groqBackup }),
+        p.fetchImpl,
+      )({
+        system: "s",
+        prompt: "p",
+        schema: z.object({ ok: z.boolean() }),
+        timeoutMs: 5_000,
+        onAttempt: () => {
+          throw new Error("network observer failure");
+        },
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(p.calls).toHaveLength(1);
+  });
+
+  test("request-scoped telemetry attributes backup success and retains both failed attempts without secrets", async () => {
+    const p = fakeHosts({ "host.test": limited, "api.groq.test": () => completion('{"ok":true}') });
+    const attempts: ProviderAttempt[] = [];
+    const generate = createGenerate(cfg({ fallback: groqBackup }), p.fetchImpl);
+    await generate({
+      system: "private system",
+      prompt: "private shopper text",
+      schema: z.object({ ok: z.boolean() }),
+      timeoutMs: 5_000,
+      onAttempt: (a) => attempts.push(a),
+    });
+    expect(attempts).toEqual([
+      {
+        provider: "nvidia",
+        model: "primary-model",
+        role: "primary",
+        outcome: "error",
+        failure: "http_429",
+        elapsedMs: expect.any(Number),
+        httpRequests: 1,
+      },
+      {
+        provider: "groq",
+        model: groqBackup.model,
+        role: "fallback",
+        outcome: "success",
+        fallbackReason: "http_429",
+        elapsedMs: expect.any(Number),
+        httpRequests: 1,
+      },
+    ]);
+    const serialized = JSON.stringify(attempts);
+    for (const secret of ["gsk_backup", "Bearer", "private", "rate limit reached", "host.test"])
+      expect(serialized).not.toContain(secret);
+    // Telemetry belongs to this request, rather than a global mutable last-model field.
+    await ask(cfg(), fakeHosts({ "*": () => completion('{"ok":true}') }).fetchImpl);
+    expect(attempts).toHaveLength(2);
+
+    const failed: ProviderAttempt[] = [];
+    await expect(
+      createGenerate(
+        cfg({ fallback: groqBackup }),
+        fakeHosts({ "*": limited }).fetchImpl,
+      )({
+        system: "s",
+        prompt: "p",
+        schema: z.object({ ok: z.boolean() }),
+        timeoutMs: 5_000,
+        onAttempt: (a) => failed.push(a),
+      }),
+    ).rejects.toThrow();
+    expect(failed.map((a) => a.outcome)).toEqual(["error", "error"]);
+    expect(failed[1]).toMatchObject({ provider: "groq", failure: "http_429", fallbackReason: "http_429" });
+  });
 
   test("a rate-limited primary is answered by the backup on another provider, with its own endpoint and key", async () => {
     const p = fakeHosts({ "host.test": limited, "api.groq.test": () => completion('{"ok":true}') });

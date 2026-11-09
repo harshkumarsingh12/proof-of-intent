@@ -76,12 +76,19 @@ export function outcomeOf(d: Pick<DisputeSummary, "status" | "paypal">) {
   if (d.status !== "RESOLVED") return undefined;
   const o = (
     d.paypal as {
-      dispute_outcome?: { outcome_code?: string; amount_refunded?: { currency_code?: string; value?: string } };
+      dispute_outcome?: {
+        outcome_code?: string;
+        amount_refunded?: { currency_code?: string; value?: string };
+      };
     } | null
   )?.dispute_outcome;
   const code = o?.outcome_code;
   if (!code) return undefined;
-  const result = /SELLER_FAVOU?R/.test(code) ? "SELLER_FAVOUR" : /BUYER_FAVOU?R/.test(code) ? "BUYER_FAVOUR" : "OTHER";
+  const result = /SELLER_FAVOU?R/.test(code)
+    ? "SELLER_FAVOUR"
+    : /BUYER_FAVOU?R/.test(code)
+      ? "BUYER_FAVOUR"
+      : "OTHER";
   const r = o?.amount_refunded;
   const refunded =
     r?.currency_code && r.value !== undefined && Number.isFinite(Number(r.value))
@@ -129,6 +136,7 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
   const c = intent?.constraints;
   return {
     ...base,
+    isDemoData: rec.demo === true,
     ...(intent
       ? {
           shopperIntentText: intent.natural_language_description,
@@ -280,13 +288,10 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   // Every GET in this plugin returns merchant data; its POSTs carry their own operator check.
   app.addHook("onRequest", async (req, reply) => {
     if (req.method !== "GET" || readsAllowed(req, deps.operatorToken)) return;
-    return reply
-      .code(401)
-      .header("www-authenticate", "Bearer")
-      .send({
-        error: "read_unauthorized",
-        message: "A valid operator token is required to read merchant data",
-      });
+    return reply.code(401).header("www-authenticate", "Bearer").send({
+      error: "read_unauthorized",
+      message: "A valid operator token is required to read merchant data",
+    });
   });
 
   const needDb = (reply: FastifyReply): Db | null => {
