@@ -188,7 +188,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       ],
       classificationInfo: {
         disputeClass: "MANDATE_COMPLIANT",
-        confidence: 0.99,
+        confidence: null,
         recommendedAction: "PROVIDE_EVIDENCE",
         reasons: [
           {
@@ -275,7 +275,8 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
           cartActual: "$95.00",
           status: "FAIL",
           reasonCode: "AMOUNT_EXCEEDS_MAX",
-          explanation: "Cart total of $95.00 exceeded the shopper's maximum budget ceiling of $80.00 by $15.00.",
+          explanation:
+            "Cart total of $95.00 exceeded the shopper's maximum budget ceiling of $80.00 by $15.00.",
         },
         {
           id: "rule-color",
@@ -284,7 +285,8 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
           cartActual: "red",
           status: "FAIL",
           reasonCode: "ATTRIBUTE_MISMATCH",
-          explanation: "Agent purchased a red jacket, directly violating the explicit constraint requiring grey.",
+          explanation:
+            "Agent purchased a red jacket, directly violating the explicit constraint requiring grey.",
         },
         {
           id: "rule-category",
@@ -313,7 +315,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       ],
       classificationInfo: {
         disputeClass: "AGENT_OVERREACH",
-        confidence: 0.98,
+        confidence: null,
         recommendedAction: "ACCEPT_CLAIM",
         reasons: [
           {
@@ -361,7 +363,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       constraintChecks: [], // No passing checks on unmandated order
       classificationInfo: {
         disputeClass: "NO_MANDATE",
-        confidence: 0.99,
+        confidence: null,
         recommendedAction: "STANDARD_EVIDENCE",
         reasons: [
           {
@@ -400,7 +402,8 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       cartActual: "Purchased item ambiguous or divergent",
       status: "FAIL",
       reasonCode: base.reasons[0] ?? "SEMANTIC_UNCERTAIN",
-      explanation: "Purchased item failed semantic verification against natural language shopper description.",
+      explanation:
+        "Purchased item failed semantic verification against natural language shopper description.",
     });
     checks.push({
       id: "rule-merchant",
@@ -498,7 +501,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
     constraintChecks: checks,
     classificationInfo: {
       disputeClass: base.disputeClass,
-      confidence: 0.95,
+      confidence: null,
       recommendedAction: base.decision === "defend" ? "PROVIDE_EVIDENCE" : "ACCEPT_CLAIM",
       reasons: base.reasons.map((r) => ({ text: `Reason code evaluated: ${r}`, cites: [r] })),
       evidencePlan: base.decision === "defend" ? ["Compile signed mandate JWS"] : ["Accept claim"],
