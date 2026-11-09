@@ -1,3 +1,5 @@
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   aggregateCurrencyTotals,
@@ -8,6 +10,8 @@ import {
   filterDisputes,
   formatCurrencyTotals,
   formatMoney,
+  isPartialList,
+  MAX_DISPUTES_PER_REQUEST,
   sortDisputes,
 } from "./api";
 import type { DisputeFilters, DisputeItem, DisputeSorting } from "./dispute-types";
@@ -270,78 +274,100 @@ describe("dispute queue data & helpers (spec 0007)", () => {
     expect(platforms.has("Tote")).toBe(true);
   });
 
-  describe("pagination parameters and partial data indicator (issue #173)", () => {
-    it("passes limit and offset parameters to GET /disputes", async () => {
-      let calledUrl = "";
-      const mockFetch = (async (url: string) => {
-        calledUrl = url;
-        return {
-          ok: true,
-          json: async () => ({ disputes: [] }),
-        };
+  // #173, #234: `GET /disputes` now says how many disputes exist (`total`, `limit`, `offset`, `hasMore`). The dashboard asks for as
+  // many as the API gives, and only says "partial" when the server said it did not send them all.
+  describe("paging and the partial data indicator (#234)", () => {
+    const answer = (body: unknown) =>
+      (async (url: string) => {
+        seen.push(url);
+        return { ok: true, json: async () => body };
       }) as unknown as typeof fetch;
+    const seen: string[] = [];
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `PP-D-${i + 1}` }));
+    const get = (body: unknown, extra: object = {}) =>
+      fetchDisputesDetailed({ apiBaseUrl: "http://example.test", fetchFn: answer(body), ...extra });
 
-      await fetchDisputesDetailed({
-        apiBaseUrl: "http://example.test",
-        fetchFn: mockFetch,
-        limit: 25,
-        offset: 50,
-      });
-
-      expect(calledUrl).toBe("http://example.test/disputes?limit=25&offset=50");
+    it("asks for as many disputes as the API gives, from the start, unless told otherwise", async () => {
+      seen.length = 0;
+      await get({ disputes: [] });
+      expect(MAX_DISPUTES_PER_REQUEST).toBe(200);
+      expect(seen).toEqual(["http://example.test/disputes?limit=200&offset=0"]);
     });
 
-    it("parses paging metadata from API response when present and detects partial data", async () => {
-      const mockPagedFetch = (async () => ({
-        ok: true,
-        json: async () => ({
-          disputes: [{ id: "PP-D-1" }, { id: "PP-D-2" }],
-          total: 100,
-          limit: 2,
-          offset: 0,
-          hasMore: true,
-        }),
-      })) as unknown as typeof fetch;
+    it("passes limit and offset through when given", async () => {
+      seen.length = 0;
+      await get({ disputes: [] }, { limit: 25, offset: 50 });
+      expect(seen).toEqual(["http://example.test/disputes?limit=25&offset=50"]);
+    });
 
-      const res = await fetchDisputesDetailed({
-        apiBaseUrl: "http://example.test",
-        fetchFn: mockPagedFetch,
-      });
-
+    it("reads the paging the API sends, and a list with more behind it is partial", async () => {
+      const res = await get({ disputes: rows(2), total: 100, limit: 2, offset: 0, hasMore: true });
       expect(res.isFallback).toBe(false);
-      expect(res.disputes).toHaveLength(2);
-      expect(res.paging).toBeDefined();
-      expect(res.paging?.total).toBe(100);
-      expect(res.paging?.hasMore).toBe(true);
-
-      // Partial data condition holds
-      const isPartial = Boolean(
-        res.paging?.hasMore || (res.paging?.total !== undefined && res.paging.total > res.disputes.length)
-      );
-      expect(isPartial).toBe(true);
+      expect(res.paging).toEqual({ total: 100, limit: 2, offset: 0, hasMore: true });
+      expect(isPartialList(res.paging, res.disputes.length)).toBe(true);
     });
 
-    it("leaves paging undefined when API returns unpaged disputes payload (current API shape)", async () => {
-      const mockUnpagedFetch = (async () => ({
-        ok: true,
-        json: async () => ({
-          disputes: [{ id: "PP-D-1" }],
-        }),
-      })) as unknown as typeof fetch;
+    it("a complete list is not partial, even when it is exactly as big as the limit", async () => {
+      const res = await get({ disputes: rows(3), total: 3, limit: 3, offset: 0, hasMore: false });
+      expect(isPartialList(res.paging, res.disputes.length)).toBe(false);
+    });
 
-      const res = await fetchDisputesDetailed({
-        apiBaseUrl: "http://example.test",
-        fetchFn: mockUnpagedFetch,
-      });
+    it("works out hasMore from the total when the API leaves it out", async () => {
+      const res = await get({ disputes: rows(2), total: 5, limit: 2, offset: 2 });
+      expect(res.paging).toEqual({ total: 5, limit: 2, offset: 2, hasMore: true });
+      const last = await get({ disputes: rows(1), total: 5, limit: 2, offset: 4 });
+      expect(last.paging?.hasMore).toBe(false);
+    });
 
+    it("no total means unknown, never partial: nothing is guessed", async () => {
+      const res = await get({ disputes: rows(1) });
       expect(res.isFallback).toBe(false);
       expect(res.paging).toBeUndefined();
+      expect(isPartialList(res.paging, res.disputes.length)).toBe(false);
+    });
 
-      // Does not fake partial data when paging info is absent
-      const isPartial = Boolean(
-        res.paging?.hasMore || (res.paging?.total !== undefined && res.paging.total > res.disputes.length)
-      );
-      expect(isPartial).toBe(false);
+    it("ignores paging numbers that are not valid counts", async () => {
+      const res = await get({ disputes: rows(1), total: "many", limit: -1 });
+      expect(res.paging).toBeUndefined();
+    });
+
+    it("isPartialList: more behind this answer, or a total larger than what is held", () => {
+      expect(isPartialList(undefined, 10)).toBe(false);
+      expect(isPartialList({ total: 10, limit: 50, offset: 0, hasMore: false }, 10)).toBe(false);
+      expect(isPartialList({ total: 11, limit: 10, offset: 0, hasMore: true }, 10)).toBe(true);
+      expect(isPartialList({ total: 11, limit: 10, offset: 0, hasMore: false }, 10)).toBe(true); // the total still says so
+      expect(isPartialList({ total: 10, limit: 5, offset: 5, hasMore: false }, 5)).toBe(false); // the second of two pages
+    });
+
+    // The banner is what a shopper-facing operator reads, so it is rendered from the real component, not re-derived.
+    describe("the queue's banner", () => {
+      // The component's JSX is compiled for Next's runtime; under vitest it needs React in scope, and it is imported after that.
+      const render = async (disputes: DisputeItem[], paging?: Parameters<typeof isPartialList>[0]) => {
+        (globalThis as { React?: unknown }).React = React;
+        const { DisputeQueue } = await import("../app/disputes/DisputeQueue");
+        return renderToStaticMarkup(
+          React.createElement(DisputeQueue, {
+            initialDisputes: disputes,
+            initialIsDemo: false,
+            initialPaging: paging,
+          }),
+        );
+      };
+      const some = generateSeedDisputes().slice(0, 3);
+
+      it("says how many of how many it shows when the server did not send them all", async () => {
+        const html = await render(some, { total: 90, limit: 3, offset: 0, hasMore: true });
+        expect(html).toContain('data-testid="partial-data-indicator"');
+        expect(html).toContain("showing 3 of 90 disputes");
+        expect(html).not.toContain("first page");
+      });
+
+      it("is absent for a complete list, and for one whose paging is unknown", async () => {
+        expect(await render(some, { total: 3, limit: 50, offset: 0, hasMore: false })).not.toContain(
+          "partial-data-indicator",
+        );
+        expect(await render(some, undefined)).not.toContain("partial-data-indicator");
+      });
     });
   });
 });

@@ -68,7 +68,8 @@ still pick its dispute up from PayPal. `/readyz` carries `webhooks.pending`, `we
 not `ok`, and docs/MONITORING.md adds the same keyword to the dedicated monitor.
 
 - The worker re-reads every dispute with the Agent Toolkit's `get_dispute` before classifying (webhook bodies can
-  be partial) and runs a `list_disputes` catch-up every `DISPUTE_SYNC_MS` (default 5 min) for missed webhooks (#59).
+  be partial) and runs a `list_disputes` catch-up every `DISPUTE_SYNC_MS` (default 5 min) for missed webhooks (#59). The catch-up reads every page
+  (the Agent Toolkit pages by `page`, 50 to a page; `forEachDisputePage`, capped at 10 pages), not only the first 50 (#173, #234).
 - The dashboard asks `GET /disputes/:id/paypal-actions` (live) what PayPal allows; buttons PayPal won't take are
   disabled with the reason, and **Escalate to a claim** appears at the inquiry stage (#87).
 - The operator can override a defend recommendation and accept with a note (#84); evidence audit rows carry the

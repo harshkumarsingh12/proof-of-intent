@@ -169,6 +169,11 @@ export interface Page {
   offset: number;
 }
 
+/** Which disputes a list or a count covers. `analyzedOnly` leaves out the ones the copilot has not classified yet. */
+export interface DisputeScope {
+  analyzedOnly?: boolean;
+}
+
 export interface WebhookStats {
   received: number;
   lastReceivedAt: string | null;
@@ -286,7 +291,9 @@ export interface Db {
   saveDispute(d: DisputeRow): Promise<boolean>;
   getDispute(id: string): Promise<DisputeRow | null>;
   /** Response deadline first: disputes close to seller_response_due_date sort to the top (spec 0005). */
-  listDisputes(page: Page): Promise<DisputeSummary[]>;
+  listDisputes(page: Page & DisputeScope): Promise<DisputeSummary[]>;
+  /** How many disputes `listDisputes` would page through with the same scope, so a caller can say how many it did not show. */
+  countDisputes(scope?: DisputeScope): Promise<number>;
   /** Applies pending migrations. Safe to call from several processes at once. */
   migrate(): Promise<string[]>;
   close(): Promise<void>;
@@ -705,15 +712,27 @@ export function createDb(databaseUrl: string): Db {
       return r.evidence_pdf ? { ...row, evidencePdf: new Uint8Array(r.evidence_pdf as Buffer) } : row;
     },
 
-    async listDisputes({ limit, offset }) {
+    async listDisputes({ limit, offset, analyzedOnly }) {
+      // The filter is in the query, not applied to the page afterwards: filtering after LIMIT/OFFSET made a page come back
+      // short, and a caller could not tell a short page from the last one (#234). `id` breaks ties between equal deadlines so
+      // two requests for consecutive pages never repeat or skip a dispute.
       const res = await pool.query(
         `select id, order_id, reason, status, amount_value, currency, seller_response_due_date, created_at, paypal,
                 paypal_updated_at, recommendation, evidence_bundle, evidence_pdf is not null as has_evidence_pdf
-           from disputes order by seller_response_due_date asc nulls last, created_at desc
+           from disputes
+          ${analyzedOnly ? "where recommendation is not null" : ""}
+          order by seller_response_due_date asc nulls last, created_at desc, id asc
           limit $1 offset $2`,
         [limit, offset],
       );
       return res.rows.map(toDispute);
+    },
+
+    async countDisputes({ analyzedOnly } = {}) {
+      const res = await pool.query(
+        `select count(*)::int as n from disputes ${analyzedOnly ? "where recommendation is not null" : ""}`,
+      );
+      return Number(res.rows[0].n);
     },
 
     async getMandate(hash) {

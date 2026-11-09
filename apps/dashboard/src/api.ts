@@ -26,22 +26,33 @@ export function serverApiBaseUrl(): string {
   return process.env.API_INTERNAL_URL ?? DEFAULT_API_BASE_URL;
 }
 
+/** The most disputes the API returns in one answer (`GET /disputes`, `limit`); asking for it keeps the queue whole for a merchant with up to this many. */
+export const MAX_DISPUTES_PER_REQUEST = 200;
+
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
   fetchFn?: typeof fetch;
+  /** How many disputes to ask for. Defaults to the most the API gives (200). */
   limit?: number;
   offset?: number;
-  page?: number;
-  pageSize?: number;
 }
 
+/** What `GET /disputes` says about the list it returned: how many exist, and where this answer sits in them. */
 export interface DisputePagingInfo {
-  total?: number;
-  limit?: number;
-  offset?: number;
-  page?: number;
-  pageSize?: number;
-  hasMore?: boolean;
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+/**
+ * Whether the dashboard is showing only some of the disputes. True when the API says more exist after this answer, or when
+ * its total is more than what we hold. Unknown (no paging info, as from an older API or the sample data) is not "partial":
+ * the banner only appears when the server actually said so.
+ */
+export function isPartialList(paging: DisputePagingInfo | undefined, shown: number): boolean {
+  if (!paging) return false;
+  return paging.hasMore || paging.total > paging.offset + shown;
 }
 
 export interface FetchDisputesResponse {
@@ -59,13 +70,11 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
-  const params = new URLSearchParams();
-  if (options?.limit !== undefined) params.set("limit", String(options.limit));
-  if (options?.offset !== undefined) params.set("offset", String(options.offset));
-  if (options?.page !== undefined) params.set("page", String(options.page));
-  if (options?.pageSize !== undefined) params.set("page_size", String(options.pageSize));
-  const qs = params.toString();
-  const url = `${baseUrl}/disputes${qs ? `?${qs}` : ""}`;
+  const params = new URLSearchParams({
+    limit: String(options?.limit ?? MAX_DISPUTES_PER_REQUEST),
+    offset: String(options?.offset ?? 0),
+  });
+  const url = `${baseUrl}/disputes?${params}`;
 
   try {
     const res = await runner(url, {
@@ -78,48 +87,34 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
       if (Array.isArray(data)) {
         return { disputes: data as DisputeItem[], isFallback: false };
       }
-      if (data && typeof data === "object") {
+      if (data && typeof data === "object" && Array.isArray((data as { disputes?: unknown }).disputes)) {
         const payload = data as {
-          disputes?: DisputeItem[];
-          total?: number;
-          limit?: number;
-          offset?: number;
-          page?: number;
-          page_size?: number;
-          pageSize?: number;
-          hasMore?: boolean;
-          has_more?: boolean;
+          disputes: DisputeItem[];
+          total?: unknown;
+          limit?: unknown;
+          offset?: unknown;
+          hasMore?: unknown;
         };
-        if (Array.isArray(payload.disputes)) {
-          const hasPaging =
-            payload.total !== undefined ||
-            payload.hasMore !== undefined ||
-            payload.has_more !== undefined ||
-            payload.limit !== undefined ||
-            payload.offset !== undefined;
-
-          const paging: DisputePagingInfo | undefined = hasPaging
-            ? {
-                total: payload.total,
-                limit: payload.limit,
-                offset: payload.offset,
-                page: payload.page,
-                pageSize: payload.pageSize ?? payload.page_size,
+        const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);
+        const total = num(payload.total);
+        // Only report paging the API actually gave: a missing total is "unknown", never a guess.
+        const paging: DisputePagingInfo | undefined =
+          total === undefined
+            ? undefined
+            : {
+                total,
+                limit: num(payload.limit) ?? payload.disputes.length,
+                offset: num(payload.offset) ?? 0,
                 hasMore:
-                  payload.hasMore ??
-                  payload.has_more ??
-                  (payload.total !== undefined
-                    ? payload.total > (payload.offset ?? 0) + payload.disputes.length
-                    : undefined),
-              }
-            : undefined;
-
-          return { disputes: payload.disputes, isFallback: false, paging };
-        }
+                  typeof payload.hasMore === "boolean"
+                    ? payload.hasMore
+                    : (num(payload.offset) ?? 0) + payload.disputes.length < total,
+              };
+        return { disputes: payload.disputes, isFallback: false, ...(paging ? { paging } : {}) };
       }
     }
   } catch {
-    // API server not reachable in dev or standalone mode; fallback to canonical seed data
+    // API server not reachable; fall back to the canonical seed set below.
   }
 
   // Fresh per call: seed times are relative to now, and a long-running server must not serve stale deadlines.

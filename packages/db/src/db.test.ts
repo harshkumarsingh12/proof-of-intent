@@ -401,6 +401,44 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect(await db.getDispute("PP-D-NONE")).toBeNull();
   });
 
+  test("analyzedOnly puts the filter in the query: pages and the count agree, and equal deadlines keep a stable order (#234)", async () => {
+    const due = "2026-11-20T00:00:00.000Z";
+    const rec = { class: "MANDATE_COMPLIANT" };
+    const before = await db.countDisputes({ analyzedOnly: true }); // earlier tests in this file leave disputes behind
+    // Three analyzed and two not, all with the same deadline: the unanalyzed ones would fill a page if the filter ran after it.
+    for (const id of ["PP-D-P1", "PP-D-P2"])
+      await db.saveDispute({ id, paypal: {}, sellerResponseDueDate: due });
+    for (const id of ["PP-D-A3", "PP-D-A1", "PP-D-A2"])
+      await db.saveDispute({ id, paypal: {}, sellerResponseDueDate: due, recommendation: rec });
+
+    const total = await db.countDisputes({ analyzedOnly: true });
+    expect(total).toBe(before + 3); // the two unanalyzed disputes are not counted
+    expect(await db.countDisputes()).toBeGreaterThanOrEqual(total + 2);
+
+    // Walk every page of 2. Each page but the last is full (the unanalyzed ones took no places), nothing repeats or is
+    // skipped, and the order is the same however the pages are cut.
+    const seen: string[] = [];
+    const sizes: number[] = [];
+    for (let offset = 0; offset < total + 2; offset += 2) {
+      const rows = await db.listDisputes({ limit: 2, offset, analyzedOnly: true });
+      sizes.push(rows.length);
+      seen.push(...rows.map((d) => d.id));
+    }
+    expect(seen).toHaveLength(total);
+    expect(new Set(seen).size).toBe(total);
+    expect(seen).not.toContain("PP-D-P1");
+    // Paging by 2 yields exactly the sequence one big read does, so consecutive pages never repeat or skip a dispute.
+    const oneRead = (await db.listDisputes({ limit: 100, offset: 0, analyzedOnly: true })).map((d) => d.id);
+    expect(seen).toEqual(oneRead);
+    expect(seen.filter((id) => id.startsWith("PP-D-A")).sort()).toEqual(["PP-D-A1", "PP-D-A2", "PP-D-A3"]);
+    expect(sizes.filter((n) => n === 2).length).toBe(Math.floor(total / 2));
+    expect(sizes.filter((n) => n === 1).length).toBe(total % 2);
+
+    // Without the scope the unanalyzed disputes are still listed (Studio reads them this way).
+    const all = (await db.listDisputes({ limit: 100, offset: 0 })).map((d) => d.id);
+    expect(all).toEqual(expect.arrayContaining(["PP-D-P1", "PP-D-P2", "PP-D-A1"]));
+  });
+
   test("key registration: idempotent per kid, concurrent-safe, retirement keeps the first date", async () => {
     const jwk = { kty: "EC", crv: "P-256", x: "x".repeat(43), y: "y".repeat(43) };
     const [a, b] = await Promise.all([

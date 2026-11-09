@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
-import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, sortDisputes, type DisputePagingInfo } from "../../src/api";
+import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, isPartialList, sortDisputes, type DisputePagingInfo } from "../../src/api";
 import { card, kpiLabel, pillButton } from "../../src/theme";
 import { SampleDataNotice } from "../SampleDataNotice";
 
@@ -22,10 +22,8 @@ export function DisputeQueue({
   const [selectedDispute, setSelectedDispute] = useState<DisputeItem | null>(null);
   const [paging, setPaging] = useState<DisputePagingInfo | undefined>(initialPaging);
 
-  // Partial data indicator (issue #173): true only when real paging info indicates more pages exist
-  const isPartialData = Boolean(
-    paging?.hasMore || (paging?.total !== undefined && paging.total > disputes.length)
-  );
+  // Partial data indicator (#173, #234): only when the API itself said it did not send every dispute.
+  const isPartialData = isPartialList(paging, disputes.length);
 
   // Filter state
   const [filters, setFilters] = useState<DisputeFilters>({
@@ -125,8 +123,8 @@ export function DisputeQueue({
         >
           <span>ℹ️</span>
           <span>
-            <strong>Partial data:</strong> Showing first page of disputes. More disputes exist on the server
-            {paging?.total !== undefined ? ` (total: ${paging.total})` : ""}.
+            <strong>Partial data:</strong> showing {disputes.length} of {paging?.total} disputes, soonest deadline first.
+            The rest are on the server and are not in this list, the totals or the filters below.
           </span>
         </div>
       )}

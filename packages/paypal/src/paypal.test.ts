@@ -577,6 +577,45 @@ describe("Agent Toolkit transport (sandbox disputes and tracking)", () => {
     await expect(toolkitDisputes({}).getDispute("PP-D-1")).rejects.toThrow("not enabled");
   });
 
+  // #234: the toolkit's list_disputes pages by `page` (from 1, 50 to a page), not by a next link, so a caller reads past the first 50
+  // by asking for page 2, 3, ... The page number goes through as the tool's own `page` argument, and PayPal's page count comes back.
+  test("list_disputes is read page by page through the tool's own page argument, with PayPal's page count", async () => {
+    const { disputes, calls } = fakeToolkit({
+      list_disputes: { items: [{ dispute_id: "PP-D-51" }], total_pages: 2, total_items: 51 },
+    });
+    expect(await disputes.listDisputesPage(2)).toEqual({
+      items: [{ dispute_id: "PP-D-51" }],
+      page: 2,
+      totalPages: 2,
+    });
+    expect(calls).toEqual([{ name: "list_disputes", args: { page_size: 50, page: 2 } }]);
+  });
+
+  test("a page answer with no page count, or no items, is still a page; a bad page number never reaches PayPal", async () => {
+    const { disputes, calls } = fakeToolkit({ list_disputes: {} });
+    expect(await disputes.listDisputesPage(1)).toEqual({ items: [], page: 1 });
+    for (const bad of [0, -1, 1.5, Number.NaN]) await expect(disputes.listDisputesPage(bad)).rejects.toThrow(RangeError);
+    expect(calls).toHaveLength(1); // only the good call went out
+  });
+
+  test("mock: disputes are paged 50 to a page, with the page count, and a page past the end is empty", async () => {
+    const mock = createMockClient();
+    for (let i = 1; i <= 120; i++)
+      mock.seedDispute({ dispute_id: `PP-D-${i}`, status: "OPEN", update_time: "2026-11-06T00:00:00Z" });
+    const [p1, p2, p3, p4] = [
+      await mock.listDisputesPage(1),
+      await mock.listDisputesPage(2),
+      await mock.listDisputesPage(3),
+      await mock.listDisputesPage(4),
+    ];
+    expect([p1.items.length, p2.items.length, p3.items.length, p4.items.length]).toEqual([50, 50, 20, 0]);
+    expect(p1.totalPages).toBe(3);
+    expect(p3.items[0]?.dispute_id).toBe("PP-D-101");
+    const ids = [...p1.items, ...p2.items, ...p3.items].map((d) => d.dispute_id);
+    expect(new Set(ids).size).toBe(120); // every dispute exactly once
+    expect((await mock.listDisputes()).length).toBe(120); // the first-page method is unchanged
+  });
+
   test("mock: seeded disputes are readable, unknown ones are 404, tracking is recorded", async () => {
     const mock = createMockClient();
     await expect(mock.getDispute("PP-D-9")).rejects.toMatchObject({ status: 404 });

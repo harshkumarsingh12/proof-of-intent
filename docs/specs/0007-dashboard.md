@@ -138,6 +138,12 @@ concede is not offered: only MANDATE_COMPLIANT disputes have an evidence package
    copilot's calls and are labelled so. "Due within 24 hours" counts open disputes with a deadline from now to 24 h away;
    past-deadline ones are the separate "Overdue" tile. *(done: `analytics.test.ts`, `studio-data.test.ts`,
    `apps/api/src/dispute-outcome.test.ts`)*
+6. A view that does not hold every dispute says so (#173, #234). `GET /disputes` answers `{ disputes, total, limit, offset, hasMore }`:
+   `total` counts analyzed disputes in the database (the same rows `limit` and `offset` page through, in a stable order), and
+   the dashboard asks for the most the API gives (200). The queue shows "showing N of M disputes" when `hasMore` or the total says
+   it holds fewer than exist, and shows nothing when the API sent no total. Studio loads the details of the 60 most urgent
+   disputes and says how many of how many it shows. *(done: `dispute-queue.test.ts`, `studio-data.test.ts`,
+   `apps/api/src/disputes.test.ts`, `packages/db/src/db.test.ts`)*
 
 ## Out of scope
 
