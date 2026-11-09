@@ -15,13 +15,17 @@ async function scenario(run: (s: Awaited<ReturnType<typeof setup>>) => Promise<v
   const name = `poi_eval_${randomUUID().replace(/-/g, "")}`;
   const url = new URL(process.env.DATABASE_URL!);
   const admin = new pg.Client({ connectionString: url.toString() });
-  admin.on("error", (e) => console.log(`DIAG admin client error: ${(e as { code?: string }).code} ${e.message}`));
+  // These two are test scaffolding, not the code under test. The scenario's database is dropped WITH (FORCE) at the end, which
+  // makes Postgres terminate any connection still open to it (57P01). On CI that reached the helper pool as an 'error' event;
+  // with no listener, Node treats it as uncaught and failed the whole run after every test had passed. Expected at
+  // teardown, so ignore it here. The app's own pool has a handler of its own (packages/db).
+  admin.on("error", () => {});
   await admin.connect();
   await admin.query(`CREATE DATABASE ${name}`);
   url.pathname = `/${name}`;
   const db = createDb(url.toString());
   const raw = new pg.Pool({ connectionString: url.toString() });
-  raw.on("error", (e) => console.log(`DIAG raw pool error: ${(e as { code?: string }).code} ${e.message}`));
+  raw.on("error", () => {});
   let s: Awaited<ReturnType<typeof setup>> | undefined;
   try {
     s = await setup(db, raw, url.toString());
