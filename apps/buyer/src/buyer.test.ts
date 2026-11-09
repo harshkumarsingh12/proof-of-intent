@@ -462,6 +462,8 @@ describe("shop page layout structure (issue #178)", () => {
     // The details panel is placed after the request section
     expect(detailsIdx).toBeGreaterThan(section1Idx);
     expect(shopFlowSource).toContain("Your signing key &amp; PayPal wallet");
+    // A failed key setup is reported inside that panel, so the panel opens itself rather than hiding the reason.
+    expect(shopFlowSource).toMatch(/<details className="panel key-card" open=\{keyError \? true : undefined\}>/);
 
     // The subsequent steps follow in order
     const section2Idx = shopFlowSource.indexOf('<span className="num">2</span> The agent proposes a cart');

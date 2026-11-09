@@ -718,7 +718,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         )}
       </section>
 
-      <details className="panel key-card">
+      {/* Closed by default, but open when the key could not be made: the error is inside, and the limits form above stays
+          greyed out until there is a key, so a closed panel would leave the shopper with no reason why. */}
+      <details className="panel key-card" open={keyError ? true : undefined}>
         <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16 }}>
           <span>Your signing key &amp; PayPal wallet</span>
           <span className="meta" style={{ fontWeight: 400, fontSize: 13, marginLeft: 12 }}>

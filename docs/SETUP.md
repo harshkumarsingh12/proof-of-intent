@@ -54,7 +54,7 @@ the real PayPal button appears (it needs `PAYPAL_CLIENT_ID`). The agent's key ha
 set `OPERATOR_TOKEN` in `.env` (any long random string) and the shop registers it on the first checkout. Without it,
 proposing a cart answers "the merchant doesn't know this shop's agent key". Picking a category fills in its demo words, price and color; keep those words in replay mode, because
 `AI_MODE=replay` has recorded J1 answers for exactly those (one per product in the category).
-**Agent alone:** under "Your signing key", "Save a PayPal wallet" runs Vault v3 (mock PayPal returns to the shop at once; sandbox sends the shopper to PayPal to approve, and `BUYER_PUBLIC_URL` on the API must be the shop's public address so PayPal can send them back). Then "Let the agent pay alone" lets an approved cart be charged to that wallet with no PayPal step; a cart the merchant isn't sure about is held for the shopper instead, and nothing is charged. The store is
+**Agent alone:** in the "Your signing key & PayPal wallet" panel (below the limits form, closed until you open it), "Save a PayPal wallet" runs Vault v3 (mock PayPal returns to the shop at once; sandbox sends the shopper to PayPal to approve, and `BUYER_PUBLIC_URL` on the API must be the shop's public address so PayPal can send them back). Then "Let the agent pay alone" lets an approved cart be charged to that wallet with no PayPal step; a cart the merchant isn't sure about is held for the shopper instead, and nothing is charged. The store is
 `packages/contracts/src/catalog.ts`; after adding a product, add its label to `packages/ai/src/j1-cases.ts` and run
 `pnpm ai:record` (it asks the live model only about the cases without an answer; `--all` re-asks every one).
 

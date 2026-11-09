@@ -61,7 +61,7 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 6. Open [Analytics](https://poi-dashboard.iotkiit.in/analytics) and inspect disputes and outcomes by platform.
 7. Back in the shop, sign an intent and click **Let the agent choose**. The agent searches the store, proposes a cart,
    and the page lists what it did and the merchant's answer. It never proposes a product that breaks the signed limits.
-8. **Agent alone.** Under "Your signing key" click **Save a PayPal wallet**, approve as the judge sandbox shopper on PayPal, and
+8. **Agent alone.** Open **Your signing key & PayPal wallet** (below the limits form) and click **Save a PayPal wallet**, approve as the judge sandbox shopper on PayPal, and
    come back to the shop. Tick **Let the agent pay alone from my saved wallet** (it is signed into the intent), sign, and propose the grey USD 74
    jacket: there is no PayPal step, and **Paid by your agent** shows the capture. The red USD 95 jacket is still refused with
    nothing charged, and, under a freshly signed intent (one intent covers one purchase), a cart the merchant isn't sure about (the grey USD 79 rain shell) is held under **Waiting for your approval** instead of charged: click **Approve and pay from my wallet** to sign it and pay. (Checked on the mock stack
