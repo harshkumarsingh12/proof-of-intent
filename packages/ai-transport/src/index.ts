@@ -77,10 +77,15 @@ export function createOperation(
   };
 }
 export function dailyCallLimit(env: NodeJS.ProcessEnv = process.env): number {
-  const value = env.AI_DAILY_CALL_LIMIT;
-  if (value === undefined || value.trim() === "") return 500;
+  return parseLimit(env.AI_DAILY_CALL_LIMIT, 500, "AI_DAILY_CALL_LIMIT");
+}
+export function chatDailyLimit(env: NodeJS.ProcessEnv = process.env): number {
+  return parseLimit(env.BUYER_CHAT_DAILY_LIMIT, 150, "BUYER_CHAT_DAILY_LIMIT");
+}
+function parseLimit(value: string | undefined, defaultLimit: number, name: string): number {
+  if (value === undefined || value.trim() === "") return defaultLimit;
   if (!/^\d+$/.test(value.trim()) || !Number.isSafeInteger(Number(value)))
-    throw new TypeError("AI_DAILY_CALL_LIMIT must be a nonnegative safe integer");
+    throw new TypeError(`${name} must be a nonnegative safe integer`);
   return Number(value);
 }
 
@@ -287,14 +292,15 @@ export function createTransportModel(
 }
 
 const stores = new Map<string, ReturnType<typeof createDb>>();
-export function usageStoreFromEnv(env: NodeJS.ProcessEnv = process.env): UsageStore {
+export function usageStoreFromEnv(env: NodeJS.ProcessEnv = process.env, job?: string): UsageStore {
   if (!env.DATABASE_URL?.trim()) throw new AiTransportUnavailable("database_not_configured");
+  const feature = job === "buyer.chat" ? { name: "buyer.chat", limit: chatDailyLimit(env) } : undefined;
   let db = stores.get(env.DATABASE_URL);
   if (!db) {
     db = createDb(env.DATABASE_URL, { maxConnections: 2, allowExitOnIdle: true });
     stores.set(env.DATABASE_URL, db);
   }
-  return { reserve: (merchantId, limit) => db!.reserveAiCall(merchantId, limit) };
+  return { reserve: (merchantId, limit) => db!.reserveAiCall(merchantId, limit, feature) };
 }
 export function validateLiveEnvironment(env: NodeJS.ProcessEnv = process.env): void {
   dailyCallLimit(env);
@@ -320,7 +326,7 @@ export function modelFromEnv(
   if ("missing" in config) throw new AiTransportUnavailable(`missing_${config.missing.split(" ")[0]}`);
   const merchantId = env.MERCHANT_ID ?? "merchant-trailhead";
   return createTransportModel(config, options.operation ?? createOperation(job, options), {
-    usage: options.usage ?? usageStoreFromEnv(env),
+    usage: options.usage ?? usageStoreFromEnv(env, options.operation?.job ?? job),
     merchantId,
     limit: dailyCallLimit(env),
     fetch: options.fetch,
