@@ -2,7 +2,7 @@
 
 |               |                                                                |
 | ------------- | -------------------------------------------------------------- |
-| **Status**    | In Progress                                                    |
+| **Status**    | Done                                                           |
 | **Owner**     | @srshriv                                                       |
 | **Reviewers** | @harshkumarsingh12, @hoursgotviral-dev                         |
 | **Milestone** | M0 (core), M1 (remaining rules)                                |
@@ -84,7 +84,7 @@ evaluate(input: { intent: IntentMandate; cart: CartMandate; now: string; ledger?
 7. Every rule in the design table has a passing test for its reason code. Each limit the spec states has a test at
    exactly the limit: `valid_from <= now`, `now < intent_expiry`, `now < cart_expiry` and `total <= amount_max` from the
    table, and the `budget_cap` and `recurrence` limits from §Ledger rules (`max_orders`, and both ends of the
-   `(now - window_days, now]` window).
+   `(now - window_days, now]` window). _(done)_
 8. An intent that signs neither a `budget_cap` nor a `recurrence` authorizes one successful purchase: a further cart
    is `INTENT_ALREADY_USED` (#156). _(done)_
 9. `freshness({ intent, cart, now })` reports exactly the time reasons `evaluate` reports, in the same order (#161). _(done)_
