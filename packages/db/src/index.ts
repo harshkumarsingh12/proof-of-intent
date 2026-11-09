@@ -299,7 +299,6 @@ export interface Db {
   close(): Promise<void>;
 }
 
-const MIGRATIONS_DIR = join(import.meta.dirname, "../migrations");
 /** Any fixed 64-bit key; serializes concurrent migrate() calls (api and worker start together). */
 const MIGRATION_LOCK = 7_007_001;
 
@@ -879,6 +878,8 @@ export function createDb(
     },
 
     async migrate() {
+      // Only the migration runner resolves source SQL paths; runtime consumers may be bundled by Next.js.
+      const MIGRATIONS_DIR = join(import.meta.dirname, "../migrations");
       const client = await pool.connect();
       try {
         await client.query("select pg_advisory_lock($1)", [MIGRATION_LOCK]);
