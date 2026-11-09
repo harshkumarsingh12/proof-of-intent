@@ -8,6 +8,7 @@ import {
   executeDisputeAction,
   fetchPaypalActions,
   formatMoney,
+  proofPackagePath,
   type PaypalActions,
 } from "../../../src/api";
 import { card, kpiLabel, pillButton } from "../../../src/theme";
@@ -283,6 +284,7 @@ export function DisputeDetailView({
         )}
 
         {dispute.mandateId ? (
+          <>
           <div style={{ display: "flex", gap: 20, marginTop: 12, fontSize: 12, color: "var(--poi-text-muted)", flexWrap: "wrap" }}>
             <span>
               Issuer: <span style={{ fontFamily: "monospace", color: "var(--poi-text)" }}>{dispute.mandateIssuer || "None"}</span>
@@ -294,6 +296,17 @@ export function DisputeDetailView({
               Expiry: <span style={{ fontFamily: "monospace", color: "var(--poi-text)" }}>{dispute.mandateExpiry || "None"}</span>
             </span>
           </div>
+          {/* #177: the signed record behind this order, as a file anyone can check offline. Not for sample data: it has no stored mandates. */}
+          {!isDemoData && dispute.orderId && (
+            <div data-testid="proof-package-link" style={{ marginTop: 10, fontSize: 12, color: "var(--poi-text-muted)" }}>
+              <a href={proofPackagePath(dispute.orderId)} download style={{ color: "var(--poi-blue)", fontWeight: 600 }}>
+                Download proof package (JSON)
+              </a>{" "}
+              holds the three signed mandates, their public keys and the PayPal references. Anyone can check it with{" "}
+              <code>pnpm proof:verify</code>; it shows who signed what, not who holds the keys.
+            </div>
+          )}
+          </>
         ) : (
           <div style={{ marginTop: 10, fontSize: 12, color: "var(--poi-text-muted)" }}>
             Order processed without customer-signed intent parameters. Standard seller defense evidence required.
