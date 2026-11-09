@@ -5,6 +5,13 @@
  */
 import type { CartMandate, IntentMandate, ReasonCode } from "@poi/contracts";
 
+/**
+ * The version of the rule table below. Bump it when a rule's behaviour changes (a new rule, a changed comparison), not for a
+ * rename or a comment. A proof package (#177) records the version it was made under, so a reader can tell when the rules that
+ * judged a purchase are not the rules a verifier now runs.
+ */
+export const POLICY_VERSION = "poi-policy/0.1";
+
 /** Prior captured orders under this mandate. Used by budget_cap and recurrence. */
 export interface MandateLedger {
   capturedTotal: number;

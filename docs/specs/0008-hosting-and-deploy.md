@@ -73,8 +73,12 @@ even when nothing had been deployed. `/healthz` never touches Postgres, so it st
   minute. So "healthy" means it is polling and the database answers. A hung database query never beats, so a stuck worker
   turns unhealthy even though its process is alive and logs nothing. Docker only *shows* `unhealthy`; it does not restart the
   container (a restart policy acts on exit), so a stuck worker needs `docker compose restart worker`.
-- **`verify-public`** (a second job in `deploy.yml`) checks what people actually reach, from the runner: the API's `/readyz`
-  and the shop's and dashboard's `/healthz`, through the proxy and certificate. It is configured by the repository
+- **`verify-public`** (a second job in `deploy.yml`) checks what people actually reach, from the runner, with the uptime
+  monitor's script (`scripts/ops/uptime-check.sh`, retried for about two minutes): the API's `/readyz` with the database
+  reachable and the dispute worker keeping up (`"inbox":"ok"`: no dispute event waiting past `INBOX_LAG_ALERT_SECONDS`, none
+  quarantined), and the shop's and dashboard's `/healthz`, through the proxy and certificate. On Dokploy there is no SSH deploy,
+  so this is the only worker check a release gets. It catches a worker that has stopped processing events, but an idle worker
+  with no events waiting reads `ok` whether or not it is running. It is configured by the repository
   **variables** `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and `PUBLIC_DASHBOARD_URL`, and runs even when nothing was deployed over
   SSH (a Dokploy server deploys from `main`, not from the tag). When the variables are unset it passes with a loud warning
   that nothing was checked, and says so a second time when there was no SSH deploy either.
@@ -103,10 +107,11 @@ live, five migrations, scratch database dropped, live data untouched. Refused as
 statement (the old command exits 0 on it), an empty dump, and a scratch database left behind by an earlier drill. An older dump
 taken before the data existed restores cleanly and the report shows `600 newer in live`.
 
-**Not confirmed, and not something the repository can confirm:** that the *hosted* server takes backups on a schedule. The
-repository now makes it a one-line change (see "Backups on Dokploy" below), but it only counts once someone has set the two
-variables on the server, redeployed, and run the drill on a dump it produced: SETUP.md, "Setting up backups on Dokploy", has the
-steps, and #38 tracks it.
+**On the hosted server (Nov 8):** the backup service runs on the named volume and wrote
+`poi-20261107T222438Z.sql.gz`; the administrator restored that dump by hand into a scratch database with `ON_ERROR_STOP=1`, no
+errors, `orders` 29 rows in both restore and live, scratch database dropped (only `orders` compared). Still not confirmed: a
+second scheduled dump 24 h later (that is what makes it a *schedule*), a run of `restore-drill.sh` itself on the server, and an
+off-server copy (skipped for the hackathon; see SETUP.md).
 
 ### Backups on Dokploy (#38)
 

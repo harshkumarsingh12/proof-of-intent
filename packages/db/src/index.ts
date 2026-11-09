@@ -251,6 +251,11 @@ export interface Db {
   createOrder(o: OrderRecord): Promise<void>;
   getOrder(id: string): Promise<StoredOrder | null>;
   getMandate(hash: string): Promise<MandateRecord | null>;
+  /**
+   * The Payment Mandate that committed to this Cart Mandate (its signed `cart_mandate_hash`), the earliest if the same cart was
+   * paid for again after a lost answer (spec 0003, #159): that one created the order. Null when none was stored.
+   */
+  findPaymentMandateForCart(cartMandateHash: string): Promise<MandateRecord | null>;
   updateOrder(id: string, patch: OrderPatch): Promise<void>;
   /**
    * Unattended (CAPTURE) orders under an intent whose PayPal result we never learned (status UNKNOWN_OUTCOME),
@@ -737,17 +742,20 @@ export function createDb(databaseUrl: string): Db {
 
     async getMandate(hash) {
       const r = (await pool.query("select * from mandates where hash = $1", [hash])).rows[0];
-      return r
-        ? {
-            hash: r.hash,
-            kind: r.kind,
-            mandateId: r.mandate_id,
-            canonical: r.canonical,
-            jws: r.jws,
-            kid: r.kid,
-            seenAt: (r.created_at as Date).toISOString(),
-          }
-        : null;
+      return r ? toMandate(r) : null;
+    },
+
+    async findPaymentMandateForCart(cartMandateHash) {
+      // `canonical` is the exact JCS text that was signed; a payment's commitment to its cart is a field of that JSON.
+      const r = (
+        await pool.query(
+          `select * from mandates
+            where kind = 'payment' and (canonical::jsonb ->> 'cart_mandate_hash') = $1
+            order by created_at asc, hash asc limit 1`,
+          [cartMandateHash],
+        )
+      ).rows[0];
+      return r ? toMandate(r) : null;
     },
 
     async updateOrder(id, p) {
@@ -942,6 +950,18 @@ function toVerdict(r: Row): StoredVerdict {
     outcome: r.outcome as StoredVerdict["outcome"],
     reasons: r.reasons as string[],
     ...(r.semantic === null ? {} : { semantic: r.semantic }),
+  };
+}
+
+function toMandate(r: Row): MandateRecord {
+  return {
+    hash: r.hash as string,
+    kind: r.kind as MandateRecord["kind"],
+    mandateId: r.mandate_id as string,
+    canonical: r.canonical as string,
+    jws: r.jws as string,
+    kid: r.kid as string,
+    seenAt: (r.created_at as Date).toISOString(),
   };
 }
 

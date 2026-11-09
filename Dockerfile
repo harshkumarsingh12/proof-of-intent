@@ -18,6 +18,7 @@ COPY --chown=node:node packages/ledger/package.json packages/ledger/
 COPY --chown=node:node packages/mandates/package.json packages/mandates/
 COPY --chown=node:node packages/paypal/package.json packages/paypal/
 COPY --chown=node:node packages/policy-engine/package.json packages/policy-engine/
+COPY --chown=node:node packages/proof/package.json packages/proof/
 RUN pnpm install --frozen-lockfile
 
 COPY --chown=node:node . .
