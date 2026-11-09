@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { fetchDisputeDetailDetailed, fetchDisputesDetailed, serverApiBaseUrl } from "../../../src/api";
 import { studioExamples } from "../../../src/studio-agent";
-import { checkRows, disputeRows } from "../../../src/studio-data";
+import { checkRows, disputeRows, STUDIO_DETAIL_LIMIT, studioCoverageNote } from "../../../src/studio-data";
 import { pageSubtitle, pageTitle } from "../../../src/theme";
 import { studioEnabled } from "./enabled";
 import { StudioView } from "./StudioView";
@@ -19,12 +19,19 @@ export default async function StudioPage() {
     data && !data.isFallback
       ? (
           await Promise.all(
-            data.disputes.slice(0, 60).map((d) => fetchDisputeDetailDetailed(d.id, { apiBaseUrl })),
+            data.disputes
+              .slice(0, STUDIO_DETAIL_LIMIT)
+              .map((d) => fetchDisputeDetailDetailed(d.id, { apiBaseUrl })),
           )
         )
           .filter((r) => !r.isFallback && r.dispute)
           .map((r) => r.dispute!)
       : [];
+
+  const coverage =
+    data && !data.isFallback
+      ? studioCoverageNote(data.paging?.total ?? data.disputes.length, details.length)
+      : undefined;
 
   return (
     <section>
@@ -33,6 +40,11 @@ export default async function StudioPage() {
       <p style={pageSubtitle}>
         Read policy findings, compare agent platforms, and prepare buyer replies for review.
       </p>
+      {coverage && (
+        <p data-testid="studio-coverage-note" style={{ fontSize: 13, color: "var(--poi-blue)" }}>
+          <strong>Partial data:</strong> {coverage}
+        </p>
+      )}
       {licenseKey && data && !data.isFallback ? (
         <StudioView
           licenseKey={licenseKey}

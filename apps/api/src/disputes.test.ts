@@ -88,6 +88,51 @@ async function setup(paypal: PayPalClient = createMockClient()) {
   return { app, mem, paypal };
 }
 
+describe("GET /disputes paging (#234)", () => {
+  const get = async (app: Awaited<ReturnType<typeof setup>>["app"], query = "") => {
+    const res = await app.inject({ method: "GET", url: `/disputes${query}`, headers: auth });
+    expect(res.statusCode).toBe(200);
+    return res.json() as {
+      disputes: { id: string }[];
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  };
+
+  test("says how many there are and whether more exist: the total counts analyzed disputes only", async () => {
+    const { app } = await setup();
+    expect(await get(app)).toMatchObject({ total: 2, limit: 50, offset: 0, hasMore: false });
+  });
+
+  test("pages by limit and offset with no repeats, no gaps, and hasMore true until the last page", async () => {
+    const { app } = await setup();
+    const first = await get(app, "?limit=1&offset=0");
+    const second = await get(app, "?limit=1&offset=1");
+    expect([first.disputes.length, first.total, first.hasMore]).toEqual([1, 2, true]);
+    expect([second.disputes.length, second.total, second.hasMore]).toEqual([1, 2, false]);
+    expect([first.disputes[0]!.id, second.disputes[0]!.id].sort()).toEqual(["PP-D-1", "PP-D-2"]);
+    expect((await get(app, "?limit=1&offset=2")).disputes).toEqual([]); // past the end: empty, not an error
+  });
+
+  test("a dispute the copilot has not analyzed yet does not use up a place on a page", async () => {
+    const { app, mem } = await setup();
+    // It sorts before both analyzed ones. Filtering after the page was cut used to give one row for limit=2, which looked
+    // like the last page while a dispute was still waiting.
+    await mem.db.saveDispute({
+      id: "PP-D-EARLY",
+      paypal: {},
+      sellerResponseDueDate: "2026-11-01T00:00:00.000Z",
+    });
+    const page = await get(app, "?limit=2");
+    expect(page.disputes.map((d) => d.id).sort()).toEqual(["PP-D-1", "PP-D-2"]);
+    expect([page.total, page.hasMore]).toEqual([2, false]);
+    const one = await get(app, "?limit=1");
+    expect([one.disputes.length, one.hasMore]).toEqual([1, true]);
+  });
+});
+
 describe("dispute reads", () => {
   test("GET /disputes lists analyzed disputes in the dashboard's shape", async () => {
     const { app } = await setup();

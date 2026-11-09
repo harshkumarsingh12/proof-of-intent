@@ -379,7 +379,13 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   app.get("/disputes", async (req, reply) => {
     const db = needDb(reply);
     if (!db) return;
-    const rows = (await db.listDisputes(page(req.query))).filter((d) => d.recommendation);
+    // Only analyzed disputes (the filter is in the query, so `limit` and `offset` count the same rows the dashboard sees),
+    // and the total, so a dashboard that was not given all of them can say how many it was not shown (#234).
+    const { limit, offset } = page(req.query);
+    const [rows, total] = await Promise.all([
+      db.listDisputes({ limit, offset, analyzedOnly: true }),
+      db.countDisputes({ analyzedOnly: true }),
+    ]);
     // ponytail: one order lookup per dispute; fine for a demo merchant, join in listDisputes if it grows.
     const disputes = await Promise.all(
       rows.map(async (d) =>
@@ -391,7 +397,7 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         ),
       ),
     );
-    return { disputes };
+    return { disputes, total, limit, offset, hasMore: offset + disputes.length < total };
   });
 
   app.get<{ Params: { id: string } }>("/disputes/:id/recommendation", async (req, reply) => {

@@ -4,7 +4,13 @@
  * Simplification: every order counts as approved by the shopper, since there's no buyer to click.
  */
 import { randomBytes } from "node:crypto";
-import { PayPalError, type CreatedOrder, type PayPalClient, type PayPalDispute } from "./index";
+import {
+  DISPUTES_PAGE_SIZE,
+  PayPalError,
+  type CreatedOrder,
+  type PayPalClient,
+  type PayPalDispute,
+} from "./index";
 import { evidenceForm, orderBody } from "./sandbox";
 
 /** Mock mode accepts a webhook delivery only when it carries this transmission signature. */
@@ -40,6 +46,8 @@ export function createMockClient(): MockPayPalClient {
   const authorizations = new Map<string, "CREATED" | "CAPTURED" | "VOIDED">();
   const disputeActions: DisputeAction[] = [];
   const disputes = new Map<string, PayPalDispute>();
+  const listed = () =>
+    [...disputes.values()].map(({ dispute_id, update_time, status }) => ({ dispute_id, update_time, status }));
 
   const notFound = (what: string, id: string) =>
     new PayPalError(
@@ -162,11 +170,14 @@ export function createMockClient(): MockPayPalClient {
     },
 
     async listDisputes() {
-      return [...disputes.values()].map(({ dispute_id, update_time, status }) => ({
-        dispute_id,
-        update_time,
-        status,
-      }));
+      return listed();
+    },
+
+    async listDisputesPage(page) {
+      if (!Number.isInteger(page) || page < 1) throw new RangeError("a dispute page number starts at 1");
+      const all = listed();
+      const items = all.slice((page - 1) * DISPUTES_PAGE_SIZE, page * DISPUTES_PAGE_SIZE);
+      return { items, page, totalPages: Math.max(1, Math.ceil(all.length / DISPUTES_PAGE_SIZE)) };
     },
 
     async addTracking(input) {

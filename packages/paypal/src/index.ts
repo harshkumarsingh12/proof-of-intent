@@ -92,6 +92,17 @@ export interface DisputeListItem {
   status?: string;
 }
 
+/** How many disputes one `list_disputes` page holds: the Agent Toolkit's maximum (`page_size`, 1 to 50). */
+export const DISPUTES_PAGE_SIZE = 50;
+
+/** One page of the merchant's disputes. The toolkit pages by number (`page`, from 1), not by a next link or token. */
+export interface DisputeListPage {
+  items: DisputeListItem[];
+  page: number;
+  /** PayPal's own page count, when it says. Absent means: keep going until a page comes back short. */
+  totalPages?: number;
+}
+
 /** Shipment tracking for a captured payment: the proof of fulfillment for "not received" disputes. */
 export interface TrackingInput {
   captureId: string;
@@ -136,8 +147,10 @@ export interface PayPalClient {
   acceptClaim(disputeId: string, note: string): Promise<void>;
   /** The current dispute. Agent Toolkit `get_dispute`. */
   getDispute(disputeId: string): Promise<PayPalDispute>;
-  /** The merchant's most recent disputes (up to 50). Agent Toolkit `list_disputes`. */
+  /** The merchant's most recent disputes (the first page, up to 50). Agent Toolkit `list_disputes`. */
   listDisputes(): Promise<DisputeListItem[]>;
+  /** One page of the merchant's disputes, numbered from 1, so a caller can read past the first 50. */
+  listDisputesPage(page: number): Promise<DisputeListPage>;
   /** Only after an operator click. Agent Toolkit `create_shipment_tracking`. */
   addTracking(input: TrackingInput): Promise<void>;
 }

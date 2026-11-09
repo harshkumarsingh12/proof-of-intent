@@ -16,6 +16,8 @@ import {
   statusLabel,
   urgency,
   type StudioCheckRow,
+  STUDIO_DETAIL_LIMIT,
+  studioCoverageNote,
 } from "./studio-data";
 
 const check = (name: string, status: "PASS" | "FAIL", reasonCode?: string) => ({
@@ -217,7 +219,10 @@ describe("the disputes table the grid, tiles and charts read", () => {
     expect([at("2026-11-07T12:00:00.000Z").dueSoon, at("2026-11-07T12:00:00.000Z").overdue]).toEqual([1, 0]);
     expect([at("2026-11-08T12:00:00.000Z").dueSoon, at("2026-11-08T12:00:00.000Z").overdue]).toEqual([1, 0]);
     expect([at("2026-11-07T11:59:00.000Z").dueSoon, at("2026-11-07T11:59:00.000Z").overdue]).toEqual([0, 1]);
-    expect([at("2026-11-06T00:00:00.000Z", "RESOLVED").dueSoon, at("2026-11-06T00:00:00.000Z", "RESOLVED").overdue]).toEqual([0, 0]);
+    expect([
+      at("2026-11-06T00:00:00.000Z", "RESOLVED").dueSoon,
+      at("2026-11-06T00:00:00.000Z", "RESOLVED").overdue,
+    ]).toEqual([0, 0]);
   });
 
   it("copes with a missing deadline, a compliant dispute (no conceded dollars) and a missing analysis", () => {
@@ -303,5 +308,18 @@ describe("grid labels", () => {
   it("links to the full dispute page and escapes the id", () => {
     expect(disputePath("PP-R-1")).toBe("/disputes/PP-R-1");
     expect(disputePath("a/b c")).toBe("/disputes/a%2Fb%20c");
+  });
+});
+
+describe("Studio says when it is not showing every dispute (#173, #234)", () => {
+  it("is silent when Studio has them all, and says how many of how many when it does not", () => {
+    expect(studioCoverageNote(24, 24)).toBeUndefined();
+    expect(studioCoverageNote(0, 0)).toBeUndefined();
+    expect(studioCoverageNote(24, 30)).toBeUndefined(); // more than the total is not "partial"
+    expect(studioCoverageNote(150, 60)).toContain("Studio shows 60 of 150 disputes");
+  });
+
+  it("loads the details of the 60 most urgent disputes", () => {
+    expect(STUDIO_DETAIL_LIMIT).toBe(60);
   });
 });

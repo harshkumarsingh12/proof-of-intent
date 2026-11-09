@@ -15,12 +15,13 @@ import { fromPayPalAmount, PayPalError, type PayPalClient, type PayPalDispute } 
 import { importJWK, type JWK } from "jose";
 import { disputeFacts, runDisputeClassifier, type DisputeRecord, type OrderRecord } from "./classifier";
 import { buildConstraintChecks, draftEvidenceForDefend, type EvidencePackageResult } from "./evidence";
+import { forEachDisputePage } from "./intake";
 import { logger } from "./logger";
 
 export interface InboxDeps {
   db: Db;
   /** Absent: the webhook payload is all we know. Present: every dispute is re-read from PayPal first. */
-  paypal?: Pick<PayPalClient, "getDispute" | "listDisputes">;
+  paypal?: Pick<PayPalClient, "getDispute" | "listDisputesPage">;
   aiMode?: AiMode;
   now?: () => string;
   log?: (msg: string) => void;
@@ -79,19 +80,31 @@ export async function syncDisputes(deps: InboxDeps): Promise<number> {
   if (!deps.paypal) return 0;
   const log = deps.log ?? ((msg: string) => logger.warn(msg));
   let handled = 0;
-  for (const item of await deps.paypal.listDisputes()) {
-    const held = await deps.db.getDispute(item.dispute_id);
-    const stale =
-      !held ||
-      (item.update_time &&
-        (!held.paypalUpdatedAt || Date.parse(item.update_time) > Date.parse(held.paypalUpdatedAt)));
-    if (!stale) continue;
-    try {
-      await handleDisputeEvent({ resource: { dispute_id: item.dispute_id } }, deps);
-      handled++;
-    } catch (err) {
-      log(`dispute sync ${item.dispute_id} failed, will retry: ${(err as Error).message}`);
-    }
+  // Page by page, handling each page as it arrives, so a page that fails to load does not discard the ones already read.
+  const pages = await forEachDisputePage(
+    deps.paypal,
+    async (items) => {
+      for (const item of items) {
+        const held = await deps.db.getDispute(item.dispute_id);
+        const stale =
+          !held ||
+          (item.update_time &&
+            (!held.paypalUpdatedAt || Date.parse(item.update_time) > Date.parse(held.paypalUpdatedAt)));
+        if (!stale) continue;
+        try {
+          await handleDisputeEvent({ resource: { dispute_id: item.dispute_id } }, deps);
+          handled++;
+        } catch (err) {
+          log(`dispute sync ${item.dispute_id} failed, will retry: ${(err as Error).message}`);
+        }
+      }
+    },
+    { log },
+  );
+  if (pages.hitMaxPages) {
+    log(
+      `dispute sync read ${pages.pagesRead} full pages and stopped; any disputes beyond them wait for the next cycle`,
+    );
   }
   return handled;
 }
