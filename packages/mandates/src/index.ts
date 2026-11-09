@@ -8,6 +8,7 @@ import {
   calculateJwkThumbprint,
   CompactSign,
   compactVerify,
+  exportJWK,
   generateKeyPair,
   importJWK,
   type JWK,
@@ -138,4 +139,17 @@ export function createKeyRegistry() {
       return (await importJWK(key.publicJwk, "ES256")) as VerifyKey;
     },
   };
+}
+
+/**
+ * The public half of a signing key, as the P-256 coordinates a verifier needs, or undefined when the key can't be exported
+ * (a non-extractable CryptoKey). The private part is dropped before anything is returned.
+ */
+export async function publicJwkOfSigningKey(key: SigningKey): Promise<JWK | undefined> {
+  try {
+    const { d: _private, ...rest } = await exportJWK(key as Parameters<typeof exportJWK>[0]);
+    return publicEs256Jwk(rest);
+  } catch {
+    return undefined;
+  }
 }

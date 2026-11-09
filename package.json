@@ -17,6 +17,7 @@
     "ledger": "node scripts/ledger.mjs reports/vitest.json",
     "format": "prettier --write .",
     "keys:gen": "tsx scripts/keys/gen-merchant-key.ts",
+    "proof:verify": "tsx scripts/proof/verify.ts",
     "dev:api": "pnpm --filter @poi/api dev",
     "dev:buyer": "pnpm --filter @poi/buyer dev",
     "dev:dashboard": "pnpm --filter @poi/dashboard dev",

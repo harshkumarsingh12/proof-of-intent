@@ -1,0 +1,14 @@
+{
+  "name": "@poi/proof",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@poi/contracts": "workspace:*",
+    "@poi/mandates": "workspace:*",
+    "@poi/policy-engine": "workspace:*",
+    "jose": "^5.9.6",
+    "zod": "^3.23.8"
+  }
+}
