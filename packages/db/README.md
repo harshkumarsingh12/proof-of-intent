@@ -43,6 +43,11 @@ saw, and keys (`registerShopperKey`, `registerAgentKey`, `retireKey`).
 
 ## Migrations
 
+`reserveAiCall(merchantId, limit, feature?)` atomically reserves a physical provider attempt for the UTC day.
+An optional feature allowance (for example buyer chat) must have capacity alongside the merchant's global allowance;
+a denied feature reservation never consumes checkout capacity. Both caps persist across processes and restarts,
+and lower configured limits stay in force until the next UTC day. Counters older than seven days are removed together.
+
 New change → new file `migrations/NNNN_name.sql`; never edit one that has shipped. `migrate()` applies pending
 files in name order, each in its own transaction, under an advisory lock so the api and worker can start together.
 
