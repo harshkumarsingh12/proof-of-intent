@@ -13,9 +13,12 @@ import {
 export * from "./config";
 
 export class AiTransportUnavailable extends Error {
+  readonly statusCode?: number;
   constructor(readonly code: string) {
     super(`AI unavailable (${code})`);
     this.name = "AiTransportUnavailable";
+    const http = /^http_(\d{3})$/.exec(code);
+    if (http) this.statusCode = Number(http[1]);
   }
 }
 export interface UsageStore {
@@ -266,8 +269,14 @@ export function createTransportModel(
             (blocked && blocked.code !== "endpoint_timeout") ||
             (!blocked && !isFailoverError(error))
           )
-            throw error;
-          return call(config.fallback, "fallback", params, failureCategory(error));
+            throw new AiTransportUnavailable(failureCategory(error));
+          try {
+            return await call(config.fallback, "fallback", params, failureCategory(error));
+          } catch (backupError) {
+            const failed = new AiTransportUnavailable(failureCategory(backupError));
+            failed.message = `Primary endpoint failed; the backup (${config.fallback.provider}) also failed (${failed.code})`;
+            throw failed;
+          }
         }
       },
       wrapStream: async () => {
