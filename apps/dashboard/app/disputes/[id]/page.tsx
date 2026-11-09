@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function DisputeDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const { dispute, isFallback } = await fetchDisputeDetailDetailed(id, { apiBaseUrl: serverApiBaseUrl() });
+  const { dispute } = await fetchDisputeDetailDetailed(id, { apiBaseUrl: serverApiBaseUrl() });
 
   if (!dispute) {
     notFound();
@@ -44,7 +44,7 @@ export default async function DisputeDetailPage({ params }: PageProps) {
       </div>
 
       {/* Main Dispute Detail View */}
-      <DisputeDetailView dispute={dispute} isDemoData={isFallback} />
+      <DisputeDetailView dispute={dispute} />
     </div>
   );
 }

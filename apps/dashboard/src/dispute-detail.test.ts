@@ -11,6 +11,15 @@ import type { DisputeDetail } from "./dispute-types";
 import { widgets } from "./widgets";
 
 describe("dispute detail & mandate diff (spec 0007)", () => {
+  it("preserves the historical seed label when a case is served by the real API", async () => {
+    const data = { ...getDisputeDetail("PP-D-1002")!, isDemoData: true };
+    const fetchFn = (async () => Response.json(data)) as typeof fetch;
+    const loaded = await fetchDisputeDetailDetailed("PP-D-1002", { apiBaseUrl: "http://api.test", fetchFn });
+    expect(loaded.isFallback).toBe(false);
+    expect(loaded.dispute?.isDemoData).toBe(true);
+    expect(loaded.dispute?.id).toBe("PP-D-1002");
+  });
+
   it("registers mandate-diff and evidence-preview widgets with AI descriptions", () => {
     const mandateDiff = widgets.find((w) => w.id === "mandate-diff");
     expect(mandateDiff).toBeDefined();
@@ -51,14 +60,14 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     expect(detail!.evidenceDraftInfo?.coverNote.length).toBeGreaterThan(20);
     expect(detail!.evidenceDraftInfo?.attestationSections.length).toBeGreaterThan(2);
     expect(detail!.evidenceDraftInfo?.attestationHash).toBe(
-      "82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d"
+      "82db739af70408317d95f4eefeb744a7c47267451a0a3e9a1ad679e1e9e9956d",
     );
     expect(detail!.evidenceDraftInfo?.customId).toBe(
-      "poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831"
+      "poi:0192f3a0-0000-7000-8000-000000000001:82db739af7040831",
     );
     expect(detail!.evidenceDraftInfo?.pdfFilename).toBe("evidence-PP-D-1001.pdf");
     const cryptoSection = detail!.evidenceDraftInfo?.attestationSections.find((s) =>
-      s.heading.includes("Cryptographic")
+      s.heading.includes("Cryptographic"),
     );
     expect(cryptoSection?.body).toContain("ES256");
     expect(cryptoSection?.body).not.toContain("Ed25519");
@@ -181,14 +190,20 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       };
     }) as unknown as typeof fetch;
 
-    const detailedApiResult = await fetchDisputeDetailDetailed("PP-D-API/1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
+    const detailedApiResult = await fetchDisputeDetailDetailed("PP-D-API/1", {
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockSuccessFetch,
+    });
     expect(calledUrl).toBe("http://example.test/disputes/PP-D-API%2F1/recommendation");
     expect(detailedApiResult.isFallback).toBe(false);
     expect(detailedApiResult.dispute?.isDemoData).toBe(false);
     expect(detailedApiResult.dispute?.id).toBe("PP-D-API-1");
     expect(detailedApiResult.dispute?.agentPlatform).toBe("TestBot");
 
-    const directResult = await fetchDisputeDetail("PP-D-API/1", { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch });
+    const directResult = await fetchDisputeDetail("PP-D-API/1", {
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockSuccessFetch,
+    });
     expect(directResult?.id).toBe("PP-D-API-1");
 
     // API error (501 or network failure) -> falls back to local fixture with isFallback=true and isDemoData=true
@@ -196,14 +211,20 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       throw new Error("connection failed");
     }) as unknown as typeof fetch;
 
-    const fallbackDetailed = await fetchDisputeDetailDetailed("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
+    const fallbackDetailed = await fetchDisputeDetailDetailed("PP-D-1001", {
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockErrorFetch,
+    });
     expect(fallbackDetailed.isFallback).toBe(true);
     expect(fallbackDetailed.dispute?.isDemoData).toBe(true);
     expect(fallbackDetailed.dispute?.id).toBe("PP-D-1001");
     expect(fallbackDetailed.dispute?.decision).toBe("defend");
 
     // Unknown dispute ID returns undefined
-    const notFoundResult = await fetchDisputeDetailDetailed("UNKNOWN-ID", { apiBaseUrl: "http://example.test", fetchFn: mockErrorFetch });
+    const notFoundResult = await fetchDisputeDetailDetailed("UNKNOWN-ID", {
+      apiBaseUrl: "http://example.test",
+      fetchFn: mockErrorFetch,
+    });
     expect(notFoundResult.dispute).toBeUndefined();
     expect(notFoundResult.isFallback).toBe(true);
   });
@@ -226,7 +247,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       "PP-D-1001",
       "provide-evidence",
       { note: "evidence submitted" },
-      { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch }
+      { apiBaseUrl: "http://example.test", fetchFn: mockSuccessFetch },
     );
 
     expect(calledUrl).toBe("http://example.test/disputes/PP-D-1001/actions/provide-evidence");
@@ -246,7 +267,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       "PP-D-1001",
       "accept-claim",
       {},
-      { apiBaseUrl: "http://example.test", fetchFn: mock501Fetch }
+      { apiBaseUrl: "http://example.test", fetchFn: mock501Fetch },
     );
 
     expect(failureResult.success).toBe(false);
@@ -254,11 +275,23 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     expect(failureResult.error).toBe("not_implemented");
 
     // What PayPal allows: the parsed answer, or null (unknown) on any failure so nothing is blocked by mistake.
-    const actions = { stage: "INQUIRY", status: "WAITING_FOR_SELLER_RESPONSE", allowed: ["accept-claim", "escalate"] };
+    const actions = {
+      stage: "INQUIRY",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      allowed: ["accept-claim", "escalate"],
+    };
     const okFetch = (async () => ({ ok: true, json: async () => actions })) as unknown as typeof fetch;
-    expect(await fetchPaypalActions("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: okFetch })).toEqual(actions);
-    const downFetch = (async () => ({ ok: false, status: 503, json: async () => ({}) })) as unknown as typeof fetch;
-    expect(await fetchPaypalActions("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: downFetch })).toBeNull();
+    expect(
+      await fetchPaypalActions("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: okFetch }),
+    ).toEqual(actions);
+    const downFetch = (async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+    expect(
+      await fetchPaypalActions("PP-D-1001", { apiBaseUrl: "http://example.test", fetchFn: downFetch }),
+    ).toBeNull();
 
     // The API's human message is what the operator sees, not the bare status.
     const unavailable = (async () => ({
@@ -267,7 +300,12 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       statusText: "Service Unavailable",
       json: async () => ({ error: "paypal_unavailable", message: "PayPal accept-claim failed; try again" }),
     })) as unknown as typeof fetch;
-    const retry = await executeDisputeAction("PP-D-1001", "accept-claim", {}, { apiBaseUrl: "http://example.test", fetchFn: unavailable });
+    const retry = await executeDisputeAction(
+      "PP-D-1001",
+      "accept-claim",
+      {},
+      { apiBaseUrl: "http://example.test", fetchFn: unavailable },
+    );
     expect(retry.error).toBe("PayPal accept-claim failed; try again");
 
     // 3. Network error returns failure, never success
@@ -279,7 +317,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       "PP-D-1001",
       "provide-evidence",
       {},
-      { apiBaseUrl: "http://example.test", fetchFn: mockNetworkErrorFetch }
+      { apiBaseUrl: "http://example.test", fetchFn: mockNetworkErrorFetch },
     );
 
     expect(netResult.success).toBe(false);

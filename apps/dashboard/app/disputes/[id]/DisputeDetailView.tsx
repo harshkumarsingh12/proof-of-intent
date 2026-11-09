@@ -146,7 +146,7 @@ export function DisputeDetailView({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {isDemoData && (
         <SampleDataNotice>
-          This dispute comes from the built-in demo set. Live disputes appear here once the merchant API serves them.
+          Historical seeded case. This is fictional, read-only demo data, not a payment or refund from the current checkout.
         </SampleDataNotice>
       )}
 

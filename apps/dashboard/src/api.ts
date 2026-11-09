@@ -89,7 +89,7 @@ export interface FetchDisputeDetailResponse {
  */
 export async function fetchDisputeDetailDetailed(
   disputeId: string,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<FetchDisputeDetailResponse> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
@@ -104,7 +104,10 @@ export async function fetchDisputeDetailDetailed(
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
-        return { dispute: { ...(data as DisputeDetail), isDemoData: false }, isFallback: false };
+        return {
+          dispute: { ...(data as DisputeDetail), isDemoData: (data as DisputeDetail).isDemoData === true },
+          isFallback: false,
+        };
       }
     }
   } catch {
@@ -125,18 +128,14 @@ export async function fetchDisputeDetailDetailed(
  */
 export async function fetchDisputeDetail(
   disputeId: string,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<DisputeDetail | undefined> {
   const res = await fetchDisputeDetailDetailed(disputeId, options);
   return res.dispute;
 }
 
 export type DisputeOperatorAction =
-  | "provide-evidence"
-  | "accept-claim"
-  | "make-offer"
-  | "send-message"
-  | "escalate";
+  "provide-evidence" | "accept-claim" | "make-offer" | "send-message" | "escalate";
 
 export interface PaypalActions {
   stage: string | null;
@@ -147,7 +146,7 @@ export interface PaypalActions {
 /** What PayPal allows on a dispute right now (GET /disputes/:id/paypal-actions). Null when unknown. */
 export async function fetchPaypalActions(
   disputeId: string,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<PaypalActions | null> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
@@ -179,7 +178,7 @@ export async function executeDisputeAction(
   disputeId: string,
   action: DisputeOperatorAction,
   payload?: Record<string, unknown>,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<DisputeActionResult> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
@@ -228,9 +227,7 @@ export async function executeDisputeAction(
  * Reads from the API over HTTP with no direct database access.
  * Falls back to canonical seed analytics if the API returns 501 or is offline.
  */
-export async function fetchAnalytics(
-  options?: FetchDisputesOptions
-): Promise<AnalyticsSummary> {
+export async function fetchAnalytics(options?: FetchDisputesOptions): Promise<AnalyticsSummary> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
@@ -255,7 +252,10 @@ export async function fetchAnalytics(
 
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
 export function formatMoney(money: Money): string {
-  const amount = (money.value / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const amount = (money.value / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   if (money.currency === "USD") {
     return `$${amount}`;
   }
