@@ -12,6 +12,7 @@ COPY --chown=node:node apps/worker/package.json apps/worker/
 COPY --chown=node:node apps/buyer/package.json apps/buyer/
 COPY --chown=node:node apps/dashboard/package.json apps/dashboard/
 COPY --chown=node:node packages/ai/package.json packages/ai/
+COPY --chown=node:node packages/ai-transport/package.json packages/ai-transport/
 COPY --chown=node:node packages/contracts/package.json packages/contracts/
 COPY --chown=node:node packages/db/package.json packages/db/
 COPY --chown=node:node packages/ledger/package.json packages/ledger/
