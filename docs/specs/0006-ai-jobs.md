@@ -106,6 +106,16 @@ runs the identical fixed set against the configured fallback alone and does not 
 The backup must pass independently before being treated as evaluated. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
 schema validity 100% after retry.
 
+**Supplemental evaluation (#169).** Keep the milestone 20/12 sets fixed. `scripts/ai/eval-holdout.ts` adds 12
+disjoint public semantic regressions and 10 real-route scenarios with disposable PostgreSQL and mock PayPal.
+Raw model accuracy, raw false approvals and attempts are reported separately from guarded outcomes, plus schema
+validity, case latency and provider telemetry when available. Targets: all 10 system cases, at least 11/12 guarded
+semantic cases, zero raw/guarded mismatch-to-match approvals and 100% valid model cases after retry. System cases
+cover catalog manipulation, multi-order budget races, expired/revoked authority, provider failure and persisted
+completed-payment outcomes. J2's supplied-decision agreement is explicitly explanation faithfulness. No hidden
+benchmark, independent J2 classification accuracy, hosted payment result or measured business benefit is claimed.
+Each run writes matching timestamped Markdown/JSON with the source commit; supplemental runs never publish replay.
+
 ## Acceptance criteria
 
 1. Replay: compliant fixture → `match` ≥ 0.8; rain shell → `partial`. _(done)_

@@ -25,6 +25,31 @@ backup is unverified; a passing primary does not validate it.
 
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
 
+## Supplemental semantic and completed-payment evaluation (#169)
+
+Commit the source first. Use disposable PostgreSQL 16 (a role allowed to create/drop test databases) and the
+team's configured provider environment, then run `pnpm exec tsx scripts/ai/eval-holdout.ts`. The command creates
+isolated databases and uses mock PayPal; never point it at production. `--backup` runs the configured fallback
+alone. `--system-only` needs no model credentials and explicitly does not validate a live model.
+
+The additional 12 semantic cases are disjoint from the golden set and prompt examples. They are public
+regressions, not a hidden benchmark. Reports retain raw model outputs/predictions separately from guarded
+system predictions and exclude local pre-model guards from the model denominator. Ten PostgreSQL scenarios
+exercise the real API: product price/title/attribute manipulation, concurrent spending reservations, expired
+authority, provider failure, expiry/revocation before approval, and both human-approved and unattended completed
+payments with persisted capture IDs. Payment proposals are not counted as completed payments.
+
+Require all 10 system scenarios, at least 11/12 guarded semantic cases, zero raw or guarded mismatch-to-match
+approvals, and 100% schema validity after retry for model cases. Report raw accuracy independently, even if
+guards improve the result. The timestamped Markdown/JSON pair identifies the commit; provider attempts are
+included when the #171 transport hook is available and otherwise remain explicitly unobserved. These runs never
+rewrite canonical replay files or change the scored 20 J1 / 12 J2 sets. Return primary and backup artifacts for
+review before publishing new figures. A system-only pass is local safety evidence, not a live or hosted result.
+
+Known separate gap: [#225](https://github.com/harshkumarsingh12/proof-of-intent/issues/225) reproduces a pending
+capture being marked completed by the sandbox adapter. The ten scenarios above use the mock payment provider;
+their pass does not validate provider settlement-state handling. Keep that limitation with any published result.
+
 ## Studio starter recordings
 
 Common Studio questions no longer need recordings (a local planner answers them); `pnpm smoke:studio` checks them in
