@@ -17,6 +17,22 @@ test("missing records and an unprepared preview are visible even for a compliant
   expect(evidenceAvailability(full).checks.find((c) => c.label === "Intent record")?.available).toBe(true);
 });
 
+test("an evidence preview is only counted where one is ever built: a concede or a no-mandate dispute has none to miss", () => {
+  const preview = (id: string) => {
+    const a = evidenceAvailability(getDisputeDetail(id)!);
+    return {
+      total: a.total,
+      hasPreview: a.checks.some((c) => c.label === "Evidence preview"),
+      all: a.checks.map((c) => c.available),
+    };
+  };
+  expect(preview("PP-D-1001")).toMatchObject({ total: 4, hasPreview: true }); // compliant: the defend package
+  expect(preview("PP-D-1002")).toEqual({ total: 3, hasPreview: false, all: [true, true, true] }); // the demo's overreach: 3/3, not 3/4
+  expect(preview("PP-D-1015")).toMatchObject({ total: 3, hasPreview: false }); // no mandate: the standard path, no PDF
+  // Real gaps are still reported where they are real.
+  expect(preview("PP-D-1015").all).toContain(false);
+});
+
 test("confidence is independent of record availability and is never described as calibrated certainty", () => {
   expect(confidenceDescription(0.83)).toContain("Uncalibrated model score: 0.83");
   expect(confidenceDescription(1)).toContain("not a probability of winning");

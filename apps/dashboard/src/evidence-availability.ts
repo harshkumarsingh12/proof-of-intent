@@ -11,7 +11,11 @@ export function evidenceAvailability(dispute: DisputeDetail) {
         ["APPROVE", "REJECT", "STEP_UP"].includes(dispute.checkoutVerdict ?? "") &&
         dispute.constraintChecks.length > 0,
     },
-    { label: "Evidence preview", available: !!dispute.evidenceDrafted && !!dispute.evidenceDraftInfo },
+    // The worker builds the attestation PDF only for a compliant dispute (a defend package). For a concede or a no-mandate
+    // dispute none is ever expected, so counting it would show "missing" for something that was never going to exist.
+    ...(dispute.disputeClass === "MANDATE_COMPLIANT"
+      ? [{ label: "Evidence preview", available: !!dispute.evidenceDrafted && !!dispute.evidenceDraftInfo }]
+      : []),
   ];
   return { checks, available: checks.filter((c) => c.available).length, total: checks.length };
 }

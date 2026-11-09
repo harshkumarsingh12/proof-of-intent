@@ -6,7 +6,7 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 
 Dispute details separate the deterministic policy class from the model's optional, uncalibrated score.
 `classificationInfo.confidence` is `number | null`; missing/invalid scores are unavailable, never filled with
-100%. Record availability lists the intent, cart, checkout finding and prepared preview independently. It is
+100%. Record availability lists the intent, cart and checkout finding independently, and the prepared evidence preview only for a compliant dispute (the only class the worker builds a defend package for; a concede or no-mandate dispute has none to miss). It is
 not a completeness certification or a probability of winning. Delivery, cardholder authorization and completed
 refunds require separate evidence. Historical sample scores are unset. Old unbounded AI reasons are omitted
 until reprocessed with source-excerpt rendering; existing stored PDFs should be reviewed before reuse.
@@ -22,7 +22,7 @@ until reprocessed with source-excerpt rendering; existing stored PDFs should be 
 | Orders         | `/orders`           | `app/orders/page.tsx`, `OrdersView.tsx`                          |
 | Dispute Studio | `/analytics/studio` | `app/analytics/studio/` (`StudioView.tsx`, `studio-widgets.tsx`) |
 
-Dispute Studio is in the sidebar under Analytics and has a banner on the Analytics page. It opens on four KPI tiles, a donut
+Dispute Studio is in the sidebar under Analytics and has a banner on the Analytics page. It opens on five KPI tiles, a donut
 of disputes by class (click a slice to filter everything), the agent platform cards, an AG Grid of disputes (click a row, filter,
 export CSV), and the mandate diff and evidence preview for the selected dispute. Its "Ask the AI" switch opens the chat (common questions are answered
 by a local planner in both modes; open-ended ones need live AI). The switch explains the limits. Run

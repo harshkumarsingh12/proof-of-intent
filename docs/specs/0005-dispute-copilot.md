@@ -18,7 +18,7 @@ fast, with a person making the final call. Journeys C and D.
 **Uncertainty correction (#170, Nov 9).** The class follows the policy tree; it is not assigned a probability
 of 1. The recommendation response's existing `classificationInfo.confidence` is the persisted model's
 uncalibrated self-score, or `null` if absent/invalid. The dashboard labels it accordingly and separately lists
-missing intent/cart/checkout/preview records. Record availability does not prove delivery, cardholder
+missing intent/cart/checkout records (and the preview, for a compliant dispute). Record availability does not prove delivery, cardholder
 authorization, refund completion or completeness of a dispute defence. AI reasons/plans are displayed only
 when tagged `grounding_version: source-excerpts-v1`, the bounded rendering described in spec 0006; legacy
 unbounded prose is omitted. Review previously generated PDFs before reusing them. Operator actions are unchanged.
