@@ -47,12 +47,24 @@ export const REQUIRED_EVIDENCE_BY_REASON: Record<string, EvidenceRequirement[]> 
   ],
 };
 
+export type DeliveryEvidenceStatus =
+  | "confirmed"
+  | "in-transit"
+  | "failed"
+  | "unknown"
+  | "not available";
+
 export interface EvidenceRequirementsReport {
   disputeReason: string;
   required: string[];
   available: string[];
   missing: string[];
-  deliveryEvidence: "confirmed" | "not available";
+  deliveryEvidence: DeliveryEvidenceStatus;
+  trackingMetadata?: {
+    carrier?: string;
+    trackingNumber?: string;
+    status?: string;
+  };
   details: Array<{
     id: string;
     label: string;
@@ -69,7 +81,7 @@ export function evaluateEvidenceRequirements(
     hasCapture?: boolean;
     hasPolicyEvaluation?: boolean;
     hasOrderPointer?: boolean;
-    tracking?: { trackingNumber?: string; carrier?: string };
+    tracking?: { trackingNumber?: string; carrier?: string; status?: string };
   },
 ): EvidenceRequirementsReport {
   const reason = disputeReason ?? "UNKNOWN";
@@ -78,7 +90,24 @@ export function evaluateEvidenceRequirements(
     { id: "cart_mandate", label: "Cart Mandate", description: "Itemized cart contents" },
   ];
 
-  const hasTracking = Boolean(records?.tracking?.trackingNumber);
+  const hasTrackingNumber = Boolean(records?.tracking?.trackingNumber?.trim());
+  const rawStatus = records?.tracking?.status?.trim().toUpperCase();
+
+  let deliveryEvidence: DeliveryEvidenceStatus;
+  if (!hasTrackingNumber) {
+    deliveryEvidence = "not available";
+  } else if (rawStatus === "DELIVERED") {
+    deliveryEvidence = "confirmed";
+  } else if (rawStatus === "IN_TRANSIT" || rawStatus === "SHIPPED" || rawStatus === "ON_HOLD") {
+    deliveryEvidence = "in-transit";
+  } else if (rawStatus === "CANCELLED" || rawStatus === "FAILED" || rawStatus === "RETURNED") {
+    deliveryEvidence = "failed";
+  } else {
+    deliveryEvidence = "unknown";
+  }
+
+  const hasConfirmedDelivery = deliveryEvidence === "confirmed";
+
   const isAvailable = (id: string): boolean => {
     switch (id) {
       case "signed_intent_mandate":
@@ -86,7 +115,7 @@ export function evaluateEvidenceRequirements(
       case "cart_mandate":
         return Boolean(records?.hasCart);
       case "proof_of_fulfillment":
-        return hasTracking;
+        return hasConfirmedDelivery;
       case "constraint_evaluation":
         return Boolean(records?.hasPolicyEvaluation);
       case "order_pointer_match":
@@ -102,9 +131,14 @@ export function evaluateEvidenceRequirements(
     const available = isAvailable(req.id);
     let value: string | undefined;
     if (req.id === "proof_of_fulfillment") {
-      value = hasTracking
-        ? `${records?.tracking?.carrier ?? "Carrier"}: ${records?.tracking?.trackingNumber}`
-        : "not available";
+      if (hasTrackingNumber) {
+        const carrier = records?.tracking?.carrier ?? "Carrier";
+        const num = records?.tracking?.trackingNumber;
+        const statusLabel = records?.tracking?.status ? ` (${records.tracking.status})` : "";
+        value = `${carrier}: ${num}${statusLabel}`;
+      } else {
+        value = "not available";
+      }
     }
     return {
       id: req.id,
@@ -123,7 +157,16 @@ export function evaluateEvidenceRequirements(
     required: requiredIds,
     available: availableIds,
     missing: missingIds,
-    deliveryEvidence: hasTracking ? "confirmed" : "not available",
+    deliveryEvidence,
+    ...(hasTrackingNumber
+      ? {
+          trackingMetadata: {
+            carrier: records?.tracking?.carrier,
+            trackingNumber: records?.tracking?.trackingNumber,
+            status: records?.tracking?.status,
+          },
+        }
+      : {}),
     details,
   };
 }
@@ -241,6 +284,36 @@ export function generateDefaultEvidenceDraft(
   const lines = cart.contents.lines.map((l) => `${l.quantity}x ${l.title} (${l.sku})`).join(", ");
   const deliveryStatus = evidenceReport?.deliveryEvidence ?? "not available";
   const missingFulfillment = evidenceReport?.missing.includes("proof_of_fulfillment");
+  const trackingMeta = evidenceReport?.trackingMetadata;
+
+  let fulfillmentNote = "";
+  if (evidenceReport) {
+    if (deliveryStatus === "confirmed") {
+      const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
+        ? ` via ${trackingMeta.carrier} ${trackingMeta.trackingNumber}`
+        : "";
+      fulfillmentNote = ` Proof of fulfillment/delivery: confirmed${carrierInfo}.`;
+    } else if (deliveryStatus === "in-transit") {
+      const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
+        ? ` (${trackingMeta.carrier} ${trackingMeta.trackingNumber})`
+        : "";
+      fulfillmentNote = ` Shipment tracking is in-transit${carrierInfo}; delivery is unverified.`;
+    } else if (deliveryStatus === "unknown") {
+      const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
+        ? ` (${trackingMeta.carrier} ${trackingMeta.trackingNumber})`
+        : "";
+      fulfillmentNote = ` Shipment tracking identifier is recorded${carrierInfo}, but delivery is unverified.`;
+    } else if (deliveryStatus === "failed") {
+      const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
+        ? ` (${trackingMeta.carrier} ${trackingMeta.trackingNumber})`
+        : "";
+      fulfillmentNote = ` Shipment tracking reported delivery failed or cancelled${carrierInfo}.`;
+    } else if (missingFulfillment) {
+      fulfillmentNote = " Proof of fulfillment/delivery: not available.";
+    }
+  } else if (missingFulfillment) {
+    fulfillmentNote = " Proof of fulfillment/delivery: not available.";
+  }
 
   const sections: Array<{ heading: string; body: string }> = [
     { heading: "Shopper Stated Intent", body: intent.natural_language_description },
@@ -252,16 +325,22 @@ export function generateDefaultEvidenceDraft(
     },
   ];
 
-  if (disputeReason === "MERCHANDISE_OR_SERVICE_NOT_RECEIVED" || missingFulfillment) {
+  if (disputeReason === "MERCHANDISE_OR_SERVICE_NOT_RECEIVED" || missingFulfillment || deliveryStatus !== "not available") {
+    let deliveryBody = `Delivery evidence: ${deliveryStatus}`;
+    if (deliveryStatus === "confirmed" && trackingMeta?.trackingNumber) {
+      deliveryBody += ` (${trackingMeta.carrier ?? "Carrier"}: ${trackingMeta.trackingNumber}, status: DELIVERED)`;
+    } else if (deliveryStatus === "in-transit" && trackingMeta?.trackingNumber) {
+      deliveryBody += ` (${trackingMeta.carrier ?? "Carrier"}: ${trackingMeta.trackingNumber}, status: ${trackingMeta.status ?? "in-transit"})`;
+    } else if (deliveryStatus === "unknown" && trackingMeta?.trackingNumber) {
+      deliveryBody += ` (tracking number recorded: ${trackingMeta.carrier ?? "Carrier"} ${trackingMeta.trackingNumber}; delivery unverified)`;
+    } else if (deliveryStatus === "failed" && trackingMeta?.trackingNumber) {
+      deliveryBody += ` (${trackingMeta.carrier ?? "Carrier"}: ${trackingMeta.trackingNumber}, status: ${trackingMeta.status ?? "failed"})`;
+    }
     sections.push({
       heading: "Delivery & Fulfillment Evidence",
-      body: `Delivery evidence: ${deliveryStatus}`,
+      body: deliveryBody,
     });
   }
-
-  const fulfillmentNote = missingFulfillment
-    ? " Proof of fulfillment/delivery: not available."
-    : "";
 
   return {
     cover_note:

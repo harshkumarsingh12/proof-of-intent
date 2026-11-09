@@ -5,7 +5,7 @@ import { generateSeedDisputes } from "./seed-disputes";
 export interface ReasonEvidenceMapping {
   required: string[];
   missing: string[];
-  deliveryEvidence: "CONFIRMED" | "not available";
+  deliveryEvidence: "CONFIRMED" | "in-transit" | "failed" | "unknown" | "not available";
   responseReadiness: "READY" | "INCOMPLETE";
   mandateCompliance: "COMPLIANT" | "NON_COMPLIANT" | "NO_MANDATE" | "MISREAD";
 }
@@ -17,7 +17,7 @@ export function evaluateDisputeEvidence(
     hasMandate?: boolean;
     hasDeliveryEvidence?: boolean;
     hasPolicyEvaluation?: boolean;
-    tracking?: { trackingNumber?: string };
+    tracking?: { trackingNumber?: string; status?: string };
   },
 ): ReasonEvidenceMapping {
   // 1. Mandate Compliance
@@ -38,7 +38,11 @@ export function evaluateDisputeEvidence(
   const required: string[] = [];
   const missing: string[] = [];
   const hasMandate = options?.hasMandate ?? (disputeClass !== "NO_MANDATE");
-  const hasDelivery = Boolean(options?.hasDeliveryEvidence || options?.tracking?.trackingNumber);
+  // A tracking number alone proves a label exists, not that the parcel arrived (#238): only a DELIVERED status confirms it,
+  // the same rule as the worker's evaluateEvidenceRequirements (apps/worker/src/evidence.ts).
+  const hasTrackingNumber = Boolean(options?.tracking?.trackingNumber?.trim());
+  const trackingStatus = options?.tracking?.status?.trim().toUpperCase();
+  const hasDelivery = Boolean(options?.hasDeliveryEvidence) || (hasTrackingNumber && trackingStatus === "DELIVERED");
 
   switch (buyerDisputeReason) {
     case "MERCHANDISE_OR_SERVICE_NOT_RECEIVED": {
@@ -82,7 +86,15 @@ export function evaluateDisputeEvidence(
   }
 
   // 3. Delivery Evidence: "There is no tracking or fulfillment data in the worker, so delivery evidence shows 'not available' unless real data exists."
-  const deliveryEvidence = hasDelivery ? "CONFIRMED" : "not available";
+  const deliveryEvidence: ReasonEvidenceMapping["deliveryEvidence"] = hasDelivery
+    ? "CONFIRMED"
+    : !hasTrackingNumber
+      ? "not available"
+      : trackingStatus === "IN_TRANSIT" || trackingStatus === "SHIPPED" || trackingStatus === "ON_HOLD"
+        ? "in-transit"
+        : trackingStatus === "CANCELLED" || trackingStatus === "FAILED" || trackingStatus === "RETURNED"
+          ? "failed"
+          : "unknown";
 
   // 4. Response Readiness: Ready only if no required items are missing
   const responseReadiness: "READY" | "INCOMPLETE" = missing.length === 0 ? "READY" : "INCOMPLETE";
