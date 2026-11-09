@@ -7,7 +7,14 @@
  * goes through `run`, which turns those into a PayPalError the API already knows how to answer.
  */
 import { PayPalAgentToolkit } from "@paypal/agent-toolkit/ai-sdk";
-import { PayPalError, type DisputeListItem, type PayPalDispute, type TrackingInput } from "./index";
+import {
+  DISPUTES_PAGE_SIZE,
+  PayPalError,
+  type DisputeListItem,
+  type DisputeListPage,
+  type PayPalDispute,
+  type TrackingInput,
+} from "./index";
 
 /** The tools we enable: dispute get/list/accept and shipment tracking create. Nothing else. */
 export const TOOLKIT_ACTIONS = {
@@ -20,6 +27,7 @@ export type ToolkitTool = { execute?: (args: never, options: never) => PromiseLi
 export interface ToolkitDisputes {
   getDispute(disputeId: string): Promise<PayPalDispute>;
   listDisputes(): Promise<DisputeListItem[]>;
+  listDisputesPage(page: number): Promise<DisputeListPage>;
   acceptClaim(disputeId: string, note: string): Promise<void>;
   addTracking(input: TrackingInput): Promise<void>;
 }
@@ -74,8 +82,22 @@ export function toolkitDisputes(tools: Record<string, ToolkitTool>): ToolkitDisp
     getDispute: (disputeId) => run<PayPalDispute>("get_dispute", { dispute_id: disputeId }),
 
     async listDisputes() {
-      const res = await run<{ items?: DisputeListItem[] }>("list_disputes", { page_size: 50 });
+      const res = await run<{ items?: DisputeListItem[] }>("list_disputes", { page_size: DISPUTES_PAGE_SIZE });
       return res?.items ?? [];
+    },
+
+    async listDisputesPage(page) {
+      if (!Number.isInteger(page) || page < 1) throw new RangeError("a dispute page number starts at 1");
+      const res = await run<{ items?: DisputeListItem[]; total_pages?: number }>("list_disputes", {
+        page_size: DISPUTES_PAGE_SIZE,
+        page,
+      });
+      const totalPages = res?.total_pages;
+      return {
+        items: res?.items ?? [],
+        page,
+        ...(Number.isInteger(totalPages) && (totalPages as number) >= 0 ? { totalPages: totalPages as number } : {}),
+      };
     },
 
     async acceptClaim(disputeId, note) {

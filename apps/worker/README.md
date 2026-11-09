@@ -15,7 +15,9 @@ PayPal; dispute actions happen in the API after an operator click.
    rule-only explanation and draft. The result is stored on the `disputes` row. A failing event is retried after a backoff (30 s doubling to an hour), and after 5 attempts is quarantined
    with its error, so it cannot block newer disputes (#164); several workers can run (events are claimed with a lease). Handling one twice gives the same row; an older delivery can't overwrite a newer one.
 2. **Catch-up**: every `DISPUTE_SYNC_MS` (default 5 min) `list_disputes` finds disputes we don't hold, or hold an
-   older version of, so a missed webhook still reaches the dashboard.
+   older version of, so a missed webhook still reaches the dashboard. It reads PayPal's list page by page (`page` 1, 2, ...,
+   50 to a page, up to 10 pages) and handles each page as it arrives, so a page that fails to load keeps the ones before it.
+   A page that comes back short, or PayPal's own page count, ends it; past the cap it logs that the rest waits for the next cycle.
 
 Needs `DATABASE_URL`; `PAYPAL_MODE` and `AI_MODE` as for the API.
 

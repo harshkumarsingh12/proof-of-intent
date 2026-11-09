@@ -11,6 +11,7 @@ import { CartMandate, IntentMandate, type DisputeClass, type Money, type ReasonC
 import type { AuditRecord, Db, DisputeRow, DisputeSummary, StoredOrder } from "@poi/db";
 import { evidenceTypeFor, fromPayPalAmount, PayPalError } from "@poi/paypal";
 import type { AppDeps } from "../app";
+import { assembleProof } from "../proof";
 
 /** What the worker stores in disputes.recommendation (apps/worker/src/inbox.ts). */
 interface Recommendation {
@@ -140,6 +141,7 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
   const groundedAi = rec.ai?.grounding_version === "source-excerpts-v1" ? rec.ai : undefined;
   return {
     ...base,
+    isDemoData: rec.demo === true,
     ...(intent
       ? {
           shopperIntentText: intent.natural_language_description,
@@ -314,6 +316,27 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
     return db && { orders: await db.listOrders(page(req.query)) };
   });
 
+  // The proof package for one order (#177): the three signed mandates, their public keys, the PayPal references and the policy
+  // version, as a file anyone can check offline with `pnpm proof:verify`. Read-only, and guarded like every GET here.
+  app.get<{ Params: { id: string } }>("/orders/:id/proof", async (req, reply) => {
+    const db = needDb(reply);
+    if (!db) return;
+    const out = await assembleProof(
+      db,
+      deps.merchant,
+      req.params.id,
+      deps.now?.() ?? new Date().toISOString(),
+    );
+    reply.header("cache-control", "no-store");
+    if (out.status === 200) {
+      reply.header(
+        "content-disposition",
+        `attachment; filename="poi-proof-${req.params.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json"`,
+      );
+    }
+    return reply.code(out.status).send(out.body);
+  });
+
   app.get("/verifications", async (req, reply) => {
     const db = needDb(reply);
     return db && { verifications: await db.listVerdicts(page(req.query)) };
@@ -388,7 +411,13 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   app.get("/disputes", async (req, reply) => {
     const db = needDb(reply);
     if (!db) return;
-    const rows = (await db.listDisputes(page(req.query))).filter((d) => d.recommendation);
+    // Only analyzed disputes (the filter is in the query, so `limit` and `offset` count the same rows the dashboard sees),
+    // and the total, so a dashboard that was not given all of them can say how many it was not shown (#234).
+    const { limit, offset } = page(req.query);
+    const [rows, total] = await Promise.all([
+      db.listDisputes({ limit, offset, analyzedOnly: true }),
+      db.countDisputes({ analyzedOnly: true }),
+    ]);
     // ponytail: one order lookup per dispute; fine for a demo merchant, join in listDisputes if it grows.
     const disputes = await Promise.all(
       rows.map(async (d) =>
@@ -400,7 +429,7 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
         ),
       ),
     );
-    return { disputes };
+    return { disputes, total, limit, offset, hasMore: offset + disputes.length < total };
   });
 
   app.get<{ Params: { id: string } }>("/disputes/:id/recommendation", async (req, reply) => {

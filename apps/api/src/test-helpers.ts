@@ -155,6 +155,15 @@ export function memoryDb() {
     },
     getOrder: async (id) => orders.get(id) ?? null,
     getMandate: async (hash) => mandates.get(hash) ?? null,
+    findPaymentMandateForCart: async (cartMandateHash) =>
+      [...mandates.values()]
+        .filter(
+          (m) =>
+            m.kind === "payment" &&
+            (JSON.parse(m.canonical) as { cart_mandate_hash?: string }).cart_mandate_hash === cartMandateHash,
+        )
+        .sort((a, b) => (a.seenAt ?? "").localeCompare(b.seenAt ?? "") || a.hash.localeCompare(b.hash))[0] ??
+      null,
     updateOrder: async (id, p) => {
       const o = orders.get(id);
       if (!o) throw new Error(`order ${id} does not exist`);
@@ -247,10 +256,17 @@ export function memoryDb() {
     listDisputes: async (p) =>
       page(
         [...disputes.values()]
-          .sort((a, b) => (a.sellerResponseDueDate ?? "~").localeCompare(b.sellerResponseDueDate ?? "~"))
+          .filter((d) => !p.analyzedOnly || d.recommendation !== undefined)
+          .sort(
+            (a, b) =>
+              (a.sellerResponseDueDate ?? "~").localeCompare(b.sellerResponseDueDate ?? "~") ||
+              a.id.localeCompare(b.id),
+          )
           .map(({ evidencePdf, ...d }) => ({ ...d, hasEvidencePdf: evidencePdf !== undefined })),
         p,
       ),
+    countDisputes: async (scope) =>
+      [...disputes.values()].filter((d) => !scope?.analyzedOnly || d.recommendation !== undefined).length,
     migrate: async () => [],
     close: async () => {},
   };

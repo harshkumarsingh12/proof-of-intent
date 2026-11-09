@@ -2,10 +2,116 @@ import { greyJacketIntent } from "@poi/contracts/fixtures";
 import type { ConstraintCheck, DisputeDetail } from "./dispute-types";
 import { generateSeedDisputes } from "./seed-disputes";
 
-/**
- * Builds canonical DisputeDetail for a dispute ID, matching specs 0005 and 0007.
- */
-export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
+export interface ReasonEvidenceMapping {
+  required: string[];
+  missing: string[];
+  deliveryEvidence: "CONFIRMED" | "not available";
+  responseReadiness: "READY" | "INCOMPLETE";
+  mandateCompliance: "COMPLIANT" | "NON_COMPLIANT" | "NO_MANDATE" | "MISREAD";
+}
+
+export function evaluateDisputeEvidence(
+  buyerDisputeReason: string,
+  disputeClass: string,
+  options?: {
+    hasMandate?: boolean;
+    hasDeliveryEvidence?: boolean;
+    hasPolicyEvaluation?: boolean;
+    tracking?: { trackingNumber?: string };
+  },
+): ReasonEvidenceMapping {
+  // 1. Mandate Compliance
+  let mandateCompliance: "COMPLIANT" | "NON_COMPLIANT" | "NO_MANDATE" | "MISREAD" = "COMPLIANT";
+  if (disputeClass === "MANDATE_COMPLIANT") {
+    mandateCompliance = "COMPLIANT";
+  } else if (disputeClass === "AGENT_OVERREACH") {
+    mandateCompliance = "NON_COMPLIANT";
+  } else if (disputeClass === "NO_MANDATE") {
+    mandateCompliance = "NO_MANDATE";
+  } else if (disputeClass === "INTENT_MISREAD") {
+    mandateCompliance = "MISREAD";
+  } else {
+    mandateCompliance = "NON_COMPLIANT";
+  }
+
+  // 2. Reason to required evidence mapping
+  const required: string[] = [];
+  const missing: string[] = [];
+  const hasMandate = options?.hasMandate ?? (disputeClass !== "NO_MANDATE");
+  const hasDelivery = Boolean(options?.hasDeliveryEvidence || options?.tracking?.trackingNumber);
+
+  switch (buyerDisputeReason) {
+    case "MERCHANDISE_OR_SERVICE_NOT_RECEIVED": {
+      required.push("Signed Intent Mandate", "Cart Mandate", "Proof of Fulfillment");
+      if (!hasMandate) missing.push("Signed Intent Mandate");
+      // "There is no tracking or fulfillment data in the worker, so delivery evidence shows 'not available' unless real data exists."
+      if (!hasDelivery) {
+        missing.push("Proof of Fulfillment (carrier tracking)");
+      }
+      break;
+    }
+    case "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED": {
+      required.push("Signed Intent Mandate", "Cart Mandate", "Policy Evaluation");
+      if (!hasMandate) missing.push("Signed Intent Mandate");
+      if (options?.hasPolicyEvaluation === false) {
+        missing.push("Constraint Check Passing Result");
+      }
+      break;
+    }
+    case "UNAUTHORISED": {
+      required.push("Signed Intent Mandate", "Order Pointer Verification");
+      if (!hasMandate) missing.push("Signed Intent Mandate");
+      break;
+    }
+    case "INCORRECT_AMOUNT": {
+      required.push("Signed Intent Mandate", "Capture Record");
+      if (!hasMandate) missing.push("Signed Intent Mandate");
+      break;
+    }
+    default: {
+      required.push("Signed Intent Mandate", "Cart Mandate");
+      if (!hasMandate) missing.push("Signed Intent Mandate");
+      break;
+    }
+  }
+
+  // A dispute the signed mandate does not back has nothing to defend with, however complete the records are: the cart broke
+  // what the shopper signed, or did not fit their words. Without this, a conceded overreach read "Readiness: READY".
+  if (mandateCompliance === "NON_COMPLIANT" || mandateCompliance === "MISREAD") {
+    missing.push("A passing mandate check (the cart did not meet what the shopper signed)");
+  }
+
+  // 3. Delivery Evidence: "There is no tracking or fulfillment data in the worker, so delivery evidence shows 'not available' unless real data exists."
+  const deliveryEvidence = hasDelivery ? "CONFIRMED" : "not available";
+
+  // 4. Response Readiness: Ready only if no required items are missing
+  const responseReadiness: "READY" | "INCOMPLETE" = missing.length === 0 ? "READY" : "INCOMPLETE";
+
+  return {
+    required,
+    missing,
+    deliveryEvidence,
+    responseReadiness,
+    mandateCompliance,
+  };
+}
+
+export function withEvidenceEvaluation(detail: DisputeDetail): DisputeDetail {
+  const evalResult = evaluateDisputeEvidence(detail.buyerDisputeReason, detail.disputeClass, {
+    hasMandate: Boolean(detail.mandateId),
+    hasPolicyEvaluation: detail.constraintChecks.every((c) => c.status === "PASS"),
+  });
+  return {
+    ...detail,
+    mandateCompliance: evalResult.mandateCompliance,
+    deliveryEvidence: evalResult.deliveryEvidence,
+    responseReadiness: evalResult.responseReadiness,
+    requiredEvidence: evalResult.required,
+    missingEvidence: evalResult.missing,
+  };
+}
+
+function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
   const base = generateSeedDisputes().find((d) => d.id === disputeId);
   if (!base) return undefined;
 
@@ -422,4 +528,13 @@ export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
           }
         : undefined,
   };
+}
+
+/**
+ * Builds canonical DisputeDetail for a dispute ID, matching specs 0005 and 0007,
+ * and attaches reason-based evidence requirements, delivery status, and readiness.
+ */
+export function getDisputeDetail(disputeId: string): DisputeDetail | undefined {
+  const detail = buildRawDisputeDetail(disputeId);
+  return detail ? withEvidenceEvaluation(detail) : undefined;
 }

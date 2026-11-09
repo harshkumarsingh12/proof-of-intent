@@ -89,8 +89,17 @@ export interface EvidenceDraftInfo {
   generatedAt: string;
 }
 
+export type MandateComplianceBadge = "COMPLIANT" | "NON_COMPLIANT" | "NO_MANDATE" | "MISREAD";
+export type DeliveryEvidenceBadge = "CONFIRMED" | "NOT_AVAILABLE" | "NOT_REQUIRED" | string;
+export type ResponseReadinessBadge = "READY" | "INCOMPLETE";
+
 export interface DisputeDetail extends DisputeItem {
   isDemoData?: boolean;
+  mandateCompliance?: MandateComplianceBadge;
+  deliveryEvidence?: DeliveryEvidenceBadge;
+  responseReadiness?: ResponseReadinessBadge;
+  requiredEvidence?: string[];
+  missingEvidence?: string[];
   shopperIntentText?: string;
   mandateId?: string;
   mandateNonce?: string;

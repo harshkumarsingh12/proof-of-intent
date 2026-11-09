@@ -3,21 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DecisionFilter, DisputeFilters, DisputeItem, DisputeSorting, SortField } from "../../src/dispute-types";
-import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, sortDisputes } from "../../src/api";
+import { calculateAge, calculateSla, fetchDisputesDetailed, filterDisputes, formatCurrencyTotals, formatMoney, isPartialList, sortDisputes, type DisputePagingInfo } from "../../src/api";
 import { card, kpiLabel, pillButton } from "../../src/theme";
 import { SampleDataNotice } from "../SampleDataNotice";
 
 export function DisputeQueue({
   initialDisputes = [],
   initialIsDemo = false,
+  initialPaging,
 }: {
   initialDisputes?: DisputeItem[];
   initialIsDemo?: boolean;
+  initialPaging?: DisputePagingInfo;
 }) {
   const [disputes, setDisputes] = useState<DisputeItem[]>(initialDisputes);
   const [loading, setLoading] = useState(initialDisputes.length === 0);
   const [isDemoData, setIsDemoData] = useState(initialIsDemo);
   const [selectedDispute, setSelectedDispute] = useState<DisputeItem | null>(null);
+  const [paging, setPaging] = useState<DisputePagingInfo | undefined>(initialPaging);
+
+  // Partial data indicator (#173, #234): only when the API itself said it did not send every dispute.
+  const isPartialData = isPartialList(paging, disputes.length);
 
   // Filter state
   const [filters, setFilters] = useState<DisputeFilters>({
@@ -38,6 +44,7 @@ export function DisputeQueue({
       const res = await fetchDisputesDetailed();
       setDisputes(res.disputes);
       setIsDemoData(res.isFallback);
+      setPaging(res.paging);
     } catch {
       setIsDemoData(true);
     } finally {
@@ -96,6 +103,30 @@ export function DisputeQueue({
         <SampleDataNotice>
           These disputes come from the built-in demo set. Live disputes appear here once the merchant API serves them.
         </SampleDataNotice>
+      )}
+
+      {/* Partial Data Indicator (issue #173) */}
+      {isPartialData && (
+        <div
+          data-testid="partial-data-indicator"
+          style={{
+            padding: "10px 14px",
+            borderRadius: 6,
+            background: "rgba(59, 130, 246, 0.1)",
+            border: "1px solid rgba(59, 130, 246, 0.3)",
+            color: "var(--poi-blue)",
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span>ℹ️</span>
+          <span>
+            <strong>Partial data:</strong> showing {disputes.length} of {paging?.total} disputes, soonest deadline first.
+            The rest are on the server and are not in this list, the totals or the filters below.
+          </span>
+        </div>
       )}
 
       {/* KPI / Summary Tiles */}

@@ -211,6 +211,7 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
     acceptClaim: (disputeId, note) => agent().acceptClaim(disputeId, note),
     getDispute: (disputeId) => agent().getDispute(disputeId),
     listDisputes: () => agent().listDisputes(),
+    listDisputesPage: (page) => agent().listDisputesPage(page),
     addTracking: (input) => agent().addTracking(input),
   };
 }

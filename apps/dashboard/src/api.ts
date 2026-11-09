@@ -26,14 +26,43 @@ export function serverApiBaseUrl(): string {
   return process.env.API_INTERNAL_URL ?? DEFAULT_API_BASE_URL;
 }
 
+/** The most disputes the API returns in one answer (`GET /disputes`, `limit`); asking for it keeps the queue whole for a merchant with up to this many. */
+export const MAX_DISPUTES_PER_REQUEST = 200;
+
+/** Where an order's proof package is downloaded from (#177): the dashboard's own proxy, which holds the operator token. */
+export const proofPackagePath = (orderId: string): string =>
+  `/api/orders/${encodeURIComponent(orderId)}/proof`;
+
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
   fetchFn?: typeof fetch;
+  /** How many disputes to ask for. Defaults to the most the API gives (200). */
+  limit?: number;
+  offset?: number;
+}
+
+/** What `GET /disputes` says about the list it returned: how many exist, and where this answer sits in them. */
+export interface DisputePagingInfo {
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+/**
+ * Whether the dashboard is showing only some of the disputes. True when the API says more exist after this answer, or when
+ * its total is more than what we hold. Unknown (no paging info, as from an older API or the sample data) is not "partial":
+ * the banner only appears when the server actually said so.
+ */
+export function isPartialList(paging: DisputePagingInfo | undefined, shown: number): boolean {
+  if (!paging) return false;
+  return paging.hasMore || paging.total > paging.offset + shown;
 }
 
 export interface FetchDisputesResponse {
   disputes: DisputeItem[];
   isFallback: boolean;
+  paging?: DisputePagingInfo;
 }
 
 /**
@@ -45,8 +74,14 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
+  const params = new URLSearchParams({
+    limit: String(options?.limit ?? MAX_DISPUTES_PER_REQUEST),
+    offset: String(options?.offset ?? 0),
+  });
+  const url = `${baseUrl}/disputes?${params}`;
+
   try {
-    const res = await runner(`${baseUrl}/disputes`, {
+    const res = await runner(url, {
       method: "GET",
       headers: readHeaders(),
     });
@@ -56,12 +91,34 @@ export async function fetchDisputesDetailed(options?: FetchDisputesOptions): Pro
       if (Array.isArray(data)) {
         return { disputes: data as DisputeItem[], isFallback: false };
       }
-      if (data && Array.isArray((data as { disputes: DisputeItem[] }).disputes)) {
-        return { disputes: (data as { disputes: DisputeItem[] }).disputes, isFallback: false };
+      if (data && typeof data === "object" && Array.isArray((data as { disputes?: unknown }).disputes)) {
+        const payload = data as {
+          disputes: DisputeItem[];
+          total?: unknown;
+          limit?: unknown;
+          offset?: unknown;
+          hasMore?: unknown;
+        };
+        const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);
+        const total = num(payload.total);
+        // Only report paging the API actually gave: a missing total is "unknown", never a guess.
+        const paging: DisputePagingInfo | undefined =
+          total === undefined
+            ? undefined
+            : {
+                total,
+                limit: num(payload.limit) ?? payload.disputes.length,
+                offset: num(payload.offset) ?? 0,
+                hasMore:
+                  typeof payload.hasMore === "boolean"
+                    ? payload.hasMore
+                    : (num(payload.offset) ?? 0) + payload.disputes.length < total,
+              };
+        return { disputes: payload.disputes, isFallback: false, ...(paging ? { paging } : {}) };
       }
     }
   } catch {
-    // API server not reachable in dev or standalone mode; fallback to canonical seed data
+    // API server not reachable; fall back to the canonical seed set below.
   }
 
   // Fresh per call: seed times are relative to now, and a long-running server must not serve stale deadlines.
@@ -89,7 +146,7 @@ export interface FetchDisputeDetailResponse {
  */
 export async function fetchDisputeDetailDetailed(
   disputeId: string,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<FetchDisputeDetailResponse> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
@@ -104,7 +161,10 @@ export async function fetchDisputeDetailDetailed(
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
-        return { dispute: { ...(data as DisputeDetail), isDemoData: false }, isFallback: false };
+        return {
+          dispute: { ...(data as DisputeDetail), isDemoData: (data as DisputeDetail).isDemoData === true },
+          isFallback: false,
+        };
       }
     }
   } catch {
@@ -125,18 +185,14 @@ export async function fetchDisputeDetailDetailed(
  */
 export async function fetchDisputeDetail(
   disputeId: string,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<DisputeDetail | undefined> {
   const res = await fetchDisputeDetailDetailed(disputeId, options);
   return res.dispute;
 }
 
 export type DisputeOperatorAction =
-  | "provide-evidence"
-  | "accept-claim"
-  | "make-offer"
-  | "send-message"
-  | "escalate";
+  "provide-evidence" | "accept-claim" | "make-offer" | "send-message" | "escalate";
 
 export interface PaypalActions {
   stage: string | null;
@@ -147,7 +203,7 @@ export interface PaypalActions {
 /** What PayPal allows on a dispute right now (GET /disputes/:id/paypal-actions). Null when unknown. */
 export async function fetchPaypalActions(
   disputeId: string,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<PaypalActions | null> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
@@ -179,7 +235,7 @@ export async function executeDisputeAction(
   disputeId: string,
   action: DisputeOperatorAction,
   payload?: Record<string, unknown>,
-  options?: FetchDisputesOptions
+  options?: FetchDisputesOptions,
 ): Promise<DisputeActionResult> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
@@ -228,9 +284,7 @@ export async function executeDisputeAction(
  * Reads from the API over HTTP with no direct database access.
  * Falls back to canonical seed analytics if the API returns 501 or is offline.
  */
-export async function fetchAnalytics(
-  options?: FetchDisputesOptions
-): Promise<AnalyticsSummary> {
+export async function fetchAnalytics(options?: FetchDisputesOptions): Promise<AnalyticsSummary> {
   const baseUrl = options?.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const runner = options?.fetchFn ?? fetch;
 
@@ -255,7 +309,10 @@ export async function fetchAnalytics(
 
 /** Formats integer minor units to standard currency string (e.g. 7400 -> "$74.00"). */
 export function formatMoney(money: Money): string {
-  const amount = (money.value / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const amount = (money.value / 100).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   if (money.currency === "USD") {
     return `$${amount}`;
   }

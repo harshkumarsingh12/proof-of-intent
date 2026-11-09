@@ -190,7 +190,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const [wallet, setWallet] = useState<"unknown" | "none" | "saved">("unknown");
   const [walletBusy, setWalletBusy] = useState(false);
   const [walletError, setWalletError] = useState<string>();
-  // The shopper's choice in step 2. It only counts once it is signed into the intent (#157): whether the agent pays
+  // The shopper's choice in step 1. It only counts once it is signed into the intent (#157): whether the agent pays
   // alone is what the merchant reads in the signed intent, never a switch on this page.
   const [allowAlone, setAllowAlone] = useState(false);
   const paysAlone = (s?: Signed) => Boolean(s?.intent.constraints.unattended_payment) && wallet === "saved";
@@ -569,61 +569,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
   return (
     <div className="wrap shop">
-      <section className="panel">
-        <h2>
-          <span className="num">1</span> Your signing key
-        </h2>
-        {keyError ? (
-          <p className="error">Couldn&apos;t set up your key: {keyError}</p>
-        ) : shopper ? (
-          <>
-            <p className="sub">
-              Made in this browser and kept here. It can sign, but it can&apos;t be copied out, not even by
-              this page.
-            </p>
-            <p className="meta">
-              Key id <code>{shopper.kid}</code> · shopper <code>{shopper.shopperId}</code>
-            </p>
-            <button className="btn btn-ghost btn-small" disabled={resetting} onClick={newKey}>
-              Use a new key
-            </button>
-            <h3 className="group">PayPal wallet (optional)</h3>
-            <p className="sub">
-              Save a PayPal wallet and your agent can pay without you at the PayPal step. The merchant still
-              checks every cart against your signed limits first, and asks you when it isn&apos;t sure.
-            </p>
-            {wallet === "saved" && (
-              <p className="meta">
-                A PayPal wallet is saved for this key.{" "}
-                {config.paypalMode === "mock" && "(Mock PayPal: nothing real is saved.)"}
-              </p>
-            )}
-            <button
-              className="btn btn-ghost btn-small"
-              disabled={walletBusy || wallet === "unknown"}
-              onClick={saveWallet}
-            >
-              {walletBusy
-                ? "Opening PayPal…"
-                : wallet === "saved"
-                  ? "Save a different wallet"
-                  : "Save a PayPal wallet"}
-            </button>{" "}
-            {wallet === "saved" && (
-              <button className="btn btn-ghost btn-small" disabled={walletBusy} onClick={removeWallet}>
-                Remove my wallet
-              </button>
-            )}
-            {walletError && <p className="error">{walletError}</p>}
-          </>
-        ) : (
-          <p className="sub">Making your key…</p>
-        )}
-      </section>
-
       <section id="limits" className={`panel${shopper ? "" : " muted"}`}>
         <h2>
-          <span className="num">2</span> Say what you want, then sign it
+          <span className="num">1</span> Say what you want, then sign it
         </h2>
         <p className="sub">
           The merchant checks every cart against these limits before PayPal takes any money.
@@ -748,7 +696,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
           />
           Let the agent pay alone from my saved wallet, with no PayPal approval from me (signed into this
           intent)
-          {wallet !== "saved" && " — save a PayPal wallet above first"}
+          {wallet !== "saved" && " — save a PayPal wallet in signing key settings below first"}
         </label>
         <button className="btn btn-ghost" disabled={!shopper || drafting} onClick={draftWithAgent}>
           {drafting ? "Agent is reading…" : "Fill in the limits from my words"}
@@ -770,6 +718,65 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
         )}
       </section>
 
+      {/* Closed by default, but open when the key could not be made: the error is inside, and the limits form above stays
+          greyed out until there is a key, so a closed panel would leave the shopper with no reason why. */}
+      <details className="panel key-card" open={keyError ? true : undefined}>
+        <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 16 }}>
+          <span>Your signing key &amp; PayPal wallet</span>
+          <span className="meta" style={{ fontWeight: 400, fontSize: 13, marginLeft: 12 }}>
+            {shopper ? `Key id ${shopper.kid}` : "Making your key…"}
+          </span>
+        </summary>
+        <div style={{ marginTop: 16 }}>
+          {keyError ? (
+            <p className="error">Couldn&apos;t set up your key: {keyError}</p>
+          ) : shopper ? (
+            <>
+              <p className="sub">
+                Made in this browser and kept here. It can sign, but it can&apos;t be copied out, not even by
+                this page.
+              </p>
+              <p className="meta">
+                Key id <code>{shopper.kid}</code> · shopper <code>{shopper.shopperId}</code>
+              </p>
+              <button className="btn btn-ghost btn-small" disabled={resetting} onClick={newKey}>
+                Use a new key
+              </button>
+              <h3 className="group" style={{ marginTop: 20 }}>PayPal wallet (optional)</h3>
+              <p className="sub">
+                Save a PayPal wallet and your agent can pay without you at the PayPal step. The merchant still
+                checks every cart against your signed limits first, and asks you when it isn&apos;t sure.
+              </p>
+              {wallet === "saved" && (
+                <p className="meta">
+                  A PayPal wallet is saved for this key.{" "}
+                  {config.paypalMode === "mock" && "(Mock PayPal: nothing real is saved.)"}
+                </p>
+              )}
+              <button
+                className="btn btn-ghost btn-small"
+                disabled={walletBusy || wallet === "unknown"}
+                onClick={saveWallet}
+              >
+                {walletBusy
+                  ? "Opening PayPal…"
+                  : wallet === "saved"
+                    ? "Save a different wallet"
+                    : "Save a PayPal wallet"}
+              </button>{" "}
+              {wallet === "saved" && (
+                <button className="btn btn-ghost btn-small" disabled={walletBusy} onClick={removeWallet}>
+                  Remove my wallet
+                </button>
+              )}
+              {walletError && <p className="error">{walletError}</p>}
+            </>
+          ) : (
+            <p className="sub">Making your key…</p>
+          )}
+        </div>
+      </details>
+
       {config.chatEnabled && (
         <ChatPanel
           form={form}
@@ -788,7 +795,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
       <section className={`panel${signed ? "" : " muted"}`}>
         <h2>
-          <span className="num">3</span> The agent proposes a cart
+          <span className="num">2</span> The agent proposes a cart
         </h2>
         <p className="sub">
           Pick what the agent sends to the merchant. Try one that breaks your limits: it&apos;s refused before
@@ -799,7 +806,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             ? wallet === "saved"
               ? "Your signed intent lets the agent pay alone from your saved wallet. The merchant still checks every limit."
               : "Your signed intent lets the agent pay alone, but there is no saved wallet now: save one first."
-            : "Your signed intent does not let the agent pay alone, so you approve each order at PayPal. To change that, tick the box in step 2 and sign again."}
+            : "Your signed intent does not let the agent pay alone, so you approve each order at PayPal. To change that, tick the box in step 1 and sign again."}
         </p>
         <button
           className="btn btn-primary"
@@ -918,7 +925,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
       <section className={`panel${(hasOrder && !approval) || paidAlone ? "" : " muted"}`}>
         <h2>
-          <span className="num">4</span> {paidAlone ? "Paid by your agent" : "Pay with PayPal"}
+          <span className="num">3</span> {paidAlone ? "Paid by your agent" : "Pay with PayPal"}
         </h2>
         <p className="sub">
           {paidAlone

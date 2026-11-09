@@ -1,0 +1,64 @@
+{
+  "runId": "2026-11-08T21-37-11-488Z-holdout-system",
+  "sourceCommit": "14b1b8eed073104fa469a9f129dc31b58d97938d",
+  "system": {
+    "passed": true,
+    "cases": [
+      {
+        "label": "product-fact manipulation (price) is refused before AI or payment",
+        "status": "passed",
+        "elapsedMs": 574.2535709999997
+      },
+      {
+        "label": "product-fact manipulation (title) is refused before AI or payment",
+        "status": "passed",
+        "elapsedMs": 327.199063
+      },
+      {
+        "label": "product-fact manipulation (attributes) is refused before AI or payment",
+        "status": "passed",
+        "elapsedMs": 333.06065199999966
+      },
+      {
+        "label": "multi-order spending reserves one budget atomically across concurrent requests",
+        "status": "passed",
+        "elapsedMs": 420.0454659999996
+      },
+      {
+        "label": "expired authority creates no payment",
+        "status": "passed",
+        "elapsedMs": 317.083611
+      },
+      {
+        "label": "provider failures on both J1 attempts require confirmation and create no unattended charge",
+        "status": "passed",
+        "elapsedMs": 392.60073900000043
+      },
+      {
+        "label": "a human-present proposal is not a payment; signed approval captures once and persists the outcome",
+        "status": "passed",
+        "elapsedMs": 364.0028659999998
+      },
+      {
+        "label": "explicit unattended authority completes a vaulted capture with a persisted capture ID",
+        "status": "passed",
+        "elapsedMs": 305.7169899999999
+      },
+      {
+        "label": "authority expiring between proposal and approval cannot capture",
+        "status": "passed",
+        "elapsedMs": 343.0854020000006
+      },
+      {
+        "label": "authority revoked after proposal cannot capture",
+        "status": "passed",
+        "elapsedMs": 346.8232740000003
+      }
+    ],
+    "paymentProvider": "mock",
+    "storage": "disposable PostgreSQL"
+  },
+  "semantic": null,
+  "passed": true,
+  "liveSemanticVerified": false
+}

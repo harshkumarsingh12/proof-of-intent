@@ -17,9 +17,9 @@ docker compose up --build
 Set both operator values before the first start. The shop needs `OPERATOR_TOKEN` to register its agent key (journey A),
 and the dashboard's operator actions need both (log in as user `operator` with the `OPERATOR_PASSWORD` value).
 
-The first `docker compose up --build` builds four images, which takes several minutes (about 4.5 minutes on a machine
-that already had the base images; longer on a new one). It stays in the foreground: run the later `docker compose exec`
-commands in a second terminal, or start the stack with `docker compose up --build -d`.
+The first `docker compose up --build` builds four images, which takes several minutes (about 8.5 minutes on a fresh
+2-core machine, about 4.5 with the base images already pulled). It stays in the foreground: run the later
+`docker compose exec` commands in a second terminal, or start the stack with `docker compose up --build -d`.
 
 | Service              | URL                           |
 | -------------------- | ----------------------------- |
@@ -54,7 +54,7 @@ the real PayPal button appears (it needs `PAYPAL_CLIENT_ID`). The agent's key ha
 set `OPERATOR_TOKEN` in `.env` (any long random string) and the shop registers it on the first checkout. Without it,
 proposing a cart answers "the merchant doesn't know this shop's agent key". Picking a category fills in its demo words, price and color; keep those words in replay mode, because
 `AI_MODE=replay` has recorded J1 answers for exactly those (one per product in the category).
-**Agent alone:** under "Your signing key", "Save a PayPal wallet" runs Vault v3 (mock PayPal returns to the shop at once; sandbox sends the shopper to PayPal to approve, and `BUYER_PUBLIC_URL` on the API must be the shop's public address so PayPal can send them back). Then "Let the agent pay alone" lets an approved cart be charged to that wallet with no PayPal step; a cart the merchant isn't sure about is held for the shopper instead, and nothing is charged. The store is
+**Agent alone:** in the "Your signing key & PayPal wallet" panel (below the limits form, closed until you open it), "Save a PayPal wallet" runs Vault v3 (mock PayPal returns to the shop at once; sandbox sends the shopper to PayPal to approve, and `BUYER_PUBLIC_URL` on the API must be the shop's public address so PayPal can send them back). Then "Let the agent pay alone" lets an approved cart be charged to that wallet with no PayPal step; a cart the merchant isn't sure about is held for the shopper instead, and nothing is charged. The store is
 `packages/contracts/src/catalog.ts`; after adding a product, add its label to `packages/ai/src/j1-cases.ts` and run
 `pnpm ai:record` (it asks the live model only about the cases without an answer; `--all` re-asks every one).
 
@@ -104,8 +104,10 @@ pnpm install
 pnpm test                # unit tests + ledger entries; db tests run when DATABASE_URL is set (packages/db/README.md)
 pnpm dev:api             # :3000
 pnpm dev:buyer           # :3001
-pnpm dev:dashboard       # :3002
+API_INTERNAL_URL=http://localhost:3000 pnpm dev:dashboard   # :3002
 ```
+
+The dev servers use the same ports as the Docker stack in §1: stop that first (`docker compose stop`).
 
 Before you push, run what CI runs: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. For the dashboard
 alone: `pnpm vitest run apps/dashboard` and `pnpm --filter @poi/dashboard build`.

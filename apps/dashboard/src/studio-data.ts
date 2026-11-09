@@ -253,3 +253,15 @@ export const statusLabel = (status: string): string => {
 
 /** The full dispute page for a dispute (the Studio widgets link to it). */
 export const disputePath = (id: string): string => `/disputes/${encodeURIComponent(id)}`;
+
+/** How many disputes Studio loads in full (their signed-limit checks come from each dispute's detail, one request each). */
+export const STUDIO_DETAIL_LIMIT = 60;
+
+/**
+ * A line saying so when Studio is not showing every dispute (#173, #234), or nothing when it is. `total` is how many disputes the
+ * server holds (what `GET /disputes` reports, or how many it sent when it reports none) and `shown` how many Studio has.
+ */
+export function studioCoverageNote(total: number, shown: number): string | undefined {
+  if (shown >= total) return undefined;
+  return `Studio shows ${shown} of ${total} disputes, soonest deadline first. The tiles, charts and grid cover only those; the dispute queue lists more.`;
+}

@@ -1,6 +1,8 @@
 import { writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { J2_PROMPT_VERSION, J2_REPLAY, type DisputeClassification } from "../../packages/ai/src/dispute-jobs";
 import { evaluateJobs } from "../../packages/ai/src/evaluate";
+import { evaluationReport } from "../../packages/ai/src/eval-report";
 import { J1_PROMPT_VERSION, J1_REPLAY, type SemanticFit } from "../../packages/ai/src/j1";
 import {
   createGenerate,
@@ -10,44 +12,44 @@ import {
   type ReplayFile,
 } from "../../packages/ai/src/runtime";
 
-const config = liveConfigFromEnv();
-if ("missing" in config)
-  throw new Error(`Live evaluation requires ${config.missing}. See docs/evals/README.md.`);
+const configured = liveConfigFromEnv();
+if ("missing" in configured)
+  throw new Error(`Live evaluation requires ${configured.missing}. See docs/evals/README.md.`);
+const args = process.argv.slice(2);
+if (args.some((arg) => arg !== "--backup")) throw new Error("Usage: pnpm eval [--backup]");
+const backup = args.includes("--backup");
+if (backup && !configured.fallback)
+  throw new Error("--backup requires a fully configured AI_FALLBACK_* endpoint.");
+// Isolate the backup: do not let a successful primary mask an untested fallback.
+const config = backup ? configured.fallback! : configured;
+const profile = backup ? "backup-only" : "primary-with-configured-fallback";
+const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 
 const result = await evaluateJobs(createGenerate(config));
-const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", dateStyle: "short" }).format(
-  new Date(),
-);
-const report = [
-  `# AI evaluation for ${date}`,
-  "",
-  `Live model: \`${config.provider}\` / \`${config.model}\`. Prompts: \`${J1_PROMPT_VERSION}\` and \`${J2_PROMPT_VERSION}\`.`,
-  "",
-  `- J1 accuracy: ${result.j1Correct}/20, measured after the local checks checkout also applies (injection guard, road-versus-trail ceiling). Mismatches labelled match: ${result.falseApprovals}.`,
-  `- J2 policy agreement with a reason citing the policy finding: ${result.j2Correct}/12. J2 receives the deterministic policy decision.`,
-  `- Schema validity after retries: ${result.schemaValid}/${result.schemaTotal} model cases. Local checkout guards are excluded.`,
-  `- Gate: ${result.passed ? "passed" : "failed"}.`,
-  "",
-  "| Job | Case | Expected | Actual | Result | Attempts | Elapsed ms |",
-  "| --- | --- | --- | --- | --- | ---: | ---: |",
-  ...result.cases.map(
-    (c) =>
-      `| ${c.job} | ${c.label} | ${c.expected} | ${c.actual} | ${c.passed ? "pass" : "fail"} | ${c.attempts} | ${c.elapsedMs} |`,
-  ),
-  "",
-].join("\n");
+const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${backup ? "backup" : "primary"}`;
+const report = evaluationReport(result, {
+  runId,
+  sourceCommit,
+  profile,
+  endpoint: config,
+  prompts: [J1_PROMPT_VERSION, J2_PROMPT_VERSION],
+});
 
 function saveReplay<T>(name: string, entries: ReplayFile<T>): void {
   writeFileSync(replayPath(name), `${JSON.stringify({ ...readReplay<T>(name), ...entries }, null, 2)}\n`);
 }
 
-if (result.passed) {
+if (result.passed && !backup) {
   saveReplay<SemanticFit>(J1_REPLAY, result.j1Replay);
   saveReplay<DisputeClassification>(J2_REPLAY, result.j2Replay);
 }
-writeFileSync(new URL(`../../docs/evals/${date}.md`, import.meta.url), report);
+writeFileSync(new URL(`../../docs/evals/${runId}.md`, import.meta.url), report);
+writeFileSync(
+  new URL(`../../docs/evals/${runId}.json`, import.meta.url),
+  `${JSON.stringify({ runId, sourceCommit, profile, cases: result.cases, passed: result.passed }, null, 2)}\n`,
+);
 console.log(
-  `J1 ${result.j1Correct}/20, J2 ${result.j2Correct}/12, schema ${result.schemaValid}/${result.schemaTotal}. Report in docs/evals/${date}.md.`,
+  `J1 ${result.j1Correct}/20, J2 ${result.j2Correct}/12, schema ${result.schemaValid}/${result.schemaTotal}. Report in docs/evals/${runId}.md.`,
 );
 if (!result.passed) {
   console.error("Evaluation targets missed. Existing replay fixtures were kept.");

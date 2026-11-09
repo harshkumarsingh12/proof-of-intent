@@ -11,7 +11,7 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function DisputesPage() {
-  const { disputes, isFallback } = await fetchDisputesDetailed({ apiBaseUrl: serverApiBaseUrl() });
+  const { disputes, isFallback, paging } = await fetchDisputesDetailed({ apiBaseUrl: serverApiBaseUrl() });
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto" }}>
       {/* Navigation header */}
@@ -39,7 +39,7 @@ export default async function DisputesPage() {
       </div>
 
       {/* Interactive Dispute Queue Table */}
-      <DisputeQueue initialDisputes={disputes} initialIsDemo={isFallback} />
+      <DisputeQueue initialDisputes={disputes} initialIsDemo={isFallback} initialPaging={paging} />
     </div>
   );
 }
