@@ -96,34 +96,11 @@ key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/
 - The countersignature hashes the payload of the `cart_mandate_jws` the merchant returned, so the shopper approves
   the exact bytes the merchant signed.
 
-## Proposed: revoking an intent (#176)
-
-_Proposed, for after submission (Nov 11). Nothing in this section is built, and the Done status above covers only what is
-built. Enforcement is in spec 0003 §Proposed: enforcing a revoked intent._
-
-A shopper can stop a signed intent before it expires. The merchant must then refuse anything new under it.
-
-- **Who can revoke:** only the holder of the key that signed the intent. The shopper signs an
-  `IntentRevocation { purpose: "intent.revoke", mandate_id, intent_mandate_hash, issued_at }` as a compact JWS (ES256,
-  header `kid`) with that key, in the same form as `VaultProof` and `StepUpListProof`. It names the intent by id **and**
-  hash, so a revocation can't be replayed against another intent, or against a different payload under the same id.
-- **Fresh:** `issued_at` must be within 5 minutes of the merchant's clock (60 s of skew), like the vault proofs. A leaked
-  revocation can't be kept and used later, although using one only ever removes authority.
-- **Retired keys can still revoke:** revoking only takes authority away, so a stolen key gains nothing by it, and a
-  shopper whose key was retired can still stop their intents. This is the one place a retired key's new signature is
-  accepted.
-- **Final:** there is no un-revoke. To buy again, the shopper signs a new intent.
-- **What it doesn't touch:** purchases made before `revoked_at` stay valid, and so does the evidence for them
-  (spec 0005). Revoking an intent doesn't retire the key or remove the saved wallet; those are separate controls.
-- **Contracts (needs Sristee and Harsh, announced in the team chat):** a new signed type `IntentRevocation`, added to
-  `ShopperProof`, and a new reason code `MANDATE_REVOKED` for the API, dashboard chips and evidence PDF.
-
-Not part of this proposal: the receipt of remaining authority (#176's third part), which needs its own read route.
-
 ## Out of scope
 
 Passkeys/WebAuthn (the signing interface is isolated so it can be swapped later); network trust registries;
 AP2 or Verifiable Intent certification.
+Revoking an intent before it expires: proposed, not built, in spec 0013 (#176).
 
 ## Open questions
 

@@ -241,51 +241,7 @@ A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVE
    `apps/api/src/stepup.test.ts`, with Postgres)_
 5. Every verdict and PayPal call is in `audit_log` with the request body. _(done for stage 1)_
 
-## Proposed: enforcing a revoked intent (#176)
-
-_Proposed, for after submission (Nov 11). Nothing in this section is built. The signed `IntentRevocation` itself is in
-spec 0001 §Proposed: revoking an intent._
-
-**Route:** `POST /intents/:mandate_id/revoke { revocation_jws }` → `{ mandate_id, revoked_at }`. Public and rate-limited
-like `/vault/*` (`keys`, 10 per minute per IP), with a 4 KB body limit. In order:
-
-1. Find the intent the revocation names: the `mandates` row whose `hash` is its `intent_mandate_hash`, with
-   `kind = 'intent'` and this `mandate_id` (a `mandate_id` alone isn't unique; the hash is the key). None →
-   404 `intent_not_found`.
-2. Verify the JWS with that row's `kid`, the key that signed the intent, retired or not (spec 0001). The header `kid`
-   must be that key, and `issued_at` must be fresh. Any failure (`SIGNATURE_INVALID`, `UNKNOWN_KEY`, `SCHEMA_INVALID`,
-   `MANDATE_MISMATCH`) → 403 `revocation_invalid` with the reason codes, and nothing changes.
-3. Set `revoked_at` (the merchant's clock now) if it is unset; first revocation wins, like key retirement. A repeat
-   answers 200 with the first `revoked_at`.
-
-**Storage (`packages/db`, Harsh):** a nullable `revoked_at` on that intent's `mandates` row, written once. An `audit_log` row `intent.revoked`
-holds the exact canonical bytes and signature that were verified (SECURITY.md, Audit integrity), written before the
-response.
-
-**Enforcement:** every path that spends an intent checks `revoked_at` against the merchant's clock and adds
-`MANDATE_REVOKED`, reported with any other reasons:
-
-| Path | Revoked intent |
-| --- | --- |
-| Stage 1 `POST /checkout` (shopper present or agent alone) | `REJECT`; no order, no Cart Mandate, no PayPal call |
-| Stage 2 `POST /checkout/:id/approve` | re-checked with `freshness` (#161) → `{ status: "VOIDED", reasons }`; a hold is voided, nothing captured |
-| Step-ups (`/stepup/:token/approve`, `/stepups/:id/approve`) | refused, nothing created or charged; `/stepups/pending` stops listing that intent's carts |
-| Reservations (§Reservation) | pending orders under the intent release what they set aside |
-
-Orders captured before `revoked_at` are unchanged, and disputes about them are judged as before.
-
-**Open questions** (@srshriv, Nov 9; to settle in review):
-
-- A revocation that arrives while a capture is in flight: the check runs right before the PayPal capture call, so a
-  capture already sent is not undone. Default: accept that, and show the order on the receipt.
-- An operator revoking an intent (fraud): default no. The operator retires the key as of an earlier date instead
-  (spec 0001), which already voids every intent first seen after that date.
-
-**Acceptance criteria once Accepted** (as `ledger()` entries first): a revocation signed by another key, or naming
-another intent or hash, changes nothing; a stale `issued_at` is refused; each path in the table refuses a revoked
-intent with `MANDATE_REVOKED`, with nothing charged; a purchase captured before the revocation is unaffected; a
-retired key can still revoke an intent it signed.
-
 ## Out of scope
 
 Multi-merchant tenancy and API keys (stretch).
+Enforcing a revoked intent: proposed, not built, in spec 0013 (#176).
