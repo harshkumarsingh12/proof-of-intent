@@ -20,6 +20,114 @@ import { generateEvidencePdf, type ConstraintCheck, type TimelineEntry } from ".
 
 export type EvidenceDraftStatus = "pending_human_approval" | "approved" | "rejected";
 
+export interface EvidenceRequirement {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export const REQUIRED_EVIDENCE_BY_REASON: Record<string, EvidenceRequirement[]> = {
+  MERCHANDISE_OR_SERVICE_NOT_RECEIVED: [
+    { id: "signed_intent_mandate", label: "Signed Intent Mandate", description: "Verified shopper purchase authorization and constraints" },
+    { id: "cart_mandate", label: "Cart Mandate", description: "Itemized cart contents evaluated against constraints" },
+    { id: "proof_of_fulfillment", label: "Proof of Fulfillment", description: "Carrier shipment tracking or proof of delivery" },
+  ],
+  MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED: [
+    { id: "signed_intent_mandate", label: "Signed Intent Mandate", description: "Shopper specifications and item attribute constraints" },
+    { id: "cart_mandate", label: "Cart Mandate", description: "Purchased line items and attribute tags" },
+    { id: "constraint_evaluation", label: "Policy Evaluation", description: "Deterministic rule check proving item attributes match" },
+  ],
+  UNAUTHORISED: [
+    { id: "signed_intent_mandate", label: "Signed Intent Mandate", description: "Cryptographically verified shopper signature" },
+    { id: "order_pointer_match", label: "Order Pointer Verification", description: "PayPal order custom_id bound to mandate hash" },
+  ],
+  INCORRECT_AMOUNT: [
+    { id: "signed_intent_mandate", label: "Signed Intent Mandate", description: "Shopper budget ceiling constraint" },
+    { id: "capture_record", label: "Capture Record", description: "Settled transaction amount matching authorized total" },
+  ],
+};
+
+export interface EvidenceRequirementsReport {
+  disputeReason: string;
+  required: string[];
+  available: string[];
+  missing: string[];
+  deliveryEvidence: "confirmed" | "not available";
+  details: Array<{
+    id: string;
+    label: string;
+    status: "available" | "missing";
+    value?: string;
+  }>;
+}
+
+export function evaluateEvidenceRequirements(
+  disputeReason?: string,
+  records?: {
+    hasMandate?: boolean;
+    hasCart?: boolean;
+    hasCapture?: boolean;
+    hasPolicyEvaluation?: boolean;
+    hasOrderPointer?: boolean;
+    tracking?: { trackingNumber?: string; carrier?: string };
+  },
+): EvidenceRequirementsReport {
+  const reason = disputeReason ?? "UNKNOWN";
+  const requirements = REQUIRED_EVIDENCE_BY_REASON[reason] ?? [
+    { id: "signed_intent_mandate", label: "Signed Intent Mandate", description: "Verified shopper purchase authorization" },
+    { id: "cart_mandate", label: "Cart Mandate", description: "Itemized cart contents" },
+  ];
+
+  const hasTracking = Boolean(records?.tracking?.trackingNumber);
+  const isAvailable = (id: string): boolean => {
+    switch (id) {
+      case "signed_intent_mandate":
+        return Boolean(records?.hasMandate);
+      case "cart_mandate":
+        return Boolean(records?.hasCart);
+      case "proof_of_fulfillment":
+        return hasTracking;
+      case "constraint_evaluation":
+        return Boolean(records?.hasPolicyEvaluation);
+      case "order_pointer_match":
+        return Boolean(records?.hasOrderPointer);
+      case "capture_record":
+        return Boolean(records?.hasCapture);
+      default:
+        return false;
+    }
+  };
+
+  const details = requirements.map((req) => {
+    const available = isAvailable(req.id);
+    let value: string | undefined;
+    if (req.id === "proof_of_fulfillment") {
+      value = hasTracking
+        ? `${records?.tracking?.carrier ?? "Carrier"}: ${records?.tracking?.trackingNumber}`
+        : "not available";
+    }
+    return {
+      id: req.id,
+      label: req.label,
+      status: available ? ("available" as const) : ("missing" as const),
+      value,
+    };
+  });
+
+  const requiredIds = requirements.map((r) => r.id);
+  const availableIds = details.filter((d) => d.status === "available").map((d) => d.id);
+  const missingIds = details.filter((d) => d.status === "missing").map((d) => d.id);
+
+  return {
+    disputeReason: reason,
+    required: requiredIds,
+    available: availableIds,
+    missing: missingIds,
+    deliveryEvidence: hasTracking ? "confirmed" : "not available",
+    details,
+  };
+}
+
 export interface EvidenceDraftInput {
   dispute: DisputeRecord;
   signedIntentJws: string;
@@ -29,6 +137,7 @@ export interface EvidenceDraftInput {
   ledger?: MandateLedger;
   /** audit_log rows for this order and dispute. Until packages/db lands, the caller passes them in. */
   auditTrail?: TimelineEntry[];
+  tracking?: { trackingNumber?: string; carrier?: string; status?: string };
 }
 
 export interface EvidencePackageResult {
@@ -40,6 +149,7 @@ export interface EvidencePackageResult {
   mandateHash: string;
   customId: string;
   createdAt: string;
+  evidenceReport?: EvidenceRequirementsReport;
 }
 
 export class InMemoryEvidenceStore {
@@ -126,22 +236,39 @@ export function generateDefaultEvidenceDraft(
   capture: CaptureRecord,
   intentHash: string,
   disputeReason?: string,
+  evidenceReport?: EvidenceRequirementsReport,
 ): EvidenceDraft {
   const lines = cart.contents.lines.map((l) => `${l.quantity}x ${l.title} (${l.sku})`).join(", ");
+  const deliveryStatus = evidenceReport?.deliveryEvidence ?? "not available";
+  const missingFulfillment = evidenceReport?.missing.includes("proof_of_fulfillment");
+
+  const sections: Array<{ heading: string; body: string }> = [
+    { heading: "Shopper Stated Intent", body: intent.natural_language_description },
+    { heading: "Agreed Constraints", body: JSON.stringify(intent.constraints, null, 2) },
+    { heading: "Purchased Cart Lines", body: lines },
+    {
+      heading: "Cryptographic Attestation & Order Pointer",
+      body: `PayPal custom_id: ${capture.customId}\nMandate Hash: ${intentHash}\nCaptured Amount: ${money(capture.amount)}`,
+    },
+  ];
+
+  if (disputeReason === "MERCHANDISE_OR_SERVICE_NOT_RECEIVED" || missingFulfillment) {
+    sections.push({
+      heading: "Delivery & Fulfillment Evidence",
+      body: `Delivery evidence: ${deliveryStatus}`,
+    });
+  }
+
+  const fulfillmentNote = missingFulfillment
+    ? " Proof of fulfillment/delivery: not available."
+    : "";
+
   return {
     cover_note:
       `The buyer opened a dispute${disputeReason ? ` (${disputeReason})` : ""}. Before PayPal captured payment, ` +
       `the cart (${lines}) was checked against the shopper's signed Intent Mandate and passed every hard rule. ` +
-      `The signed mandate, its hash and the matching custom_id on the PayPal order are attached.`,
-    attestation_sections: [
-      { heading: "Shopper Stated Intent", body: intent.natural_language_description },
-      { heading: "Agreed Constraints", body: JSON.stringify(intent.constraints, null, 2) },
-      { heading: "Purchased Cart Lines", body: lines },
-      {
-        heading: "Cryptographic Attestation & Order Pointer",
-        body: `PayPal custom_id: ${capture.customId}\nMandate Hash: ${intentHash}\nCaptured Amount: ${money(capture.amount)}`,
-      },
-    ],
+      `The signed mandate, its hash and the matching custom_id on the PayPal order are attached.${fulfillmentNote}`,
+    attestation_sections: sections,
     buyer_message: `Hello, this order matched the instructions you signed for your shopping agent ("${intent.natural_language_description}"). The signed record is attached.`,
   };
 }
@@ -170,6 +297,15 @@ export async function draftEvidenceForDefend(
     );
   }
 
+  const evidenceReport = evaluateEvidenceRequirements(dispute.reason, {
+    hasMandate: verified.ok,
+    hasCart: Boolean(cart),
+    hasCapture: Boolean(captureRecord),
+    hasPolicyEvaluation: evalResult.pass,
+    hasOrderPointer: Boolean(pointer),
+    tracking: input.tracking,
+  });
+
   let generated: Awaited<ReturnType<typeof draftEvidence>> | undefined;
   try {
     generated = await draftEvidence(
@@ -189,7 +325,7 @@ export async function draftEvidenceForDefend(
   } catch (err) {
     if (!isAiUnavailable(err)) throw err;
   }
-  const draft = generated ?? generateDefaultEvidenceDraft(intent, cart, captureRecord, hash, dispute.reason);
+  const draft = generated ?? generateDefaultEvidenceDraft(intent, cart, captureRecord, hash, dispute.reason, evidenceReport);
 
   // Only events with a real timestamp: the signed mandate, the capture, audit rows, and this draft.
   const timeline: TimelineEntry[] = [
@@ -233,6 +369,7 @@ export async function draftEvidenceForDefend(
   const bundleJson = JSON.stringify(
     {
       dispute_id: dispute.disputeId,
+      dispute_reason: dispute.reason ?? "not available",
       order_id: captureRecord.orderId,
       mandate_id: intent.mandate_id,
       mandate_hash: hash,
@@ -246,6 +383,9 @@ export async function draftEvidenceForDefend(
       policy_evaluation: { outcome: "APPROVE", reasons: evalResult.reasons },
       timeline,
       draft,
+      required_evidence: evidenceReport.required,
+      missing_evidence: evidenceReport.missing,
+      evidence_report: evidenceReport,
     },
     null,
     2,
@@ -260,6 +400,7 @@ export async function draftEvidenceForDefend(
     mandateHash: hash,
     customId: captureRecord.customId,
     createdAt: now,
+    evidenceReport,
   };
 
   await options.store?.save(result);
@@ -282,6 +423,7 @@ export interface BuildEvidenceOptions extends EvidenceOptions {
   loader: DisputeDataLoader;
   keyResolver: KeyResolver;
   auditTrail?: TimelineEntry[];
+  tracking?: { trackingNumber?: string; carrier?: string; status?: string };
 }
 
 /** Loads the dispute's order and builds its package. Only MANDATE_COMPLIANT disputes get one. */
@@ -313,6 +455,7 @@ export async function buildEvidencePackage(
       keyResolver: options.keyResolver,
       ledger: order.ledger,
       auditTrail: options.auditTrail,
+      tracking: options.tracking,
     },
     options,
   );

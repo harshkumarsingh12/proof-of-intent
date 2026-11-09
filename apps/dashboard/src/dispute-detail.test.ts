@@ -6,6 +6,7 @@ import {
   fetchDisputeDetailDetailed,
   getDisputeDetail,
 } from "./api";
+import { evaluateDisputeEvidence } from "./dispute-details";
 import type { DisputeDetail } from "./dispute-types";
 import { widgets } from "./widgets";
 
@@ -283,5 +284,102 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
 
     expect(netResult.success).toBe(false);
     expect(netResult.error).toContain("network timeout");
+  });
+
+  describe("evidence preparation and badges by dispute reason (issue #172)", () => {
+    it("separates mandate compliance, delivery evidence, and response readiness for compliant not-as-described dispute", () => {
+      const detail = getDisputeDetail("PP-D-1001");
+      expect(detail).toBeDefined();
+      expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED");
+
+      // Three separate badges
+      expect(detail!.mandateCompliance).toBe("COMPLIANT");
+      expect(detail!.deliveryEvidence).toBe("not available");
+      expect(detail!.responseReadiness).toBe("READY");
+
+      // Required vs missing records
+      expect(detail!.requiredEvidence).toEqual([
+        "Signed Intent Mandate",
+        "Cart Mandate",
+        "Policy Evaluation",
+      ]);
+      expect(detail!.missingEvidence).toEqual([]);
+    });
+
+    it("flags missing delivery evidence on item-not-received dispute PP-D-1005 making readiness INCOMPLETE", () => {
+      const detail = getDisputeDetail("PP-D-1005");
+      expect(detail).toBeDefined();
+      expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
+
+      // Three separate badges
+      expect(detail!.mandateCompliance).toBe("COMPLIANT");
+      expect(detail!.deliveryEvidence).toBe("not available");
+      expect(detail!.responseReadiness).toBe("INCOMPLETE");
+
+      // Missing supporting record flagged per reason
+      expect(detail!.requiredEvidence).toEqual([
+        "Signed Intent Mandate",
+        "Cart Mandate",
+        "Proof of Fulfillment",
+      ]);
+      expect(detail!.missingEvidence).toEqual(["Proof of Fulfillment (carrier tracking)"]);
+    });
+
+    it("never reads READY for a dispute the signed mandate does not back, whatever records exist", () => {
+      for (const cls of ["AGENT_OVERREACH", "INTENT_MISREAD"]) {
+        for (const reason of [
+          "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+          "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+          "UNAUTHORISED",
+          "INCORRECT_AMOUNT",
+        ]) {
+          const r = evaluateDisputeEvidence(reason, cls, {
+            hasMandate: true,
+            hasPolicyEvaluation: true,
+            tracking: { trackingNumber: "1Z12345678" },
+          });
+          expect(r.responseReadiness, `${cls} / ${reason}`).toBe("INCOMPLETE");
+          expect(r.missing, `${cls} / ${reason}`).toEqual([
+            "A passing mandate check (the cart did not meet what the shopper signed)",
+          ]);
+        }
+      }
+    });
+
+    it("a compliant dispute with every record is still READY", () => {
+      const r = evaluateDisputeEvidence("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MANDATE_COMPLIANT", {
+        hasMandate: true,
+        tracking: { trackingNumber: "1Z12345678" },
+      });
+      expect([r.responseReadiness, r.missing]).toEqual(["READY", []]);
+    });
+
+    it("flags missing mandate on NO_MANDATE dispute PP-D-1015", () => {
+      const detail = getDisputeDetail("PP-D-1015");
+      expect(detail).toBeDefined();
+      expect(detail!.buyerDisputeReason).toBe("UNAUTHORISED");
+
+      expect(detail!.mandateCompliance).toBe("NO_MANDATE");
+      expect(detail!.deliveryEvidence).toBe("not available");
+      expect(detail!.responseReadiness).toBe("INCOMPLETE");
+
+      expect(detail!.missingEvidence).toContain("Signed Intent Mandate");
+    });
+
+    it("evaluates reason mapping with confirmed delivery when real tracking is provided", () => {
+      const withTracking = evaluateDisputeEvidence(
+        "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+        "MANDATE_COMPLIANT",
+        {
+          hasMandate: true,
+          tracking: { trackingNumber: "1Z12345678" },
+        },
+      );
+
+      expect(withTracking.mandateCompliance).toBe("COMPLIANT");
+      expect(withTracking.deliveryEvidence).toBe("CONFIRMED");
+      expect(withTracking.responseReadiness).toBe("READY");
+      expect(withTracking.missing).toEqual([]);
+    });
   });
 });

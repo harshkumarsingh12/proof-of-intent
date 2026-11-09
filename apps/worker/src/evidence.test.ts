@@ -7,7 +7,9 @@ import {
   buildConstraintChecks,
   buildEvidencePackage,
   draftEvidenceForDefend,
+  evaluateEvidenceRequirements,
   InMemoryEvidenceStore,
+  REQUIRED_EVIDENCE_BY_REASON,
 } from "./evidence";
 
 const hash = mandateHash(greyJacketIntent);
@@ -219,5 +221,124 @@ describe("buildConstraintChecks", () => {
       "attributes.category": true,
       "attributes.color": false,
     });
+  });
+});
+
+describe("evidence requirements by dispute reason (issue #172)", () => {
+  it("flags proof of fulfillment as missing when dispute reason is MERCHANDISE_OR_SERVICE_NOT_RECEIVED without tracking", async () => {
+    const notReceivedDispute = {
+      disputeId: "PP-D-1006",
+      orderId: "ord_1001",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    };
+
+    const res = await draftEvidenceForDefend({
+      dispute: notReceivedDispute,
+      signedIntentJws,
+      cart: compliantCart,
+      captureRecord,
+      keyResolver,
+    });
+
+    // Delivery evidence is missing / not available
+    expect(res.evidenceReport).toBeDefined();
+    expect(res.evidenceReport?.disputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
+    expect(res.evidenceReport?.required).toEqual([
+      "signed_intent_mandate",
+      "cart_mandate",
+      "proof_of_fulfillment",
+    ]);
+    expect(res.evidenceReport?.missing).toContain("proof_of_fulfillment");
+    expect(res.evidenceReport?.deliveryEvidence).toBe("not available");
+
+    // bundleJson flags missing evidence
+    const bundle = JSON.parse(res.bundleJson);
+    expect(bundle.missing_evidence).toContain("proof_of_fulfillment");
+    expect(bundle.required_evidence).toContain("proof_of_fulfillment");
+    expect(bundle.evidence_report.deliveryEvidence).toBe("not available");
+
+    // Fallback draft cover note and sections explicitly report delivery evidence as not available
+    expect(res.draft.cover_note).toContain("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
+    expect(res.draft.cover_note).toContain("Proof of fulfillment/delivery: not available");
+    const deliverySection = res.draft.attestation_sections.find((s) => s.heading.includes("Delivery"));
+    expect(deliverySection?.body).toBe("Delivery evidence: not available");
+  });
+
+  it("confirms delivery evidence when real tracking data is provided", async () => {
+    const notReceivedDispute = {
+      disputeId: "PP-D-1006",
+      orderId: "ord_1001",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    };
+
+    const res = await draftEvidenceForDefend({
+      dispute: notReceivedDispute,
+      signedIntentJws,
+      cart: compliantCart,
+      captureRecord,
+      keyResolver,
+      tracking: { trackingNumber: "1Z9999999999999999", carrier: "UPS" },
+    });
+
+    expect(res.evidenceReport?.deliveryEvidence).toBe("confirmed");
+    expect(res.evidenceReport?.missing).toEqual([]);
+    expect(res.evidenceReport?.available).toContain("proof_of_fulfillment");
+    const bundle = JSON.parse(res.bundleJson);
+    expect(bundle.missing_evidence).toEqual([]);
+  });
+
+  it("checks MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED without requiring delivery evidence", async () => {
+    const notAsDescribedDispute = {
+      disputeId: "PP-D-1001",
+      orderId: "ord_1001",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+    };
+
+    const res = await draftEvidenceForDefend({
+      dispute: notAsDescribedDispute,
+      signedIntentJws,
+      cart: compliantCart,
+      captureRecord,
+      keyResolver,
+    });
+
+    expect(res.evidenceReport?.disputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED");
+    expect(res.evidenceReport?.required).toEqual([
+      "signed_intent_mandate",
+      "cart_mandate",
+      "constraint_evaluation",
+    ]);
+    expect(res.evidenceReport?.missing).toEqual([]);
+    expect(res.evidenceReport?.available).toEqual([
+      "signed_intent_mandate",
+      "cart_mandate",
+      "constraint_evaluation",
+    ]);
+  });
+
+  it("evaluates required evidence mapping helper directly", () => {
+    expect(REQUIRED_EVIDENCE_BY_REASON["MERCHANDISE_OR_SERVICE_NOT_RECEIVED"]!.map((r) => r.id)).toEqual([
+      "signed_intent_mandate",
+      "cart_mandate",
+      "proof_of_fulfillment",
+    ]);
+    expect(REQUIRED_EVIDENCE_BY_REASON["UNAUTHORISED"]!.map((r) => r.id)).toEqual([
+      "signed_intent_mandate",
+      "order_pointer_match",
+    ]);
+    expect(REQUIRED_EVIDENCE_BY_REASON["INCORRECT_AMOUNT"]!.map((r) => r.id)).toEqual([
+      "signed_intent_mandate",
+      "capture_record",
+    ]);
+
+    const report = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
+      hasMandate: true,
+      hasCart: true,
+    });
+    expect(report.missing).toEqual(["proof_of_fulfillment"]);
+    expect(report.deliveryEvidence).toBe("not available");
   });
 });
