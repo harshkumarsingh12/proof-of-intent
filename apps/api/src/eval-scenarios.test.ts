@@ -11,6 +11,14 @@ import { createGenerate } from "../../../packages/ai/src/runtime";
 import { buildApp, type AppDeps } from "./app";
 import { party, signedCheckout } from "./test-helpers";
 
+async function waitForDisconnect(admin: pg.Client, name: string) {
+  const deadline = Date.now() + 2_000;
+  while ((await admin.query("SELECT 1 FROM pg_stat_activity WHERE datname=$1", [name])).rows.length) {
+    if (Date.now() >= deadline) throw new Error(`Eval database ${name} still has connections after cleanup`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 async function scenario(run: (s: Awaited<ReturnType<typeof setup>>) => Promise<void>) {
   const name = `poi_eval_${randomUUID().replace(/-/g, "")}`;
   const url = new URL(process.env.DATABASE_URL!);
@@ -25,12 +33,18 @@ async function scenario(run: (s: Awaited<ReturnType<typeof setup>>) => Promise<v
     s = await setup(db, raw, url.toString());
     await run(s);
   } finally {
-    await raw.end();
-    // buildApp owns and closes its database pool. Only close it ourselves if setup never returned an app.
-    if (s) await s.app.close();
-    else await db.close();
-    await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-    await admin.end();
+    try {
+      await raw.end();
+      // buildApp owns and closes its database pool. Only close it ourselves if setup never returned an app.
+      if (s) await s.app.close();
+      else await db.close();
+      // pool.end() can resolve before PostgreSQL observes the socket's graceful disconnect. FORCE in that gap
+      // kills a still-closing pg client after its pool listeners are removed, producing an uncaught error.
+      await waitForDisconnect(admin, name);
+      await admin.query(`DROP DATABASE ${name}`);
+    } finally {
+      await admin.end();
+    }
   }
 }
 
