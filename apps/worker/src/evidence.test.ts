@@ -332,7 +332,7 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
     // Draft cover note and section do not state confirmed delivery
     expect(res.draft.cover_note).not.toContain("confirmed");
     expect(res.draft.cover_note).toContain(
-      "Shipment tracking identifier is recorded (USPS JUST-ISSUED-NO-DELIVERY-STATUS), but confirmed delivery event is not established",
+      "Shipment tracking identifier is recorded (USPS JUST-ISSUED-NO-DELIVERY-STATUS), but delivery is unverified",
     );
 
     const deliverySection = res.draft.attestation_sections.find((s) => s.heading.includes("Delivery"));
@@ -342,6 +342,7 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
     // PDF does not assert confirmed delivery
     const pdfText = new TextDecoder().decode(res.pdf);
     expect(pdfText).not.toContain("Delivery evidence: confirmed");
+    expect(pdfText).not.toContain("confirmed");
     expect(pdfText).toContain("Shipment tracking identifier is recorded");
   });
 
@@ -369,14 +370,16 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
     expect(bundle.evidence_report.deliveryEvidence).toBe("in-transit");
     expect(bundle.missing_evidence).toContain("proof_of_fulfillment");
 
+    expect(res.draft.cover_note).not.toContain("confirmed");
     expect(res.draft.cover_note).toContain(
-      "Shipment tracking is in-transit (USPS 9400100000000000000000); confirmed delivery is not established",
+      "Shipment tracking is in-transit (USPS 9400100000000000000000); delivery is unverified",
     );
     const deliverySection = res.draft.attestation_sections.find((s) => s.heading.includes("Delivery"));
     expect(deliverySection?.body).toContain("Delivery evidence: in-transit");
 
     const pdfText = new TextDecoder().decode(res.pdf);
     expect(pdfText).not.toContain("Delivery evidence: confirmed");
+    expect(pdfText).not.toContain("confirmed");
     expect(pdfText).toContain("Shipment tracking is in-transit");
   });
 

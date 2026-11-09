@@ -297,12 +297,12 @@ export function generateDefaultEvidenceDraft(
       const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
         ? ` (${trackingMeta.carrier} ${trackingMeta.trackingNumber})`
         : "";
-      fulfillmentNote = ` Shipment tracking is in-transit${carrierInfo}; confirmed delivery is not established.`;
+      fulfillmentNote = ` Shipment tracking is in-transit${carrierInfo}; delivery is unverified.`;
     } else if (deliveryStatus === "unknown") {
       const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
         ? ` (${trackingMeta.carrier} ${trackingMeta.trackingNumber})`
         : "";
-      fulfillmentNote = ` Shipment tracking identifier is recorded${carrierInfo}, but confirmed delivery event is not established.`;
+      fulfillmentNote = ` Shipment tracking identifier is recorded${carrierInfo}, but delivery is unverified.`;
     } else if (deliveryStatus === "failed") {
       const carrierInfo = trackingMeta?.carrier && trackingMeta?.trackingNumber
         ? ` (${trackingMeta.carrier} ${trackingMeta.trackingNumber})`
@@ -332,7 +332,7 @@ export function generateDefaultEvidenceDraft(
     } else if (deliveryStatus === "in-transit" && trackingMeta?.trackingNumber) {
       deliveryBody += ` (${trackingMeta.carrier ?? "Carrier"}: ${trackingMeta.trackingNumber}, status: ${trackingMeta.status ?? "in-transit"})`;
     } else if (deliveryStatus === "unknown" && trackingMeta?.trackingNumber) {
-      deliveryBody += ` (tracking number recorded: ${trackingMeta.carrier ?? "Carrier"} ${trackingMeta.trackingNumber}; no delivery confirmation event)`;
+      deliveryBody += ` (tracking number recorded: ${trackingMeta.carrier ?? "Carrier"} ${trackingMeta.trackingNumber}; delivery unverified)`;
     } else if (deliveryStatus === "failed" && trackingMeta?.trackingNumber) {
       deliveryBody += ` (${trackingMeta.carrier ?? "Carrier"}: ${trackingMeta.trackingNumber}, status: ${trackingMeta.status ?? "failed"})`;
     }
