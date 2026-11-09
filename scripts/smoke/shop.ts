@@ -41,6 +41,13 @@ async function freshIntent() {
   await page.getByText("Signed in your browser").waitFor({ timeout: 20_000 });
 }
 
+async function ensureKeyCardOpen(p: Page = page) {
+  const details = p.locator("details.key-card");
+  if ((await details.count()) > 0 && !(await details.first().getAttribute("open"))) {
+    await details.first().locator("summary").click();
+  }
+}
+
 await step("the browser makes a non-extractable key and signs an intent", async () => {
   await freshIntent();
   // Read the stored CryptoKey back: it must be ECDSA P-256 and refuse to be exported (spec 0001 criterion 6).
@@ -126,6 +133,7 @@ if (!hosted) {
   await step("saving a PayPal wallet comes back to the shop with the wallet saved", async () => {
     await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
     await page.getByText("Key id").waitFor({ timeout: 30_000 });
+    await ensureKeyCardOpen();
     await page.getByRole("button", { name: "Save a PayPal wallet" }).click();
     await page.getByRole("heading", { name: "Wallet saved" }).waitFor({ timeout: 30_000 });
     await page.getByRole("link", { name: "Back to the shop" }).click();
@@ -212,6 +220,7 @@ if (!hosted) {
   await step(
     "removing the wallet turns agent-alone off, and the agent can't charge it any more",
     async () => {
+      await ensureKeyCardOpen();
       await page.getByRole("button", { name: "Remove my wallet" }).click();
       await page.getByRole("button", { name: "Save a PayPal wallet" }).waitFor({ timeout: 30_000 });
       if (await page.getByLabel(/Let the agent pay alone/).isEnabled())
@@ -221,6 +230,7 @@ if (!hosted) {
       // Reloading asks the merchant again: the wallet really is gone, not just hidden.
       await page.reload({ waitUntil: "networkidle" });
       await page.getByText("Key id").waitFor({ timeout: 30_000 });
+      await ensureKeyCardOpen();
       await page.getByRole("button", { name: "Save a PayPal wallet" }).waitFor({ timeout: 30_000 });
     },
   );
