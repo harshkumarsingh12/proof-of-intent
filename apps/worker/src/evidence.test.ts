@@ -265,7 +265,7 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
     expect(deliverySection?.body).toBe("Delivery evidence: not available");
   });
 
-  it("confirms delivery evidence when real tracking data is provided", async () => {
+  it("confirms delivery evidence when real tracking data is provided with DELIVERED status", async () => {
     const notReceivedDispute = {
       disputeId: "PP-D-1006",
       orderId: "ord_1001",
@@ -279,7 +279,7 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
       cart: compliantCart,
       captureRecord,
       keyResolver,
-      tracking: { trackingNumber: "1Z9999999999999999", carrier: "UPS" },
+      tracking: { trackingNumber: "1Z9999999999999999", carrier: "UPS", status: "DELIVERED" },
     });
 
     expect(res.evidenceReport?.deliveryEvidence).toBe("confirmed");
@@ -287,6 +287,97 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
     expect(res.evidenceReport?.available).toContain("proof_of_fulfillment");
     const bundle = JSON.parse(res.bundleJson);
     expect(bundle.missing_evidence).toEqual([]);
+    expect(bundle.evidence_report.deliveryEvidence).toBe("confirmed");
+
+    expect(res.draft.cover_note).toContain("Proof of fulfillment/delivery: confirmed via UPS 1Z9999999999999999");
+    const deliverySection = res.draft.attestation_sections.find((s) => s.heading.includes("Delivery"));
+    expect(deliverySection?.body).toContain("Delivery evidence: confirmed (UPS: 1Z9999999999999999, status: DELIVERED)");
+
+    const pdfText = new TextDecoder().decode(res.pdf);
+    expect(pdfText).toContain("Proof of fulfillment/delivery: confirmed via UPS 1Z9999999999999999");
+  });
+
+  it("tracking number alone does not confirm delivery and flags proof_of_fulfillment missing (#238)", async () => {
+    const notReceivedDispute = {
+      disputeId: "PP-D-1006",
+      orderId: "ord_1001",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    };
+
+    const res = await draftEvidenceForDefend({
+      dispute: notReceivedDispute,
+      signedIntentJws,
+      cart: compliantCart,
+      captureRecord,
+      keyResolver,
+      tracking: { trackingNumber: "JUST-ISSUED-NO-DELIVERY-STATUS", carrier: "USPS" },
+    });
+
+    expect(res.evidenceReport?.deliveryEvidence).toBe("unknown");
+    expect(res.evidenceReport?.missing).toContain("proof_of_fulfillment");
+    expect(res.evidenceReport?.available).not.toContain("proof_of_fulfillment");
+    expect(res.evidenceReport?.trackingMetadata).toEqual({
+      trackingNumber: "JUST-ISSUED-NO-DELIVERY-STATUS",
+      carrier: "USPS",
+      status: undefined,
+    });
+
+    // JSON bundle retains tracking metadata without confirmed delivery
+    const bundle = JSON.parse(res.bundleJson);
+    expect(bundle.missing_evidence).toContain("proof_of_fulfillment");
+    expect(bundle.evidence_report.deliveryEvidence).toBe("unknown");
+    expect(bundle.evidence_report.trackingMetadata.trackingNumber).toBe("JUST-ISSUED-NO-DELIVERY-STATUS");
+
+    // Draft cover note and section do not state confirmed delivery
+    expect(res.draft.cover_note).not.toContain("confirmed");
+    expect(res.draft.cover_note).toContain(
+      "Shipment tracking identifier is recorded (USPS JUST-ISSUED-NO-DELIVERY-STATUS), but confirmed delivery event is not established",
+    );
+
+    const deliverySection = res.draft.attestation_sections.find((s) => s.heading.includes("Delivery"));
+    expect(deliverySection?.body).toContain("Delivery evidence: unknown");
+    expect(deliverySection?.body).not.toContain("Delivery evidence: confirmed");
+
+    // PDF does not assert confirmed delivery
+    const pdfText = new TextDecoder().decode(res.pdf);
+    expect(pdfText).not.toContain("Delivery evidence: confirmed");
+    expect(pdfText).toContain("Shipment tracking identifier is recorded");
+  });
+
+  it("in-transit tracking keeps in-transit state explicit and flags proof_of_fulfillment missing (#238)", async () => {
+    const notReceivedDispute = {
+      disputeId: "PP-D-1006",
+      orderId: "ord_1001",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+      reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    };
+
+    const res = await draftEvidenceForDefend({
+      dispute: notReceivedDispute,
+      signedIntentJws,
+      cart: compliantCart,
+      captureRecord,
+      keyResolver,
+      tracking: { trackingNumber: "9400100000000000000000", carrier: "USPS", status: "IN_TRANSIT" },
+    });
+
+    expect(res.evidenceReport?.deliveryEvidence).toBe("in-transit");
+    expect(res.evidenceReport?.missing).toContain("proof_of_fulfillment");
+
+    const bundle = JSON.parse(res.bundleJson);
+    expect(bundle.evidence_report.deliveryEvidence).toBe("in-transit");
+    expect(bundle.missing_evidence).toContain("proof_of_fulfillment");
+
+    expect(res.draft.cover_note).toContain(
+      "Shipment tracking is in-transit (USPS 9400100000000000000000); confirmed delivery is not established",
+    );
+    const deliverySection = res.draft.attestation_sections.find((s) => s.heading.includes("Delivery"));
+    expect(deliverySection?.body).toContain("Delivery evidence: in-transit");
+
+    const pdfText = new TextDecoder().decode(res.pdf);
+    expect(pdfText).not.toContain("Delivery evidence: confirmed");
+    expect(pdfText).toContain("Shipment tracking is in-transit");
   });
 
   it("checks MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED without requiring delivery evidence", async () => {
@@ -334,11 +425,54 @@ describe("evidence requirements by dispute reason (issue #172)", () => {
       "capture_record",
     ]);
 
-    const report = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
+    // Missing tracking
+    const reportMissing = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
       hasMandate: true,
       hasCart: true,
     });
-    expect(report.missing).toEqual(["proof_of_fulfillment"]);
-    expect(report.deliveryEvidence).toBe("not available");
+    expect(reportMissing.missing).toEqual(["proof_of_fulfillment"]);
+    expect(reportMissing.deliveryEvidence).toBe("not available");
+
+    // Number-only (reproduction from issue #238)
+    const reportNumberOnly = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
+      hasMandate: true,
+      hasCart: true,
+      hasCapture: true,
+      tracking: { trackingNumber: "JUST-ISSUED-NO-DELIVERY-STATUS" },
+    });
+    expect(reportNumberOnly.deliveryEvidence).toBe("unknown");
+    expect(reportNumberOnly.missing).toEqual(["proof_of_fulfillment"]);
+    expect(reportNumberOnly.available).not.toContain("proof_of_fulfillment");
+
+    // In-transit
+    const reportInTransit = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
+      hasMandate: true,
+      hasCart: true,
+      hasCapture: true,
+      tracking: { trackingNumber: "9400100000000000000000", status: "SHIPPED" },
+    });
+    expect(reportInTransit.deliveryEvidence).toBe("in-transit");
+    expect(reportInTransit.missing).toEqual(["proof_of_fulfillment"]);
+
+    // Failed
+    const reportFailed = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
+      hasMandate: true,
+      hasCart: true,
+      hasCapture: true,
+      tracking: { trackingNumber: "9400100000000000000000", status: "FAILED" },
+    });
+    expect(reportFailed.deliveryEvidence).toBe("failed");
+    expect(reportFailed.missing).toEqual(["proof_of_fulfillment"]);
+
+    // Confirmed delivery
+    const reportDelivered = evaluateEvidenceRequirements("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", {
+      hasMandate: true,
+      hasCart: true,
+      hasCapture: true,
+      tracking: { trackingNumber: "1Z9999999999999999", carrier: "UPS", status: "DELIVERED" },
+    });
+    expect(reportDelivered.deliveryEvidence).toBe("confirmed");
+    expect(reportDelivered.missing).toEqual([]);
+    expect(reportDelivered.available).toContain("proof_of_fulfillment");
   });
 });
