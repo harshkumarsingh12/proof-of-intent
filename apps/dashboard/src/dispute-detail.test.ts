@@ -306,8 +306,8 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       expect(detail!.missingEvidence).toEqual([]);
     });
 
-    it("flags missing delivery evidence on item-not-received dispute PP-D-1006 making readiness INCOMPLETE", () => {
-      const detail = getDisputeDetail("PP-D-1006");
+    it("flags missing delivery evidence on item-not-received dispute PP-D-1005 making readiness INCOMPLETE", () => {
+      const detail = getDisputeDetail("PP-D-1005");
       expect(detail).toBeDefined();
       expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
 
