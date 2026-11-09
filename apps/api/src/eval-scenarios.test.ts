@@ -1,6 +1,6 @@
 /** Supplemental eval #169: real merchant routes, signed requests and disposable PostgreSQL, mock payments. */
 import { randomUUID } from "node:crypto";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import pg from "pg";
 import { semanticFit, type SemanticFit } from "@poi/ai";
 import { compliantCart, greyJacketIntent, MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
@@ -22,7 +22,7 @@ async function scenario(run: (s: Awaited<ReturnType<typeof setup>>) => Promise<v
   const raw = new pg.Pool({ connectionString: url.toString() });
   let s: Awaited<ReturnType<typeof setup>> | undefined;
   try {
-    s = await setup(db, raw);
+    s = await setup(db, raw, url.toString());
     await run(s);
   } finally {
     await raw.end();
@@ -34,7 +34,7 @@ async function scenario(run: (s: Awaited<ReturnType<typeof setup>>) => Promise<v
   }
 }
 
-async function setup(db: ReturnType<typeof createDb>, raw: pg.Pool) {
+async function setup(db: ReturnType<typeof createDb>, raw: pg.Pool, databaseUrl: string) {
   await db.migrate();
   const shopper = await party("shopper-key-1");
   const agent = await party("agent-key-1");
@@ -92,6 +92,7 @@ async function setup(db: ReturnType<typeof createDb>, raw: pg.Pool) {
     app,
     db,
     raw,
+    databaseUrl,
     shopper,
     send,
     approve,
@@ -108,6 +109,7 @@ async function setup(db: ReturnType<typeof createDb>, raw: pg.Pool) {
 }
 
 describe.runIf(process.env.DATABASE_URL)("supplemental system eval", () => {
+  afterEach(() => vi.unstubAllEnvs());
   test.each(["price", "title", "attributes"])(
     "product-fact manipulation (%s) is refused before AI or payment",
     async (field) => {
@@ -173,6 +175,9 @@ describe.runIf(process.env.DATABASE_URL)("supplemental system eval", () => {
 
   test("provider failures on both J1 attempts require confirmation and create no unattended charge", async () => {
     await scenario(async (s) => {
+      // Live transport must reserve against this migrated, isolated database, not the administrator database.
+      vi.stubEnv("DATABASE_URL", s.databaseUrl);
+      vi.stubEnv("AI_DAILY_CALL_LIMIT", "10");
       const network = vi.fn(async () =>
         Response.json({ error: { message: "provider unavailable" } }, { status: 503 }),
       ) as unknown as typeof fetch;
