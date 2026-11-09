@@ -1,3 +1,5 @@
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   executeDisputeAction,
@@ -5,6 +7,7 @@ import {
   fetchDisputeDetail,
   fetchDisputeDetailDetailed,
   getDisputeDetail,
+  proofPackagePath,
 } from "./api";
 import { evaluateDisputeEvidence } from "./dispute-details";
 import type { DisputeDetail } from "./dispute-types";
@@ -374,7 +377,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
           const r = evaluateDisputeEvidence(reason, cls, {
             hasMandate: true,
             hasPolicyEvaluation: true,
-            tracking: { trackingNumber: "1Z12345678" },
+            tracking: { trackingNumber: "1Z12345678", status: "DELIVERED" },
           });
           expect(r.responseReadiness, `${cls} / ${reason}`).toBe("INCOMPLETE");
           expect(r.missing, `${cls} / ${reason}`).toEqual([
@@ -387,7 +390,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     it("a compliant dispute with every record is still READY", () => {
       const r = evaluateDisputeEvidence("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MANDATE_COMPLIANT", {
         hasMandate: true,
-        tracking: { trackingNumber: "1Z12345678" },
+        tracking: { trackingNumber: "1Z12345678", status: "DELIVERED" },
       });
       expect([r.responseReadiness, r.missing]).toEqual(["READY", []]);
     });
@@ -410,7 +413,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
         "MANDATE_COMPLIANT",
         {
           hasMandate: true,
-          tracking: { trackingNumber: "1Z12345678" },
+          tracking: { trackingNumber: "1Z12345678", status: "DELIVERED" },
         },
       );
 
@@ -419,5 +422,53 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       expect(withTracking.responseReadiness).toBe("READY");
       expect(withTracking.missing).toEqual([]);
     });
+
+    it("a tracking number without a delivered status does not confirm delivery (#238)", () => {
+      const cases: Array<[string | undefined, string]> = [
+        [undefined, "unknown"],
+        ["IN_TRANSIT", "in-transit"],
+        ["SHIPPED", "in-transit"],
+        ["CANCELLED", "failed"],
+      ];
+      for (const [status, expected] of cases) {
+        const r = evaluateDisputeEvidence("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MANDATE_COMPLIANT", {
+          hasMandate: true,
+          tracking: { trackingNumber: "1Z12345678", status },
+        });
+        expect([status, r.deliveryEvidence, r.responseReadiness]).toEqual([status, expected, "INCOMPLETE"]);
+        expect(r.missing).toContain("Proof of Fulfillment (carrier tracking)");
+      }
+    });
+  });
+});
+
+describe("the proof package download (#177)", () => {
+  it("is fetched through the dashboard's own proxy, which holds the operator token, with the order id encoded", () => {
+    expect(proofPackagePath("ord_abc-123")).toBe("/api/orders/ord_abc-123/proof");
+    expect(proofPackagePath("a/b c")).toBe("/api/orders/a%2Fb%20c/proof");
+  });
+
+  // The component's JSX is compiled for Next's runtime; under vitest it needs React in scope, and it is imported after that.
+  const render = async (isDemoData: boolean, patch: Partial<DisputeDetail> = {}) => {
+    (globalThis as { React?: unknown }).React = React;
+    const { DisputeDetailView } = await import("../app/disputes/[id]/DisputeDetailView");
+    const dispute = { ...getDisputeDetail("PP-D-1001")!, orderId: "ord_live_1", ...patch };
+    return renderToStaticMarkup(React.createElement(DisputeDetailView, { dispute, isDemoData }));
+  };
+
+  it("a live dispute with an order and a signed mandate offers it, pointing at that order, and says what it is for", async () => {
+    const html = await render(false);
+    expect(html).toContain('data-testid="proof-package-link"');
+    expect(html).toContain('href="/api/orders/ord_live_1/proof"');
+    expect(html).toContain("Download proof package (JSON)");
+    expect(html).toContain("pnpm proof:verify");
+    expect(html).toContain("not who holds the keys");
+  });
+
+  it("is not offered for sample data, which has no stored mandates behind it, or for a dispute with no signed mandate", async () => {
+    expect(await render(true)).not.toContain("proof-package-link");
+    expect(await render(false, { mandateId: undefined, shopperIntentText: undefined })).not.toContain(
+      "proof-package-link",
+    );
   });
 });

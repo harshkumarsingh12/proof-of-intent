@@ -92,36 +92,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+      # The same checks as the uptime monitor (scripts/ops/uptime-check.sh), so a release and the monitor can't disagree
+      # about what "up" means. That includes the dispute worker keeping up ("inbox":"ok" in /readyz, #164): on Dokploy
+      # there is no SSH deploy, so this is the only check of the worker a release gets.
       - name: Check the public endpoints
         env:
           API_URL: ${{ vars.PUBLIC_API_URL }}
           SHOP_URL: ${{ vars.PUBLIC_SHOP_URL }}
           DASHBOARD_URL: ${{ vars.PUBLIC_DASHBOARD_URL }}
           DEPLOYED: ${{ needs.server.outputs.deployed }}
+          # The stack may still be starting, so retry each check for about two minutes.
+          ATTEMPTS: 12
+          DELAY: 10
+          REPORT: ${{ runner.temp }}/verify-public.txt
         run: |
           if [ -z "$API_URL$SHOP_URL$DASHBOARD_URL" ]; then
             echo "::warning::PUBLIC_API_URL, PUBLIC_SHOP_URL and PUBLIC_DASHBOARD_URL are not set, so the public endpoints were NOT checked."
             [ "$DEPLOYED" = true ] || echo "::warning::Nothing was deployed over SSH either (no SERVER_HOST): this release was not verified at all."
             exit 0
           fi
-          fail=0
-          # check <name> <url> <text the answer must contain>: the stack may still be starting, so retry for two minutes.
-          check() {
-            [ -n "$2" ] || { echo "::warning::$1: no URL set, skipped"; return; }
-            for _ in $(seq 1 12); do
-              if body=$(curl -fsS --max-time 15 "$2" 2>/dev/null) && [[ $body == *"$3"* ]]; then
-                echo "ok    $1 ($2)"
-                return
-              fi
-              sleep 10
-            done
-            echo "::error::$1 failed: $2 did not answer 200 with $3"
-            fail=1
-          }
-          check "api ready, database reachable" "${API_URL:+${API_URL%/}/readyz}" '"database":"configured"'
-          check "shop" "${SHOP_URL:+${SHOP_URL%/}/healthz}" '"status":"ok"'
-          check "dashboard" "${DASHBOARD_URL:+${DASHBOARD_URL%/}/healthz}" '"status":"ok"'
-          exit $fail
+          [ -n "$API_URL" ] && [ -n "$SHOP_URL" ] && [ -n "$DASHBOARD_URL" ] ||
+            echo "::warning::Not every PUBLIC_*_URL variable is set, so part of the release was NOT checked (see 'skip' below)."
+          if scripts/ops/uptime-check.sh; then exit 0; fi
+          while IFS= read -r line; do echo "::error::$line"; done <"$REPORT"
+          exit 1
 
   release:
     needs: [server, verify-public]

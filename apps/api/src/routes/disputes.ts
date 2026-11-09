@@ -11,6 +11,7 @@ import { CartMandate, IntentMandate, type DisputeClass, type Money, type ReasonC
 import type { AuditRecord, Db, DisputeRow, DisputeSummary, StoredOrder } from "@poi/db";
 import { evidenceTypeFor, fromPayPalAmount, PayPalError } from "@poi/paypal";
 import type { AppDeps } from "../app";
+import { assembleProof } from "../proof";
 
 /** What the worker stores in disputes.recommendation (apps/worker/src/inbox.ts). */
 interface Recommendation {
@@ -30,6 +31,8 @@ interface Recommendation {
   evidenceError?: string;
   /** J2 (packages/ai): cited explanation of the deterministic class. Absent when the model couldn't answer. */
   ai?: {
+    confidence?: number;
+    grounding_version?: string;
     reasons: { text: string; cites: string[] }[];
     evidence_plan: { text: string; cites: string[] }[];
   };
@@ -134,6 +137,8 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
   const cart = cartRow ? CartMandate.parse(JSON.parse(cartRow.canonical)) : null;
   const base = item(d, order, rec, d.evidencePdf !== undefined);
   const c = intent?.constraints;
+  const modelConfidence = rec.ai?.confidence;
+  const groundedAi = rec.ai?.grounding_version === "source-excerpts-v1" ? rec.ai : undefined;
   return {
     ...base,
     isDemoData: rec.demo === true,
@@ -174,21 +179,27 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
     })),
     classificationInfo: {
       disputeClass: rec.class,
-      // The class comes from the deterministic tree, not a model.
-      confidence: 1,
+      // This is a model's uncalibrated estimate, never certainty assigned to the deterministic class.
+      confidence:
+        typeof modelConfidence === "number" &&
+        Number.isFinite(modelConfidence) &&
+        modelConfidence >= 0 &&
+        modelConfidence <= 1
+          ? modelConfidence
+          : null,
       recommendedAction: rec.action,
       reasons: [
         { text: EXPLANATION[rec.class], cites: rec.mandateHash ? [`intent_mandate:${rec.mandateHash}`] : [] },
         // J2 explains the class in the dispute's own terms; every line cites a fact the model was given.
-        ...(rec.ai?.reasons ?? []),
+        ...(groundedAi?.reasons ?? []),
         ...rec.reasons.map((r) => ({
           text: r,
           cites: intent ? [`intent_mandate:${intent.mandate_id}`] : [],
         })),
         ...(rec.evidenceError ? [{ text: `No evidence package: ${rec.evidenceError}`, cites: [] }] : []),
       ],
-      evidencePlan: rec.ai?.evidence_plan.length
-        ? rec.ai.evidence_plan.map((p) => p.text)
+      evidencePlan: groundedAi?.evidence_plan.length
+        ? groundedAi.evidence_plan.map((p) => p.text)
         : rec.action === "PROVIDE_EVIDENCE"
           ? ["Attestation PDF generated from the audit log", "JSON bundle: signed mandates and hashes"]
           : rec.action === "ACCEPT_CLAIM"
@@ -303,6 +314,27 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   app.get("/orders", async (req, reply) => {
     const db = needDb(reply);
     return db && { orders: await db.listOrders(page(req.query)) };
+  });
+
+  // The proof package for one order (#177): the three signed mandates, their public keys, the PayPal references and the policy
+  // version, as a file anyone can check offline with `pnpm proof:verify`. Read-only, and guarded like every GET here.
+  app.get<{ Params: { id: string } }>("/orders/:id/proof", async (req, reply) => {
+    const db = needDb(reply);
+    if (!db) return;
+    const out = await assembleProof(
+      db,
+      deps.merchant,
+      req.params.id,
+      deps.now?.() ?? new Date().toISOString(),
+    );
+    reply.header("cache-control", "no-store");
+    if (out.status === 200) {
+      reply.header(
+        "content-disposition",
+        `attachment; filename="poi-proof-${req.params.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json"`,
+      );
+    }
+    return reply.code(out.status).send(out.body);
   });
 
   app.get("/verifications", async (req, reply) => {

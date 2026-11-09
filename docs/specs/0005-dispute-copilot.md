@@ -1,12 +1,12 @@
 # 0005: Dispute copilot
 
-| | |
-|---|---|
-| **Status** | In Progress |
-| **Owner** | @hoursgotviral-dev |
+|               |                                 |
+| ------------- | ------------------------------- |
+| **Status**    | In Progress                     |
+| **Owner**     | @hoursgotviral-dev              |
 | **Reviewers** | @sumedhag28, @harshkumarsingh12 |
-| **Milestone** | M1 (skeleton), M2 (full cycle) |
-| **Code** | `apps/worker` |
+| **Milestone** | M1 (skeleton), M2 (full cycle)  |
+| **Code**      | `apps/worker`                   |
 
 ## Context
 
@@ -14,6 +14,14 @@ When a dispute arrives, the merchant needs the signed record turned into either 
 fast, with a person making the final call. Journeys C and D.
 
 ## Design
+
+**Uncertainty correction (#170, Nov 9).** The class follows the policy tree; it is not assigned a probability
+of 1. The recommendation response's existing `classificationInfo.confidence` is the persisted model's
+uncalibrated self-score, or `null` if absent/invalid. The dashboard labels it accordingly and separately lists
+missing intent/cart/checkout records (and the preview, for a compliant dispute). Record availability does not prove delivery, cardholder
+authorization, refund completion or completeness of a dispute defence. AI reasons/plans are displayed only
+when tagged `grounding_version: source-excerpts-v1`, the bounded rendering described in spec 0006; legacy
+unbounded prose is omitted. Review previously generated PDFs before reusing them. Operator actions are unchanged.
 
 ```
 webhook → verify, persist, enqueue dispute.received
@@ -33,6 +41,7 @@ J2 (spec 0006) writes the explanation and evidence plan; the class itself follow
 so a dispute verdict can never contradict the checkout verdict.
 
 **Evidence package (MANDATE_COMPLIANT):**
+
 1. Attestation PDF (`@react-pdf/renderer`), generated from the audit log: intent in the shopper's words,
    constraints, signed cart, three mandate hashes, the `custom_id` on the PayPal order, signature results,
    verdict with timestamps.
@@ -58,13 +67,12 @@ event twice yields the same row, so a crash before `processed_at` is set only re
 `Bearer OPERATOR_TOKEN`, write the operator's audit row first, then call PayPal. Later on Nov 6:
 
 **Retries, quarantine and lag (#164, migration 0007).** A failing event must not fill every batch and block newer
-disputes. The worker *claims* due events (`Db.claimDisputeEvents`: `FOR UPDATE SKIP LOCKED`, a 5-minute lease, one attempt
+disputes. The worker _claims_ due events (`Db.claimDisputeEvents`: `FOR UPDATE SKIP LOCKED`, a 5-minute lease, one attempt
 counted per claim), so several workers can run and a worker that dies lets its events go when the lease ends. A failure
 schedules the next attempt (30 s, 1 min, 2 min, 4 min, capped at an hour) and keeps the error in `last_error`; after 5
-attempts the event is *quarantined* (`quarantined_at`): kept, visible, never retried, while `list_disputes` catch-up can
+attempts the event is _quarantined_ (`quarantined_at`): kept, visible, never retried, while `list_disputes` catch-up can
 still pick its dispute up from PayPal. `/readyz` carries `webhooks.pending`, `webhooks.oldestPendingAt`,
-`webhooks.quarantined` and `inbox`: `ok`, `lagging` (the oldest event has waited past `INBOX_LAG_ALERT_SECONDS`, default
-600) or `quarantined`. It never makes `/readyz` a 503; `scripts/ops/uptime-check.sh` (so `uptime.yml`) alerts when `inbox` is
+`webhooks.quarantined` and `inbox`: `ok`, `lagging` (the oldest event has waited past `INBOX_LAG_ALERT_SECONDS`, default 600) or `quarantined`. It never makes `/readyz` a 503; `scripts/ops/uptime-check.sh` (so `uptime.yml`) alerts when `inbox` is
 not `ok`, and docs/MONITORING.md adds the same keyword to the dedicated monitor.
 
 - The worker re-reads every dispute with the Agent Toolkit's `get_dispute` before classifying (webhook bodies can
@@ -79,14 +87,14 @@ not `ok`, and docs/MONITORING.md adds the same keyword to the dedicated monitor.
 
 ## Acceptance criteria
 
-1. Overreach fixture → `AGENT_OVERREACH` → accept. *(done: classifier tests, inbox test on real Postgres)*
-2. Compliant fixture → `MANDATE_COMPLIANT` → evidence. *(done: same; live on the sandbox, PP-R-TRI-10196690)*
-3. PDF hashes equal the hash in `custom_id` and in the audit log. *(done: inbox test checks the bundle's
-   `mandate_hash` against `custom_id`; `operator.provide-evidence` rows store `pdfSha256`)*
-4. Killing the worker mid-dispute and restarting completes the job exactly once. *(by design: handling an event
-   again yields the same dispute row and older deliveries can't overwrite newer ones; no kill test yet)*
-5. No PayPal call happens without an operator action row in `audit_log`. *(done: API tests assert the order
-   `operator.<action>` → `paypal.<action>`; seen live in both sandbox runs)*
+1. Overreach fixture → `AGENT_OVERREACH` → accept. _(done: classifier tests, inbox test on real Postgres)_
+2. Compliant fixture → `MANDATE_COMPLIANT` → evidence. _(done: same; live on the sandbox, PP-R-TRI-10196690)_
+3. PDF hashes equal the hash in `custom_id` and in the audit log. _(done: inbox test checks the bundle's
+   `mandate_hash` against `custom_id`; `operator.provide-evidence` rows store `pdfSha256`)_
+4. Killing the worker mid-dispute and restarting completes the job exactly once. _(by design: handling an event
+   again yields the same dispute row and older deliveries can't overwrite newer ones; no kill test yet)_
+5. No PayPal call happens without an operator action row in `audit_log`. _(done: API tests assert the order
+   `operator.<action>` → `paypal.<action>`; seen live in both sandbox runs)_
 
 ## Out of scope
 

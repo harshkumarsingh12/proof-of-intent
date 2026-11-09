@@ -5,7 +5,7 @@ import { generateSeedDisputes } from "./seed-disputes";
 export interface ReasonEvidenceMapping {
   required: string[];
   missing: string[];
-  deliveryEvidence: "CONFIRMED" | "not available";
+  deliveryEvidence: "CONFIRMED" | "in-transit" | "failed" | "unknown" | "not available";
   responseReadiness: "READY" | "INCOMPLETE";
   mandateCompliance: "COMPLIANT" | "NON_COMPLIANT" | "NO_MANDATE" | "MISREAD";
 }
@@ -17,7 +17,7 @@ export function evaluateDisputeEvidence(
     hasMandate?: boolean;
     hasDeliveryEvidence?: boolean;
     hasPolicyEvaluation?: boolean;
-    tracking?: { trackingNumber?: string };
+    tracking?: { trackingNumber?: string; status?: string };
   },
 ): ReasonEvidenceMapping {
   // 1. Mandate Compliance
@@ -38,7 +38,11 @@ export function evaluateDisputeEvidence(
   const required: string[] = [];
   const missing: string[] = [];
   const hasMandate = options?.hasMandate ?? (disputeClass !== "NO_MANDATE");
-  const hasDelivery = Boolean(options?.hasDeliveryEvidence || options?.tracking?.trackingNumber);
+  // A tracking number alone proves a label exists, not that the parcel arrived (#238): only a DELIVERED status confirms it,
+  // the same rule as the worker's evaluateEvidenceRequirements (apps/worker/src/evidence.ts).
+  const hasTrackingNumber = Boolean(options?.tracking?.trackingNumber?.trim());
+  const trackingStatus = options?.tracking?.status?.trim().toUpperCase();
+  const hasDelivery = Boolean(options?.hasDeliveryEvidence) || (hasTrackingNumber && trackingStatus === "DELIVERED");
 
   switch (buyerDisputeReason) {
     case "MERCHANDISE_OR_SERVICE_NOT_RECEIVED": {
@@ -82,7 +86,15 @@ export function evaluateDisputeEvidence(
   }
 
   // 3. Delivery Evidence: "There is no tracking or fulfillment data in the worker, so delivery evidence shows 'not available' unless real data exists."
-  const deliveryEvidence = hasDelivery ? "CONFIRMED" : "not available";
+  const deliveryEvidence: ReasonEvidenceMapping["deliveryEvidence"] = hasDelivery
+    ? "CONFIRMED"
+    : !hasTrackingNumber
+      ? "not available"
+      : trackingStatus === "IN_TRANSIT" || trackingStatus === "SHIPPED" || trackingStatus === "ON_HOLD"
+        ? "in-transit"
+        : trackingStatus === "CANCELLED" || trackingStatus === "FAILED" || trackingStatus === "RETURNED"
+          ? "failed"
+          : "unknown";
 
   // 4. Response Readiness: Ready only if no required items are missing
   const responseReadiness: "READY" | "INCOMPLETE" = missing.length === 0 ? "READY" : "INCOMPLETE";
@@ -188,7 +200,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       ],
       classificationInfo: {
         disputeClass: "MANDATE_COMPLIANT",
-        confidence: 0.99,
+        confidence: null,
         recommendedAction: "PROVIDE_EVIDENCE",
         reasons: [
           {
@@ -275,7 +287,8 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
           cartActual: "$95.00",
           status: "FAIL",
           reasonCode: "AMOUNT_EXCEEDS_MAX",
-          explanation: "Cart total of $95.00 exceeded the shopper's maximum budget ceiling of $80.00 by $15.00.",
+          explanation:
+            "Cart total of $95.00 exceeded the shopper's maximum budget ceiling of $80.00 by $15.00.",
         },
         {
           id: "rule-color",
@@ -284,7 +297,8 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
           cartActual: "red",
           status: "FAIL",
           reasonCode: "ATTRIBUTE_MISMATCH",
-          explanation: "Agent purchased a red jacket, directly violating the explicit constraint requiring grey.",
+          explanation:
+            "Agent purchased a red jacket, directly violating the explicit constraint requiring grey.",
         },
         {
           id: "rule-category",
@@ -313,7 +327,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       ],
       classificationInfo: {
         disputeClass: "AGENT_OVERREACH",
-        confidence: 0.98,
+        confidence: null,
         recommendedAction: "ACCEPT_CLAIM",
         reasons: [
           {
@@ -361,7 +375,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       constraintChecks: [], // No passing checks on unmandated order
       classificationInfo: {
         disputeClass: "NO_MANDATE",
-        confidence: 0.99,
+        confidence: null,
         recommendedAction: "STANDARD_EVIDENCE",
         reasons: [
           {
@@ -400,7 +414,8 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
       cartActual: "Purchased item ambiguous or divergent",
       status: "FAIL",
       reasonCode: base.reasons[0] ?? "SEMANTIC_UNCERTAIN",
-      explanation: "Purchased item failed semantic verification against natural language shopper description.",
+      explanation:
+        "Purchased item failed semantic verification against natural language shopper description.",
     });
     checks.push({
       id: "rule-merchant",
@@ -498,7 +513,7 @@ function buildRawDisputeDetail(disputeId: string): DisputeDetail | undefined {
     constraintChecks: checks,
     classificationInfo: {
       disputeClass: base.disputeClass,
-      confidence: 0.95,
+      confidence: null,
       recommendedAction: base.decision === "defend" ? "PROVIDE_EVIDENCE" : "ACCEPT_CLAIM",
       reasons: base.reasons.map((r) => ({ text: `Reason code evaluated: ${r}`, cites: [r] })),
       evidencePlan: base.decision === "defend" ? ["Compile signed mandate JWS"] : ["Accept claim"],

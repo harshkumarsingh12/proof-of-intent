@@ -25,6 +25,10 @@ export interface StudioDisputeRow {
   hoursToDue: number;
   /** The cover note drafted for the evidence package, if there is one. */
   coverNote: string;
+  /** Any missing supporting records flagged for this dispute, joined by comma. */
+  missingEvidence: string;
+  /** How PayPal closed the dispute (SELLER_FAVOUR, BUYER_FAVOUR, OTHER), or empty if still open. */
+  outcome: string;
   // 0/1 and dollar columns, so a KPI tile is a plain sum and still follows Studio's filters and cross filters.
   open: number;
   overreach: number;
@@ -61,6 +65,12 @@ export const disputeRows = (details: DisputeDetail[], now: Date = new Date()): S
     // would read as 0 hours and still count as due soon.
     const msLeft = Number.isFinite(due) ? due - now.getTime() : Infinity;
     const hoursToDue = Number.isFinite(due) ? Math.round((msLeft / 3_600_000) * 10) / 10 : 99_999;
+    const missingRecords =
+      d.missingEvidence ??
+      (d.buyerDisputeReason === "MERCHANDISE_OR_SERVICE_NOT_RECEIVED"
+        ? ["Proof of Fulfillment (carrier tracking)"]
+        : []);
+    const outcome = d.outcome?.result ?? (d.status === "RESOLVED" ? "RESOLVED" : "");
     return {
       id: d.id,
       disputeClass: d.disputeClass,
@@ -73,6 +83,8 @@ export const disputeRows = (details: DisputeDetail[], now: Date = new Date()): S
       dueAt: Number.isFinite(due) ? new Date(due).toISOString() : "",
       hoursToDue,
       coverNote: d.evidenceDraftInfo?.coverNote ?? "",
+      missingEvidence: missingRecords.join(", "),
+      outcome,
       open,
       overreach,
       dueSoon: open && msLeft >= 0 && msLeft <= DAY_HOURS * 3_600_000 ? 1 : 0,
@@ -244,6 +256,63 @@ const ACTION_LABELS: Record<string, string> = {
 };
 export const actionLabel = (action: string): string =>
   ACTION_LABELS[action] ?? (action || "Not analysed yet");
+
+/** Next permitted operator action based on recommended action and dispute status. */
+export function nextPermittedAction(action: string, status: string): string {
+  if (status === "RESOLVED") return "None (dispute resolved)";
+  return actionLabel(action);
+}
+
+export interface LifecycleStage {
+  stage: "recommendation" | "action_submitted" | "outcome_confirmed";
+  label: string;
+  detail: string;
+  confirmed: boolean;
+}
+
+/**
+ * Distinguishes the copilot recommendation, the action submitted by an operator, and the confirmed PayPal outcome (#181).
+ */
+export function lifecycleStages(
+  dispute: {
+    action?: string;
+    status?: string;
+    outcome?: string;
+  },
+  operatorActionRecorded?: string,
+): LifecycleStage[] {
+  const isResolved = dispute.status === "RESOLVED";
+  const outcomeText = dispute.outcome
+    ? dispute.outcome === "SELLER_FAVOUR"
+      ? "Resolved in seller's favour"
+      : dispute.outcome === "BUYER_FAVOUR"
+        ? "Resolved in buyer's favour"
+        : `Resolved (${dispute.outcome})`
+    : isResolved
+      ? "Resolved"
+      : "Pending PayPal confirmation";
+
+  return [
+    {
+      stage: "recommendation",
+      label: "Recommendation",
+      detail: dispute.action ? actionLabel(dispute.action) : "Not analysed yet",
+      confirmed: true,
+    },
+    {
+      stage: "action_submitted",
+      label: "Action submitted",
+      detail: operatorActionRecorded ?? "Awaiting operator submission",
+      confirmed: Boolean(operatorActionRecorded),
+    },
+    {
+      stage: "outcome_confirmed",
+      label: "Outcome confirmed",
+      detail: outcomeText,
+      confirmed: isResolved,
+    },
+  ];
+}
 
 /** "WAITING_FOR_SELLER_RESPONSE" as "Waiting for seller response". */
 export const statusLabel = (status: string): string => {

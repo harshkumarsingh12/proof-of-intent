@@ -17,9 +17,9 @@ docker compose up --build
 Set both operator values before the first start. The shop needs `OPERATOR_TOKEN` to register its agent key (journey A),
 and the dashboard's operator actions need both (log in as user `operator` with the `OPERATOR_PASSWORD` value).
 
-The first `docker compose up --build` builds four images, which takes several minutes (about 4.5 minutes on a machine
-that already had the base images; longer on a new one). It stays in the foreground: run the later `docker compose exec`
-commands in a second terminal, or start the stack with `docker compose up --build -d`.
+The first `docker compose up --build` builds four images, which takes several minutes (about 8.5 minutes on a fresh
+2-core machine, about 4.5 with the base images already pulled). It stays in the foreground: run the later
+`docker compose exec` commands in a second terminal, or start the stack with `docker compose up --build -d`.
 
 | Service              | URL                           |
 | -------------------- | ----------------------------- |
@@ -104,8 +104,10 @@ pnpm install
 pnpm test                # unit tests + ledger entries; db tests run when DATABASE_URL is set (packages/db/README.md)
 pnpm dev:api             # :3000
 pnpm dev:buyer           # :3001
-pnpm dev:dashboard       # :3002
+API_INTERNAL_URL=http://localhost:3000 pnpm dev:dashboard   # :3002
 ```
+
+The dev servers use the same ports as the Docker stack in §1: stop that first (`docker compose stop`).
 
 Before you push, run what CI runs: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. For the dashboard
 alone: `pnpm vitest run apps/dashboard` and `pnpm --filter @poi/dashboard build`.
@@ -299,8 +301,10 @@ Repository secrets for `deploy.yml`: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_K
 run it yourself any time from the compose directory: it checks that `migrate` finished, Postgres is healthy, the API's
 `/readyz` answers with the database reachable (not just `/healthz`), the shop and the dashboard answer, the worker is
 polling the dispute inbox, and, if the `backup` service is running, that a dump less than 26 hours old exists. It stops at the
-first failure and says which one. A second job, `verify-public`, checks the public URLs from outside; set the repository
-**variables** `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and `PUBLIC_DASHBOARD_URL` (for example `https://poi-api.iotkiit.in`) to
+first failure and says which one. A second job, `verify-public`, checks the public URLs from outside with the uptime monitor's
+own script (`scripts/ops/uptime-check.sh`): `/readyz` with the database reachable **and** the dispute worker keeping up
+(`"inbox":"ok"`), the shop and the dashboard. On Dokploy there is no SSH deploy, so this is the release's only check of the
+worker. Set the repository **variables** `PUBLIC_API_URL`, `PUBLIC_SHOP_URL` and `PUBLIC_DASHBOARD_URL` (for example `https://poi-api.iotkiit.in`) to
 turn it on. Until you do, it passes with a warning that nothing public was checked, and the GitHub Release is only
 published when both jobs pass. On Dokploy, which deploys from `main`, set the variables and tag after the deploy finishes, and
 read the commit off Dokploy's Deployments tab: these checks prove the stack is healthy, not which commit it runs.
@@ -355,5 +359,13 @@ secret. It reads a plain `pg_dump | gzip` file; a custom-format dump needs `pg_r
    an S3 destination, or copy the newest dump by hand now and then. Dumps beside the database protect you from a bad
    migration or a deleted database, not from losing the server.
 5. After a redeploy, check the dumps are still there (that is what the named volume is for) and that the container is `healthy`.
+
+**On the team server (Nov 8).** Steps 1 and 2 are done: `COMPOSE_PROFILES=backup` and `BACKUP_DIR=backups` are set, the
+service writes to the named volume `proofofintent-proofofintent-hrpvnt_backups`, and its log shows
+`backup ok /backups/poi-20261107T222438Z.sql.gz`. The drill (step 3) was run by hand by the server's administrator with the
+restore commands above: that 144,645-byte dump restored into a scratch database `poi_drill` with `ON_ERROR_STOP=1` and no
+errors, `orders` held 29 rows in both the restore and the live `poi`, and `poi_drill` was dropped. Only `orders` was compared;
+`restore-drill.sh` compares every table. Not done for the hackathon: step 4 (the dumps live on the same disk as the database,
+so losing the server loses them too) and step 5.
 
 `audit_log` is append-only by trigger, so a demo reset means dropping and recreating the database, not deleting rows.

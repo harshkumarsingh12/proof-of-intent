@@ -77,6 +77,7 @@ apps/dashboard    operations dashboard: home, dispute queue and detail, analytic
 packages/contracts  shared schemas and reason codes (the frozen contract)
 packages/mandates   canonicalization, hashing, ES256 signatures, key registry
 packages/policy-engine  deterministic hard rules
+packages/proof    exportable proof package for an order, and the offline verifier (`pnpm proof:verify`)
 packages/paypal   typed PayPal client (Agent Toolkit for disputes) + mock
 packages/ai       LLM jobs, schemas, replay mode, evals
 packages/db       schema, migrations, audit log
