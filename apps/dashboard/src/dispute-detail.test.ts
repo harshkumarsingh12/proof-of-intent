@@ -6,6 +6,7 @@ import {
   fetchDisputeDetailDetailed,
   getDisputeDetail,
 } from "./api";
+import { evaluateDisputeEvidence } from "./dispute-details";
 import type { DisputeDetail } from "./dispute-types";
 import { widgets } from "./widgets";
 
@@ -283,5 +284,74 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
 
     expect(netResult.success).toBe(false);
     expect(netResult.error).toContain("network timeout");
+  });
+
+  describe("evidence preparation and badges by dispute reason (issue #172)", () => {
+    it("separates mandate compliance, delivery evidence, and response readiness for compliant not-as-described dispute", () => {
+      const detail = getDisputeDetail("PP-D-1001");
+      expect(detail).toBeDefined();
+      expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED");
+
+      // Three separate badges
+      expect(detail!.mandateCompliance).toBe("COMPLIANT");
+      expect(detail!.deliveryEvidence).toBe("not available");
+      expect(detail!.responseReadiness).toBe("READY");
+
+      // Required vs missing records
+      expect(detail!.requiredEvidence).toEqual([
+        "Signed Intent Mandate",
+        "Cart Mandate",
+        "Policy Evaluation",
+      ]);
+      expect(detail!.missingEvidence).toEqual([]);
+    });
+
+    it("flags missing delivery evidence on item-not-received dispute PP-D-1006 making readiness INCOMPLETE", () => {
+      const detail = getDisputeDetail("PP-D-1006");
+      expect(detail).toBeDefined();
+      expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
+
+      // Three separate badges
+      expect(detail!.mandateCompliance).toBe("COMPLIANT");
+      expect(detail!.deliveryEvidence).toBe("not available");
+      expect(detail!.responseReadiness).toBe("INCOMPLETE");
+
+      // Missing supporting record flagged per reason
+      expect(detail!.requiredEvidence).toEqual([
+        "Signed Intent Mandate",
+        "Cart Mandate",
+        "Proof of Fulfillment",
+      ]);
+      expect(detail!.missingEvidence).toEqual(["Proof of Fulfillment (carrier tracking)"]);
+    });
+
+    it("flags missing mandate and delivery evidence on NO_MANDATE dispute PP-D-1015", () => {
+      const detail = getDisputeDetail("PP-D-1015");
+      expect(detail).toBeDefined();
+      expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
+
+      expect(detail!.mandateCompliance).toBe("NO_MANDATE");
+      expect(detail!.deliveryEvidence).toBe("not available");
+      expect(detail!.responseReadiness).toBe("INCOMPLETE");
+
+      expect(detail!.missingEvidence).toContain("Signed Intent Mandate");
+      expect(detail!.missingEvidence).toContain("Proof of Fulfillment (carrier tracking)");
+    });
+
+    it("evaluates reason mapping with confirmed delivery when real tracking is provided", () => {
+      const withTracking = evaluateDisputeEvidence(
+        "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+        "MANDATE_COMPLIANT",
+        {
+          hasMandate: true,
+          tracking: { trackingNumber: "1Z12345678" },
+        },
+      );
+
+      expect(withTracking.mandateCompliance).toBe("COMPLIANT");
+      expect(withTracking.deliveryEvidence).toBe("CONFIRMED");
+      expect(withTracking.responseReadiness).toBe("READY");
+      expect(withTracking.missing).toEqual([]);
+    });
   });
 });
