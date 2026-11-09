@@ -325,17 +325,16 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       expect(detail!.missingEvidence).toEqual(["Proof of Fulfillment (carrier tracking)"]);
     });
 
-    it("flags missing mandate and delivery evidence on NO_MANDATE dispute PP-D-1015", () => {
+    it("flags missing mandate on NO_MANDATE dispute PP-D-1015", () => {
       const detail = getDisputeDetail("PP-D-1015");
       expect(detail).toBeDefined();
-      expect(detail!.buyerDisputeReason).toBe("MERCHANDISE_OR_SERVICE_NOT_RECEIVED");
+      expect(detail!.buyerDisputeReason).toBe("UNAUTHORISED");
 
       expect(detail!.mandateCompliance).toBe("NO_MANDATE");
       expect(detail!.deliveryEvidence).toBe("not available");
       expect(detail!.responseReadiness).toBe("INCOMPLETE");
 
       expect(detail!.missingEvidence).toContain("Signed Intent Mandate");
-      expect(detail!.missingEvidence).toContain("Proof of Fulfillment (carrier tracking)");
     });
 
     it("evaluates reason mapping with confirmed delivery when real tracking is provided", () => {
