@@ -73,6 +73,9 @@ importers:
       '@poi/policy-engine':
         specifier: workspace:*
         version: link:../../packages/policy-engine
+      '@poi/proof':
+        specifier: workspace:*
+        version: link:../../packages/proof
       fastify:
         specifier: ^5.1.0
         version: 5.12.7
@@ -307,6 +310,24 @@ importers:
       '@poi/ledger':
         specifier: workspace:*
         version: link:../ledger
+
+  packages/proof:
+    dependencies:
+      '@poi/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@poi/mandates':
+        specifier: workspace:*
+        version: link:../mandates
+      '@poi/policy-engine':
+        specifier: workspace:*
+        version: link:../policy-engine
+      jose:
+        specifier: ^5.9.6
+        version: 5.10.0
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
 
 packages:
 

@@ -29,6 +29,10 @@ export function serverApiBaseUrl(): string {
 /** The most disputes the API returns in one answer (`GET /disputes`, `limit`); asking for it keeps the queue whole for a merchant with up to this many. */
 export const MAX_DISPUTES_PER_REQUEST = 200;
 
+/** Where an order's proof package is downloaded from (#177): the dashboard's own proxy, which holds the operator token. */
+export const proofPackagePath = (orderId: string): string =>
+  `/api/orders/${encodeURIComponent(orderId)}/proof`;
+
 export interface FetchDisputesOptions {
   apiBaseUrl?: string;
   fetchFn?: typeof fetch;

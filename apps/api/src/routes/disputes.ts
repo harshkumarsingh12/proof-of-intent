@@ -11,6 +11,7 @@ import { CartMandate, IntentMandate, type DisputeClass, type Money, type ReasonC
 import type { AuditRecord, Db, DisputeRow, DisputeSummary, StoredOrder } from "@poi/db";
 import { evidenceTypeFor, fromPayPalAmount, PayPalError } from "@poi/paypal";
 import type { AppDeps } from "../app";
+import { assembleProof } from "../proof";
 
 /** What the worker stores in disputes.recommendation (apps/worker/src/inbox.ts). */
 interface Recommendation {
@@ -303,6 +304,27 @@ export const disputeRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   app.get("/orders", async (req, reply) => {
     const db = needDb(reply);
     return db && { orders: await db.listOrders(page(req.query)) };
+  });
+
+  // The proof package for one order (#177): the three signed mandates, their public keys, the PayPal references and the policy
+  // version, as a file anyone can check offline with `pnpm proof:verify`. Read-only, and guarded like every GET here.
+  app.get<{ Params: { id: string } }>("/orders/:id/proof", async (req, reply) => {
+    const db = needDb(reply);
+    if (!db) return;
+    const out = await assembleProof(
+      db,
+      deps.merchant,
+      req.params.id,
+      deps.now?.() ?? new Date().toISOString(),
+    );
+    reply.header("cache-control", "no-store");
+    if (out.status === 200) {
+      reply.header(
+        "content-disposition",
+        `attachment; filename="poi-proof-${req.params.id.replace(/[^A-Za-z0-9_-]/g, "_")}.json"`,
+      );
+    }
+    return reply.code(out.status).send(out.body);
   });
 
   app.get("/verifications", async (req, reply) => {

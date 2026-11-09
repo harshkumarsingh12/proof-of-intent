@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { createDb, type Db } from "./index";
@@ -399,6 +399,41 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect(list[1]).not.toHaveProperty("evidencePdf");
     expect(list[0]!.hasEvidencePdf).toBe(false);
     expect(await db.getDispute("PP-D-NONE")).toBeNull();
+  });
+
+  test("a payment mandate is found by the cart it committed to, the earliest one when the same cart was paid twice (#177)", async () => {
+    // Hashes derived from a label, so they cannot collide with the fixtures other tests in this file store in the same database.
+    const sha = (label: string) => createHash("sha256").update(`poi-177:${label}`).digest("hex");
+    const cartHash = sha("cart");
+    const save = (label: string, cart: string, seenAt: string) =>
+      db.saveMandate({
+        hash: sha(label),
+        kind: "payment",
+        mandateId: label,
+        canonical: JSON.stringify({ payment_mandate_id: label, cart_mandate_hash: cart }),
+        jws: `jws-${label}`,
+        kid: "agt_x",
+        seenAt,
+      });
+    await save("pay-late", cartHash, "2026-11-02T11:00:00.000Z");
+    await save("pay-early", cartHash, "2026-11-02T10:00:00.000Z");
+    await save("pay-other", sha("other-cart"), "2026-11-02T09:00:00.000Z");
+    // A cart mandate that happens to mention the same hash is not a payment. It is also the oldest row, so a lookup that forgot
+    // to filter on the kind would return it first.
+    await db.saveMandate({
+      hash: sha("not-a-payment"),
+      kind: "cart",
+      mandateId: "cart-x",
+      canonical: JSON.stringify({ cart_mandate_hash: cartHash }),
+      jws: "jws-cart",
+      kid: "merchant-1",
+      seenAt: "2026-11-02T08:00:00.000Z",
+    });
+
+    expect((await db.findPaymentMandateForCart(cartHash))?.mandateId).toBe("pay-early");
+    expect((await db.findPaymentMandateForCart(sha("other-cart")))?.mandateId).toBe("pay-other");
+    expect(await db.findPaymentMandateForCart(sha("no-such-cart"))).toBeNull();
+    expect((await db.findPaymentMandateForCart(cartHash))?.jws).toBe("jws-pay-early"); // the JWS as signed, not a copy
   });
 
   test("analyzedOnly puts the filter in the query: pages and the count agree, and equal deadlines keep a stable order (#234)", async () => {

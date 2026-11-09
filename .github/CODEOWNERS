@@ -25,6 +25,7 @@
 # ── Mandates and buyer side ───────────────────────────────────────────
 /packages/mandates/             @srshriv
 /packages/policy-engine/        @srshriv
+/packages/proof/                @srshriv
 /apps/buyer/                    @srshriv
 /SECURITY.md                    @srshriv
 
