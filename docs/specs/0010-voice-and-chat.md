@@ -72,7 +72,9 @@ streaming). Off unless `BUYER_CHAT=1` (runtime, default off).
   is fixed text, because it has exact wording ("no PayPal order was created and nothing was charged") that both free models
   paraphrased away or blurred in testing. And when the shopper asks the assistant to buy, sign or pay, the answer always starts by
   saying plainly that it can't, whatever the model wrote.
-- **A guard** (`answerIsGrounded`) rejects an answer that states a price or SKU that isn't in the facts, or talks in cents; the plain
+- **A guard** (`answerIsGrounded`) rejects an answer that states a price or SKU that isn't in the facts, puts a real price next to
+  a product it doesn't belong to (each amount must be the price of the product named nearest to it; a title takes any of its
+  products' prices, a SKU only its own), or talks in cents; the plain
   answer (`scriptedChat`, composed from the same facts) is used instead, and also when there is no model, the model fails or says
   nothing. So what the shopper reads is never worse than the store's own data. The guard catches hallucination, not a determined
   shopper: the assistant can't buy or change anything either way.

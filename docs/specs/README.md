@@ -24,7 +24,7 @@ areas both touch. Skip: bug fixes, refactors inside one package, docs, tests, de
 | #                                         | Spec                                   | Owner              | Reviewers                              | Milestone | Status      |
 | ----------------------------------------- | -------------------------------------- | ------------------ | -------------------------------------- | --------- | ----------- |
 | [0001](0001-mandate-model.md)             | Mandate model and signatures           | @srshriv           | @harshkumarsingh12                     | M0        | Done        |
-| [0002](0002-policy-engine.md)             | Policy engine and reason codes         | @srshriv           | @harshkumarsingh12, @hoursgotviral-dev | M0        | In Progress |
+| [0002](0002-policy-engine.md)             | Policy engine and reason codes         | @srshriv           | @harshkumarsingh12, @hoursgotviral-dev | M0        | Done        |
 | [0003](0003-checkout-and-verification.md) | Checkout API and verification flow     | @harshkumarsingh12 | @srshriv, @sumedhag28                  | M0        | In Progress |
 | [0004](0004-paypal-integration.md)        | PayPal integration                     | @harshkumarsingh12 | @hoursgotviral-dev                     | M0        | In Progress |
 | [0005](0005-dispute-copilot.md)           | Dispute copilot                        | @hoursgotviral-dev | @sumedhag28, @harshkumarsingh12        | M0        | In Progress |
