@@ -36,16 +36,36 @@ const cart = (price: string, color: string) =>
 
 async function freshIntent() {
   await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-  await page.getByText("Key id").waitFor({ timeout: 30_000 });
+  await waitForShopperKey();
   await page.getByRole("button", { name: "Sign my intent" }).click();
   await page.getByText("Signed in your browser").waitFor({ timeout: 20_000 });
 }
 
 async function ensureKeyCardOpen(p: Page = page) {
   const details = p.locator("details.key-card");
-  if ((await details.count()) > 0 && !(await details.first().getAttribute("open"))) {
+  if ((await details.count()) > 0 && (await details.first().getAttribute("open")) === null) {
     await details.first().locator("summary").click();
   }
+}
+
+async function waitForShopperKey(p: Page = page) {
+  // The key appears in the visible summary and again inside the collapsed settings panel.
+  await p.locator("details.key-card summary").filter({ hasText: "Key id" }).waitFor({ timeout: 30_000 });
+}
+
+/** A captured intent is single-use (#156); each new purchase needs newly signed authority. */
+async function renewIntent() {
+  const mandate = page.locator(".verdict.ok", { hasText: "Signed in your browser" }).locator("code").first();
+  const before = await mandate.innerText();
+  await page.getByRole("button", { name: "Sign my intent" }).click();
+  await page.waitForFunction(
+    (old) =>
+      Array.from(document.querySelectorAll(".verdict.ok"))
+        .find((e) => e.textContent?.includes("Signed in your browser"))
+        ?.querySelector("code")?.textContent !== old,
+    before,
+    { timeout: 20_000 },
+  );
 }
 
 await step("the browser makes a non-extractable key and signs an intent", async () => {
@@ -132,11 +152,13 @@ if (!hosted) {
   // #17, #36: save a wallet (mock PayPal sends the shopper straight back), then the agent pays with nobody asked.
   await step("saving a PayPal wallet comes back to the shop with the wallet saved", async () => {
     await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-    await page.getByText("Key id").waitFor({ timeout: 30_000 });
+    await waitForShopperKey();
     await ensureKeyCardOpen();
     await page.getByRole("button", { name: "Save a PayPal wallet" }).click();
     await page.getByRole("heading", { name: "Wallet saved" }).waitFor({ timeout: 30_000 });
     await page.getByRole("link", { name: "Back to the shop" }).click();
+    await waitForShopperKey();
+    await ensureKeyCardOpen();
     await page.getByText(/A PayPal wallet is saved for this key/).waitFor({ timeout: 30_000 });
   });
 
@@ -170,6 +192,7 @@ if (!hosted) {
   await step(
     "'Let the agent choose' while paying alone settles on one cart: paid, or held for the shopper",
     async () => {
+      await renewIntent();
       await page.getByRole("button", { name: "Let the agent choose" }).click();
       await verdictBox(/your agent paid|Fits your limits, but please confirm/).waitFor({ timeout: 90_000 });
       const trace = await page.getByLabel("What the agent did").innerText();
@@ -190,17 +213,7 @@ if (!hosted) {
     "a held cart waits in the shop, and approving it signs and charges the saved wallet",
     async () => {
       // One intent covers one purchase (#156), and the agent has already bought under this one: sign a new intent.
-      const mandate = page.locator(".verdict.ok", { hasText: "Signed in your browser" }).locator("code").first();
-      const before = await mandate.innerText();
-      await page.getByRole("button", { name: "Sign my intent" }).click();
-      await page.waitForFunction(
-        (old) =>
-          Array.from(document.querySelectorAll(".verdict.ok"))
-            .find((e) => e.textContent?.includes("Signed in your browser"))
-            ?.querySelector("code")?.textContent !== old,
-        before,
-        { timeout: 20_000 },
-      );
+      await renewIntent();
       await cart("$79.00", "grey").getByRole("button", { name: "Propose this cart" }).click();
       await verdictBox(/Fits your limits, but please confirm/).waitFor({ timeout: 60_000 });
       if (await page.getByRole("heading", { name: "Paid by your agent" }).count())
@@ -229,7 +242,7 @@ if (!hosted) {
         throw new Error("still says a wallet is saved");
       // Reloading asks the merchant again: the wallet really is gone, not just hidden.
       await page.reload({ waitUntil: "networkidle" });
-      await page.getByText("Key id").waitFor({ timeout: 30_000 });
+      await waitForShopperKey();
       await ensureKeyCardOpen();
       await page.getByRole("button", { name: "Save a PayPal wallet" }).waitFor({ timeout: 30_000 });
     },
@@ -238,7 +251,7 @@ if (!hosted) {
 
 await step("the button and the Enter key fill in the limits from the words, and neither signs", async () => {
   await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-  await page.getByText("Key id").waitFor({ timeout: 30_000 });
+  await waitForShopperKey();
   await page.locator("textarea").fill("I want white socks under $20 please");
   await page.getByRole("button", { name: "Fill in the limits from my words" }).click();
   await page.getByText(/filled in the limits below/).waitFor({ timeout: 30_000 });
@@ -262,7 +275,7 @@ await step(
   "quick start loads a preset, a category alone changes only the category, and item and color can be 'Anything'",
   async () => {
     await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-    await page.getByText("Key id").waitFor({ timeout: 30_000 });
+    await waitForShopperKey();
     const price = () => page.locator('input[inputmode="decimal"]').inputValue();
     await page.getByRole("button", { name: "Running socks" }).click();
     if ((await price()) !== "20") throw new Error(`quick start should load the socks cap, got ${await price()}`);
@@ -295,7 +308,7 @@ await step("'Let the agent choose' proposes a cart and shows what it did", async
 
 await step("what the words don't say stays open, and a missing price gets a proposed cap", async () => {
   await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-  await page.getByText("Key id").waitFor({ timeout: 30_000 });
+  await waitForShopperKey();
   const price = () => page.locator('input[inputmode="decimal"]').inputValue();
   await page.locator("textarea").fill("something grey under $70");
   await page.getByRole("button", { name: /Fill in the limits/ }).click();
@@ -351,7 +364,7 @@ if (process.env.VOICE === "1") {
     const p = await context.newPage();
     await p.addInitScript({ content: fake ? installFakeSpeech : removeSpeech });
     await p.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-    await p.getByText("Key id").waitFor({ timeout: 30_000 });
+    await waitForShopperKey(p);
     return p;
   };
   const speak = (p: Page) => p.getByRole("button", { name: "Speak your request" }).click();
@@ -427,7 +440,7 @@ if (process.env.CHAT === "1") {
     "chat: a store question is answered from the store's data, and the chat has no way to buy",
     async () => {
       await page.goto(`${SHOP}/shop`, { waitUntil: "networkidle" });
-      await page.getByText("Key id").waitFor({ timeout: 30_000 });
+      await waitForShopperKey();
       await assistant().getByRole("button", { name: "Ask a question" }).click();
       await askAssistant("show me grey running jackets under $80");
       await assistant()
