@@ -263,13 +263,16 @@ const EVIDENCE_FIELDS = [
   "outcome",
 ] as const;
 
-function EvidencePreview(props: AgWidgetParams<any>) {
-  const items = EVIDENCE_FIELDS.map((k) =>
-    k === "dispute" || k === "disputeClass" || k === "coverNote"
-      ? slot(props.dataMapping, k)
-      : optionalSlot(props.dataMapping, k),
-  ).filter((x): x is Mapped => x !== undefined);
+const REQUIRED_EVIDENCE_FIELDS: ReadonlySet<string> = new Set(["dispute", "disputeClass", "coverNote"]);
 
+function EvidencePreview(props: AgWidgetParams<any>) {
+  // Read each value by its field name, not its position: an optional field that is not mapped (a layout saved before #181)
+  // must not shift the later ones into the wrong column.
+  const mapped = EVIDENCE_FIELDS.flatMap((key) => {
+    const item = REQUIRED_EVIDENCE_FIELDS.has(key) ? slot(props.dataMapping, key) : optionalSlot(props.dataMapping, key);
+    return item ? [{ key, item }] : [];
+  });
+  const items = mapped.map((m) => m.item);
   const ids = items.map(idOf);
   const { rows: raw, error } = useRows(props, items);
   const [picked, setPicked] = useSelectedDispute();
@@ -279,30 +282,36 @@ function EvidencePreview(props: AgWidgetParams<any>) {
     loading?: boolean;
   }>({ loading: true });
 
-  if (error) return <Status>{`Couldn't load the disputes: ${error}`}</Status>;
-  if (!raw) return <Status>Loading the disputes…</Status>;
-  const rows = raw.map((row: Record<string, unknown>) => {
-    const values = cells(row, ids).map((x) => String(x ?? ""));
-    const dispute = values[0] ?? "";
-    const disputeClass = values[1] ?? "";
-    const coverNote = values[2] ?? "";
-    const action = values[3] ?? "";
-    const status = values[4] ?? "";
-    const dueAt = values[5] ?? "";
-    const hoursToDue = Number(values[6] ?? 0);
-    const missingEvidence = values[7] ?? "";
-    const outcome = values[8] ?? "";
-    return { dispute, disputeClass, coverNote, action, status, dueAt, hoursToDue, missingEvidence, outcome };
+  const rows = (raw ?? []).map((row: Record<string, unknown>) => {
+    const values = cells(row, ids);
+    const field = (key: (typeof EVIDENCE_FIELDS)[number]): string => {
+      const i = mapped.findIndex((m) => m.key === key);
+      return i < 0 ? "" : String(values[i] ?? "");
+    };
+    const hours = field("hoursToDue");
+    return {
+      dispute: field("dispute"),
+      disputeClass: field("disputeClass"),
+      coverNote: field("coverNote"),
+      action: field("action"),
+      status: field("status"),
+      dueAt: field("dueAt"),
+      // Unmapped or empty reads as "no deadline" (the 99,999 disputeRows uses), not as due now.
+      hoursToDue: hours === "" || !Number.isFinite(Number(hours)) ? 99_999 : Number(hours),
+      missingEvidence: field("missingEvidence"),
+      outcome: field("outcome"),
+    };
   });
-  if (rows.length === 0) return <NoData />;
   const current = rows.find((r) => r.dispute === picked) ?? rows[0];
-  if (!current) return <NoData />;
+  const currentId = current?.dispute ?? "";
 
+  // Every hook runs on every render, before any early return: a hook after "Loading…" would be skipped on the first
+  // render and called on the next, which React rejects ("Rendered more hooks than during the previous render").
   useEffect(() => {
-    if (!current?.dispute) return;
+    if (!currentId) return;
     let cancelled = false;
     setAuditState({ loading: true });
-    void fetchDisputeAudit(current.dispute).then((result) => {
+    void fetchDisputeAudit(currentId).then((result) => {
       if (cancelled) return;
       if ("entries" in result) {
         setAuditState({ entries: result.entries, loading: false });
@@ -313,7 +322,11 @@ function EvidencePreview(props: AgWidgetParams<any>) {
     return () => {
       cancelled = true;
     };
-  }, [current?.dispute]);
+  }, [currentId]);
+
+  if (error) return <Status>{`Couldn't load the disputes: ${error}`}</Status>;
+  if (!raw) return <Status>Loading the disputes…</Status>;
+  if (!current) return <NoData />;
 
   const operatorAction = auditState.entries?.find((e) => e.action.startsWith("operator."));
   const operatorActionText = operatorAction ? auditActionLabel(operatorAction) : undefined;
