@@ -139,6 +139,7 @@ to the merchant's server: one JSON file per order, and a verifier that says whic
 
 Passkeys/WebAuthn (the signing interface is isolated so it can be swapped later); network trust registries;
 AP2 or Verifiable Intent certification.
+Revoking an intent before it expires: proposed, not built, in spec 0013 (#176).
 
 ## Open questions
 

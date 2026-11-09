@@ -245,3 +245,4 @@ A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVE
 ## Out of scope
 
 Multi-merchant tenancy and API keys (stretch).
+Enforcing a revoked intent: proposed, not built, in spec 0013 (#176).
