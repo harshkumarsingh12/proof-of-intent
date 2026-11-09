@@ -11,6 +11,8 @@ import {
   evidencePdfPath,
   hasEvidence,
   isUrgent,
+  lifecycleStages,
+  nextPermittedAction,
   NO_MANDATE_LABEL,
   platformCards,
   statusLabel,
@@ -321,5 +323,69 @@ describe("Studio says when it is not showing every dispute (#173, #234)", () => 
 
   it("loads the details of the 60 most urgent disputes", () => {
     expect(STUDIO_DETAIL_LIMIT).toBe(60);
+  });
+});
+
+describe("Studio operator tasks & workflow lifecycle (#181)", () => {
+  it("carries missing evidence and outcome in dispute rows", () => {
+    const rows = disputeRows([
+      detail("PP-INR", [], {
+        buyerDisputeReason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+        missingEvidence: ["Proof of Fulfillment (carrier tracking)"],
+      }),
+      detail("PP-RESOLVED", [], {
+        status: "RESOLVED",
+        outcome: { result: "SELLER_FAVOUR", code: "RESOLVED_SELLER_FAVOUR" },
+      }),
+    ]);
+
+    expect(rows[0]!.missingEvidence).toBe("Proof of Fulfillment (carrier tracking)");
+    expect(rows[0]!.outcome).toBe("");
+
+    expect(rows[1]!.outcome).toBe("SELLER_FAVOUR");
+  });
+
+  it("identifies next permitted action, blocking closed disputes", () => {
+    expect(nextPermittedAction("PROVIDE_EVIDENCE", "WAITING_FOR_SELLER_RESPONSE")).toBe("Defend with evidence");
+    expect(nextPermittedAction("ACCEPT_CLAIM", "WAITING_FOR_SELLER_RESPONSE")).toBe("Accept the claim");
+    expect(nextPermittedAction("PROVIDE_EVIDENCE", "RESOLVED")).toBe("None (dispute resolved)");
+  });
+
+  it("distinguishes recommendation, action submitted, and outcome confirmed", () => {
+    // Open dispute, awaiting operator
+    const initialStages = lifecycleStages({
+      action: "PROVIDE_EVIDENCE",
+      status: "WAITING_FOR_SELLER_RESPONSE",
+    });
+    expect(initialStages).toEqual([
+      { stage: "recommendation", label: "Recommendation", detail: "Defend with evidence", confirmed: true },
+      { stage: "action_submitted", label: "Action submitted", detail: "Awaiting operator submission", confirmed: false },
+      { stage: "outcome_confirmed", label: "Outcome confirmed", detail: "Pending PayPal confirmation", confirmed: false },
+    ]);
+
+    // Operator submitted evidence
+    const submittedStages = lifecycleStages(
+      { action: "PROVIDE_EVIDENCE", status: "UNDER_REVIEW" },
+      "Operator submitted the evidence package",
+    );
+    expect(submittedStages[1]).toEqual({
+      stage: "action_submitted",
+      label: "Action submitted",
+      detail: "Operator submitted the evidence package",
+      confirmed: true,
+    });
+    expect(submittedStages[2]!.confirmed).toBe(false);
+
+    // Resolved in seller favour
+    const resolvedStages = lifecycleStages(
+      { action: "PROVIDE_EVIDENCE", status: "RESOLVED", outcome: "SELLER_FAVOUR" },
+      "Operator submitted the evidence package",
+    );
+    expect(resolvedStages[2]).toEqual({
+      stage: "outcome_confirmed",
+      label: "Outcome confirmed",
+      detail: "Resolved in seller's favour",
+      confirmed: true,
+    });
   });
 });

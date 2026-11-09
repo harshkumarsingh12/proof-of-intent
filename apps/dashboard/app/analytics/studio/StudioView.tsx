@@ -96,6 +96,8 @@ export function StudioView({
             { id: "dueAt", name: "Respond by", format: "textFormat" },
             { id: "hoursToDue", name: "Hours to respond", format: "decimalFormat" },
             { id: "coverNote", name: "Cover note", format: "textFormat" },
+            { id: "missingEvidence", name: "Missing evidence", format: "textFormat" },
+            { id: "outcome", name: "Outcome", format: "textFormat" },
             { id: "open", name: "Open", format: "integerFormat" },
             { id: "overreach", name: "Agent overreach", format: "integerFormat" },
             { id: "dueSoon", name: "Due within 24 hours", format: "integerFormat" },
