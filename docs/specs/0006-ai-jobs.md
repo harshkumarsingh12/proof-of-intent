@@ -180,3 +180,15 @@ Each run writes matching timestamped Markdown/JSON with the source commit; suppl
   - Run 3 (final): passed. Expect the occasional J1 timeout to show up as `unavailable` (a step-up at checkout, never an approval).
     The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
     cases are recorded from the passing run.
+- **Primary and backup, with per-case attribution (Nov 10, #171, #222), commit `3976a3d` / `9f23ac9`.**
+  - Primary with the backup configured ([report](../evals/2026-11-09T23-45-49-348Z-primary.md)): J1 20/20, J2 12/12, schema
+    31/31, every case answered by the primary. Replay entries refreshed from this run.
+  - Backup alone, back to back ([report](../evals/2026-11-09T23-46-10-807Z-backup.md)): **failed**, J2 0/12. Not its answers:
+    after 12 cases every request got HTTP 429 from the free-tier endpoint, and the two attempts are about 100 ms apart, so the
+    retry hits the same limit. Of the 12 it answered, 11 were right.
+  - Backup alone, paced 7 s per call (`pnpm eval --backup --pace-ms=7000`, [report](../evals/2026-11-09T23-51-12-652Z-backup.md)):
+    **passed**, J1 20/20 with 0 mismatches labelled match, J2 11/12 (missing insulation: the reasons did not cite the policy
+    finding), schema 31/31, no 429s.
+  - So the backup's answers are good enough, but its capacity is not a primary's: if the primary goes down during a burst of
+    traffic, expect the backup to rate-limit after about a dozen calls a minute. Those calls fail closed (J1 `unavailable` is a
+    step-up at checkout, J2 falls back to the rule-only recommendation), so nothing is approved by mistake.

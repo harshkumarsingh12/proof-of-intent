@@ -1,0 +1,671 @@
+{
+  "runId": "2026-11-09T23-51-12-652Z-backup",
+  "sourceCommit": "9f23ac93ce3312171bffffee44fd2f2fe56dea77",
+  "profile": "backup-only, paced 7000 ms per call",
+  "cases": [
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1227,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8230,
+      "job": "J1",
+      "label": "grey running jacket",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1476,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8478,
+      "job": "J1",
+      "label": "hooded rain shell",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 832,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7834,
+      "job": "J1",
+      "label": "red running jacket",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 728,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7729,
+      "job": "J1",
+      "label": "navy rain shell",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 780,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7782,
+      "job": "J1",
+      "label": "black insulated gloves",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 781,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7782,
+      "job": "J1",
+      "label": "green trail vest",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 900,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7901,
+      "job": "J1",
+      "label": "white cycling helmet",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 660,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7661,
+      "job": "J1",
+      "label": "red thermos",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 681,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7682,
+      "job": "J1",
+      "label": "blue yoga mat",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1190,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8193,
+      "job": "J1",
+      "label": "trail shoes for road running",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 776,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7779,
+      "job": "J1",
+      "label": "unrated warmth",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1090,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8091,
+      "job": "J1",
+      "label": "small sock pack",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 679,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7680,
+      "job": "J1",
+      "label": "zip pockets unverified",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1291,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8294,
+      "job": "J1",
+      "label": "carry-on dimensions unverified",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 882,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7884,
+      "job": "J1",
+      "label": "unverified tumbler capacity",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 780,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7782,
+      "job": "J1",
+      "label": "jacket versus tent",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1396,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8397,
+      "job": "J1",
+      "label": "wrong helmet color",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 780,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7781,
+      "job": "J1",
+      "label": "cordless requirement",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 987,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7987,
+      "job": "J1",
+      "label": "dairy conflict",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 0,
+      "providerAttempts": [],
+      "elapsedMs": 0,
+      "job": "J1",
+      "label": "injected cart title",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": true
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1796,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8806,
+      "job": "J2",
+      "label": "grey jacket as requested",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2521,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 9523,
+      "job": "J2",
+      "label": "delivery alleged missing",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1496,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8499,
+      "job": "J2",
+      "label": "shopper approved exact cart",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2111,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 9114,
+      "job": "J2",
+      "label": "price and color violations",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1802,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8805,
+      "job": "J2",
+      "label": "unapproved merchant",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2111,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 9113,
+      "job": "J2",
+      "label": "too many units",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1864,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8867,
+      "job": "J2",
+      "label": "rain shell substitution",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1711,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8712,
+      "job": "J2",
+      "label": "road versus trail shoes",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1103,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8105,
+      "job": "J2",
+      "label": "missing insulation",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1515,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8517,
+      "job": "J2",
+      "label": "ordinary checkout",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "NO_MANDATE / STANDARD_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1212,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 8213,
+      "job": "J2",
+      "label": "pointer mismatch",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "NO_MANDATE / STANDARD_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 992,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 7993,
+      "job": "J2",
+      "label": "injected buyer note",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "NO_MANDATE / STANDARD_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    }
+  ],
+  "passed": true
+}
