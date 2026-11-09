@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { DisputeClassification } from "./dispute-jobs";
 import { J1_EVAL_CASES, J2_EVAL_CASES } from "./eval-cases";
 import { evaluateJobs } from "./evaluate";
 import type { Generate, GenerateRequest } from "./runtime";
@@ -55,4 +56,8 @@ test("the harness counts retries, skips the local guard and rejects false approv
   });
   expect(Object.keys(result.j1Replay)).toHaveLength(19);
   expect(Object.keys(result.j2Replay)).toHaveLength(12);
+  // What the eval would write must be readable by replay mode, which parses each entry with the strict schema. The job adds
+  // `grounding_version` to its result; an entry that kept it would be refused on every later replay read.
+  for (const [key, entry] of Object.entries(result.j2Replay))
+    expect(DisputeClassification.safeParse(entry.output).success, key).toBe(true);
 });

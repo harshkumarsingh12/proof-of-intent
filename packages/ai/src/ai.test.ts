@@ -276,7 +276,9 @@ describe("J2 dispute classification", () => {
       "live",
       generate,
     );
-    expect(res.reasons).toEqual([{ text: "Supported", cites: ["policy_evaluation"] }]);
+    expect(res.reasons).toEqual([
+      { text: `Policy finding: ${overreach.bundle.policy_evaluation}`, cites: ["policy_evaluation"] },
+    ]);
     expect(res.evidence_plan).toEqual([]);
     expect(seen[0]?.prompt).toContain("\\u003c/bundle\\u003e");
     for (const secret of ["test@example.com", "secret-token", "Fictional Lane"]) {
@@ -309,7 +311,7 @@ describe("J3 evidence drafting", () => {
       attestation_sections: [{ heading: "Delivery", body: "Delivered.", cites: ["tracking"] }],
     });
     const result = await draftEvidence(compliant, "live", generate);
-    expect(result.cover_note).toBe("The signed rules passed.");
+    expect(result.cover_note).toBe("Policy finding: All hard rules passed.");
     expect(result.citations.cover_note).toEqual(["policy_evaluation"]);
     expect(result.attestation_sections).toEqual([]);
   });
@@ -324,4 +326,46 @@ describe("J3 evidence drafting", () => {
     await expect(draftEvidence(overreach, "live", generate)).rejects.toBeInstanceOf(AiUnavailableError);
     expect(seen).toHaveLength(1);
   });
+
+  test.each([
+    "The goods were delivered to the buyer.",
+    "The cardholder authorized this payment.",
+    "The buyer has already received a full refund.",
+  ])("an existing citation cannot support an invented claim: %s", async (claim) => {
+    const { generate } = fakeModel({
+      cover_note: { text: claim, cites: ["policy_evaluation"] },
+      buyer_message: { text: claim, cites: ["policy_evaluation"] },
+      attestation_sections: [{ heading: claim, body: claim, cites: ["policy_evaluation"] }],
+    });
+    const result = await draftEvidence(compliant, "live", generate);
+    expect(result.cover_note).toBe("Policy finding: All hard rules passed.");
+    expect(result.attestation_sections).toEqual([
+      { heading: "Cited purchase record", body: "Policy finding: All hard rules passed." },
+    ]);
+    expect(result.buyer_message).not.toContain(claim);
+    expect(JSON.stringify(result)).not.toContain(claim);
+  });
+});
+
+test("J2 cannot launder a buyer allegation or invented delivery/refund/authorization through a real citation", async () => {
+  const claim = "Delivered, authorized by the cardholder and fully refunded.";
+  const { generate } = fakeModel({
+    class: overreach.decision.class,
+    recommended_action: overreach.decision.action,
+    confidence: 0.99,
+    reasons: [
+      { text: claim, cites: ["policy_evaluation"] },
+      { text: claim, cites: ["buyer_note"] },
+    ],
+    evidence_plan: [{ text: claim, cites: ["capture_record"] }],
+  });
+  const result = await classifyDispute(
+    { ...overreach, bundle: { ...overreach.bundle, buyer_note: "The parcel was delivered." } },
+    "live",
+    generate,
+  );
+  expect(result.reasons[0]!.text).toBe(`Policy finding: ${overreach.bundle.policy_evaluation}`);
+  expect(result.reasons[1]!.text).toBe("Buyer allegation (unverified): The parcel was delivered.");
+  expect(result.evidence_plan[0]!.text).toBe(`Recorded payment capture: ${overreach.bundle.capture_record}`);
+  expect(JSON.stringify(result)).not.toContain(claim);
 });

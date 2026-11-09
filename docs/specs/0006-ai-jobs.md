@@ -81,6 +81,13 @@ recommendation. J3 drafts the preview cover note and buyer message for verified 
 items with missing or unknown citations. When a job is unavailable, the rule-only recommendation and evidence
 remain available for operator review. The first J2/J3 replay entries are hand-authored demo fixtures.
 
+**Citation safety correction (Nov 9, #170).** Existing bundle keys establish where to look, not whether the
+model's sentence follows from them. J2/J3 therefore select cited excerpts and render their source text locally;
+model-written prose and headings are not published as evidence. Buyer notes are explicitly unverified
+allegations. J3 uses a neutral buyer-review template. A capture record does not prove delivery, cardholder
+authorization or refund completion. The same rendering applies to live and replay output; prompts and replay
+keys are unchanged. This closes the unsupported-paraphrase path without claiming a semantic entailment score.
+
 **Evals:** J1 set of 20 (7 match, 7 partial, 6 mismatch); J2 set of 12 covering all four classes. `pnpm eval`
 writes `docs/evals/<date>.md`. Targets: J1 accuracy ≥ 0.9 with **zero mismatch labelled match**; J2 at least 11/12;
 schema validity 100% after retry.
@@ -147,5 +154,5 @@ schema validity 100% after retry.
     `dispute_reason`. J1 fell to 18/20 because two calls (black gloves, tumbler capacity) timed out on both 2 s attempts. That
     is the free endpoint's latency, not a prompt change: the same cases passed in runs 1 and 3.
   - Run 3 (final): passed. Expect the occasional J1 timeout to show up as `unavailable` (a step-up at checkout, never an approval).
-  The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
-  cases are recorded from the passing run.
+    The hand-authored J2 demo entry was re-keyed to `j2-v2` with its output unchanged. Replay entries for the 20 J1 and 12 J2
+    cases are recorded from the passing run.

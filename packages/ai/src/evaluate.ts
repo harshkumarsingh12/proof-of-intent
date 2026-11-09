@@ -74,7 +74,8 @@ export async function evaluateJobs(generate: Generate) {
       guarded: false,
     });
     if (result) {
-      const { source: _source, prompt_version: _promptVersion, ...output } = result;
+      // Everything the job adds to the model's answer is dropped, so a replay entry is exactly what DisputeClassification accepts.
+      const { source: _source, prompt_version: _promptVersion, grounding_version: _grounding, ...output } = result;
       j2Replay[j2ReplayKey(c.input)] = { label: c.label, output };
     }
   }

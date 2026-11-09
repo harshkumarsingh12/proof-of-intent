@@ -106,6 +106,27 @@ export const j2ReplayKey = (input: DisputeJobInput): string =>
 const hasValidCitations = ({ cites }: { cites: string[] }, bundle: DisputeJobInput["bundle"]) =>
   cites.length > 0 && cites.every((id) => Object.hasOwn(bundle, id));
 
+const FACT_LABELS: Record<string, string> = {
+  policy_evaluation: "Policy finding",
+  capture_record: "Recorded payment capture",
+  checkout_verdict: "Checkout finding",
+  intent_mandate: "Shopper request",
+  cart_mandate: "Recorded cart",
+  dispute_reason: "Reported dispute reason",
+  buyer_note: "Buyer allegation (unverified)",
+};
+
+/**
+ * A valid citation locates an excerpt; it does not validate a model's sentence. Render only the selected
+ * source facts, with allegations labelled, so a plausible but unsupported paraphrase cannot become evidence.
+ * The model selects relevant excerpts, while the deterministic policy still owns the class/action.
+ */
+function citedFacts(cites: string[], bundle: DisputeJobInput["bundle"]): string {
+  return [...new Set(cites)]
+    .map((id) => `${FACT_LABELS[id] ?? `Recorded excerpt (${id})`}: ${scrub(bundle[id]!)}`)
+    .join("\n");
+}
+
 async function run<T>(
   job: typeof j2,
   input: DisputeJobInput,
@@ -141,11 +162,12 @@ export async function classifyDispute(input: DisputeJobInput, mode: AiMode, gene
   const grounded = (items: DisputeClassification["reasons"]) =>
     items
       .filter((item) => hasValidCitations(item, safe.bundle))
-      .map((item) => ({ ...item, text: scrub(item.text) }));
+      .map((item) => ({ ...item, text: citedFacts(item.cites, safe.bundle) }));
   return {
     ...output,
     reasons: grounded(output.reasons),
     evidence_plan: grounded(output.evidence_plan),
+    grounding_version: "source-excerpts-v1" as const,
     prompt_version: j2.prompt.version,
     source: mode,
   };
@@ -165,17 +187,19 @@ export async function draftEvidence(input: DisputeJobInput, mode: AiMode, genera
   }
   const sections = output.attestation_sections.filter((section) => hasValidCitations(section, safe.bundle));
   return {
-    cover_note: scrub(output.cover_note.text),
-    buyer_message: scrub(output.buyer_message.text),
-    attestation_sections: sections.map(({ heading, body }) => ({
-      heading: scrub(heading),
-      body: scrub(body),
+    cover_note: citedFacts(output.cover_note.cites, safe.bundle),
+    buyer_message:
+      "We are reviewing your dispute using the available purchase record. This message does not confirm delivery or a completed refund.",
+    attestation_sections: sections.map(({ cites }) => ({
+      heading: "Cited purchase record",
+      body: citedFacts(cites, safe.bundle),
     })),
     citations: {
       cover_note: output.cover_note.cites,
       buyer_message: output.buyer_message.cites,
       attestation_sections: sections.map(({ cites }) => cites),
     },
+    grounding_version: "source-excerpts-v1" as const,
     prompt_version: j3.prompt.version,
     source: mode,
   };
