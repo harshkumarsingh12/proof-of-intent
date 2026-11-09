@@ -53,7 +53,7 @@ export function evaluateDisputeEvidence(
     case "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED": {
       required.push("Signed Intent Mandate", "Cart Mandate", "Policy Evaluation");
       if (!hasMandate) missing.push("Signed Intent Mandate");
-      if (options?.hasPolicyEvaluation === false || disputeClass === "AGENT_OVERREACH") {
+      if (options?.hasPolicyEvaluation === false) {
         missing.push("Constraint Check Passing Result");
       }
       break;
@@ -73,6 +73,12 @@ export function evaluateDisputeEvidence(
       if (!hasMandate) missing.push("Signed Intent Mandate");
       break;
     }
+  }
+
+  // A dispute the signed mandate does not back has nothing to defend with, however complete the records are: the cart broke
+  // what the shopper signed, or did not fit their words. Without this, a conceded overreach read "Readiness: READY".
+  if (mandateCompliance === "NON_COMPLIANT" || mandateCompliance === "MISREAD") {
+    missing.push("A passing mandate check (the cart did not meet what the shopper signed)");
   }
 
   // 3. Delivery Evidence: "There is no tracking or fulfillment data in the worker, so delivery evidence shows 'not available' unless real data exists."

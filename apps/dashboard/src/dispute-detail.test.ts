@@ -325,6 +325,35 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       expect(detail!.missingEvidence).toEqual(["Proof of Fulfillment (carrier tracking)"]);
     });
 
+    it("never reads READY for a dispute the signed mandate does not back, whatever records exist", () => {
+      for (const cls of ["AGENT_OVERREACH", "INTENT_MISREAD"]) {
+        for (const reason of [
+          "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+          "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+          "UNAUTHORISED",
+          "INCORRECT_AMOUNT",
+        ]) {
+          const r = evaluateDisputeEvidence(reason, cls, {
+            hasMandate: true,
+            hasPolicyEvaluation: true,
+            tracking: { trackingNumber: "1Z12345678" },
+          });
+          expect(r.responseReadiness, `${cls} / ${reason}`).toBe("INCOMPLETE");
+          expect(r.missing, `${cls} / ${reason}`).toEqual([
+            "A passing mandate check (the cart did not meet what the shopper signed)",
+          ]);
+        }
+      }
+    });
+
+    it("a compliant dispute with every record is still READY", () => {
+      const r = evaluateDisputeEvidence("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MANDATE_COMPLIANT", {
+        hasMandate: true,
+        tracking: { trackingNumber: "1Z12345678" },
+      });
+      expect([r.responseReadiness, r.missing]).toEqual(["READY", []]);
+    });
+
     it("flags missing mandate on NO_MANDATE dispute PP-D-1015", () => {
       const detail = getDisputeDetail("PP-D-1015");
       expect(detail).toBeDefined();
