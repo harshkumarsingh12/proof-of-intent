@@ -377,7 +377,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
           const r = evaluateDisputeEvidence(reason, cls, {
             hasMandate: true,
             hasPolicyEvaluation: true,
-            tracking: { trackingNumber: "1Z12345678" },
+            tracking: { trackingNumber: "1Z12345678", status: "DELIVERED" },
           });
           expect(r.responseReadiness, `${cls} / ${reason}`).toBe("INCOMPLETE");
           expect(r.missing, `${cls} / ${reason}`).toEqual([
@@ -390,7 +390,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
     it("a compliant dispute with every record is still READY", () => {
       const r = evaluateDisputeEvidence("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MANDATE_COMPLIANT", {
         hasMandate: true,
-        tracking: { trackingNumber: "1Z12345678" },
+        tracking: { trackingNumber: "1Z12345678", status: "DELIVERED" },
       });
       expect([r.responseReadiness, r.missing]).toEqual(["READY", []]);
     });
@@ -413,7 +413,7 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
         "MANDATE_COMPLIANT",
         {
           hasMandate: true,
-          tracking: { trackingNumber: "1Z12345678" },
+          tracking: { trackingNumber: "1Z12345678", status: "DELIVERED" },
         },
       );
 
@@ -421,6 +421,23 @@ describe("dispute detail & mandate diff (spec 0007)", () => {
       expect(withTracking.deliveryEvidence).toBe("CONFIRMED");
       expect(withTracking.responseReadiness).toBe("READY");
       expect(withTracking.missing).toEqual([]);
+    });
+
+    it("a tracking number without a delivered status does not confirm delivery (#238)", () => {
+      const cases: Array<[string | undefined, string]> = [
+        [undefined, "unknown"],
+        ["IN_TRANSIT", "in-transit"],
+        ["SHIPPED", "in-transit"],
+        ["CANCELLED", "failed"],
+      ];
+      for (const [status, expected] of cases) {
+        const r = evaluateDisputeEvidence("MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MANDATE_COMPLIANT", {
+          hasMandate: true,
+          tracking: { trackingNumber: "1Z12345678", status },
+        });
+        expect([status, r.deliveryEvidence, r.responseReadiness]).toEqual([status, expected, "INCOMPLETE"]);
+        expect(r.missing).toContain("Proof of Fulfillment (carrier tracking)");
+      }
     });
   });
 });
