@@ -9,6 +9,7 @@ import {
   liveConfigFromEnv,
   readReplay,
   replayPath,
+  type Generate,
   type ReplayFile,
 } from "../../packages/ai/src/runtime";
 
@@ -16,16 +17,32 @@ const configured = liveConfigFromEnv();
 if ("missing" in configured)
   throw new Error(`Live evaluation requires ${configured.missing}. See docs/evals/README.md.`);
 const args = process.argv.slice(2);
-if (args.some((arg) => arg !== "--backup")) throw new Error("Usage: pnpm eval [--backup]");
+// --pace-ms=N waits N ms before each model call. A free-tier endpoint (Groq's) answers HTTP 429 after about a dozen
+// back-to-back cases, which measures its rate limit, not its answers. Pacing is recorded in the report's profile.
+const paceArg = args.find((arg) => arg.startsWith("--pace-ms="));
+const paceMs = paceArg ? Number(paceArg.slice("--pace-ms=".length)) : 0;
+if (
+  args.some((arg) => arg !== "--backup" && arg !== paceArg) ||
+  !Number.isInteger(paceMs) ||
+  paceMs < 0 ||
+  paceMs > 60_000
+)
+  throw new Error("Usage: pnpm eval [--backup] [--pace-ms=0..60000]");
 const backup = args.includes("--backup");
 if (backup && !configured.fallback)
   throw new Error("--backup requires a fully configured AI_FALLBACK_* endpoint.");
 // Isolate the backup: do not let a successful primary mask an untested fallback.
 const config = backup ? configured.fallback! : configured;
-const profile = backup ? "backup-only" : "primary-with-configured-fallback";
+const profile =
+  (backup ? "backup-only" : "primary-with-configured-fallback") + (paceMs ? `, paced ${paceMs} ms per call` : "");
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 
-const result = await evaluateJobs(createGenerate(config));
+const live = createGenerate(config);
+const paced: Generate = async (req) => {
+  await new Promise((resolve) => setTimeout(resolve, paceMs));
+  return live(req);
+};
+const result = await evaluateJobs(paceMs ? paced : live);
 const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${backup ? "backup" : "primary"}`;
 const report = evaluationReport(result, {
   runId,
