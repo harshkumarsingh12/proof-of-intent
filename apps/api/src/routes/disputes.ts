@@ -31,6 +31,8 @@ interface Recommendation {
   evidenceError?: string;
   /** J2 (packages/ai): cited explanation of the deterministic class. Absent when the model couldn't answer. */
   ai?: {
+    confidence?: number;
+    grounding_version?: string;
     reasons: { text: string; cites: string[] }[];
     evidence_plan: { text: string; cites: string[] }[];
   };
@@ -135,6 +137,8 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
   const cart = cartRow ? CartMandate.parse(JSON.parse(cartRow.canonical)) : null;
   const base = item(d, order, rec, d.evidencePdf !== undefined);
   const c = intent?.constraints;
+  const modelConfidence = rec.ai?.confidence;
+  const groundedAi = rec.ai?.grounding_version === "source-excerpts-v1" ? rec.ai : undefined;
   return {
     ...base,
     isDemoData: rec.demo === true,
@@ -175,21 +179,27 @@ async function detail(db: Db, d: DisputeRow, rec: Recommendation) {
     })),
     classificationInfo: {
       disputeClass: rec.class,
-      // The class comes from the deterministic tree, not a model.
-      confidence: 1,
+      // This is a model's uncalibrated estimate, never certainty assigned to the deterministic class.
+      confidence:
+        typeof modelConfidence === "number" &&
+        Number.isFinite(modelConfidence) &&
+        modelConfidence >= 0 &&
+        modelConfidence <= 1
+          ? modelConfidence
+          : null,
       recommendedAction: rec.action,
       reasons: [
         { text: EXPLANATION[rec.class], cites: rec.mandateHash ? [`intent_mandate:${rec.mandateHash}`] : [] },
         // J2 explains the class in the dispute's own terms; every line cites a fact the model was given.
-        ...(rec.ai?.reasons ?? []),
+        ...(groundedAi?.reasons ?? []),
         ...rec.reasons.map((r) => ({
           text: r,
           cites: intent ? [`intent_mandate:${intent.mandate_id}`] : [],
         })),
         ...(rec.evidenceError ? [{ text: `No evidence package: ${rec.evidenceError}`, cites: [] }] : []),
       ],
-      evidencePlan: rec.ai?.evidence_plan.length
-        ? rec.ai.evidence_plan.map((p) => p.text)
+      evidencePlan: groundedAi?.evidence_plan.length
+        ? groundedAi.evidence_plan.map((p) => p.text)
         : rec.action === "PROVIDE_EVIDENCE"
           ? ["Attestation PDF generated from the audit log", "JSON bundle: signed mandates and hashes"]
           : rec.action === "ACCEPT_CLAIM"
