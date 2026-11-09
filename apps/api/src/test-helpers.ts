@@ -155,6 +155,15 @@ export function memoryDb() {
     },
     getOrder: async (id) => orders.get(id) ?? null,
     getMandate: async (hash) => mandates.get(hash) ?? null,
+    findPaymentMandateForCart: async (cartMandateHash) =>
+      [...mandates.values()]
+        .filter(
+          (m) =>
+            m.kind === "payment" &&
+            (JSON.parse(m.canonical) as { cart_mandate_hash?: string }).cart_mandate_hash === cartMandateHash,
+        )
+        .sort((a, b) => (a.seenAt ?? "").localeCompare(b.seenAt ?? "") || a.hash.localeCompare(b.hash))[0] ??
+      null,
     updateOrder: async (id, p) => {
       const o = orders.get(id);
       if (!o) throw new Error(`order ${id} does not exist`);

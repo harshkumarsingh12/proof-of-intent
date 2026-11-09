@@ -6,7 +6,7 @@
 | **Owner**     | @srshriv                                                               |
 | **Reviewers** | @harshkumarsingh12                                                     |
 | **Milestone** | M0 (model), M1 (browser signing, key registry)                         |
-| **Code**      | `packages/contracts`, `packages/mandates`, `apps/buyer/src/signing.ts` |
+| **Code**      | `packages/contracts`, `packages/mandates`, `packages/proof`, `apps/buyer/src/signing.ts` |
 
 ## Context
 
@@ -66,6 +66,39 @@ signer wrote);
 key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/keys/*` in spec 0003, stored in
 `shopper_keys` / `agent_keys`.
 
+## Proof package (#177)
+
+The core promise is that a signed record backs each purchase. The proof package makes that inspectable by someone with no access
+to the merchant's server: one JSON file per order, and a verifier that says which checks passed. `packages/proof`
+(`buildProofPackage`, `verifyProofPackage`), served by `GET /orders/:id/proof` (spec 0003) and checked with
+`pnpm proof:verify <file>` (`scripts/proof/verify.ts`).
+
+- **What it holds** (schema `poi-proof/0.1`): the three signed mandates as the compact JWS that was signed (the shopper's Intent,
+  the buyer agent's Payment, the merchant's Cart) with each one's hash and `kid`; the public keys that verify them (role,
+  `kid`, P-256 public JWK, `platform` for an agent key, `retired_at` if retired); the references (order id, merchant id, the
+  `custom_id` pointer, and the PayPal order, authorization and capture ids the order has); the policy version
+  (`POLICY_VERSION`, `packages/policy-engine`); and an integrity manifest (a SHA-256 over each section and over those hashes).
+  Nothing in it is secret, and it carries no shopper id, wallet or private key.
+- **What the verifier checks**, offline, from the file alone: the file is a package; the manifest matches; each shopper and agent
+  `kid` is the thumbprint of its key; each of the three signatures verifies with a key *of the right role*, and the package's
+  declared hash and `kid` for it are right; the payloads are well-formed mandates; the Payment commits to this Intent and this
+  Cart, the Cart points at this Intent for this merchant, and the Payment names the key that signed it; the PayPal pointer
+  (`poi:<intent id>:<16 hex>`) names this intent; the hard rules held at the payment's own timestamp (spec 0002); and, when the
+  payment says nobody was present, the intent carried the shopper's signed permission to pay alone (#157). A check whose
+  prerequisite failed says "not checked" and fails: a pass is never claimed for something not looked at.
+- **What a pass does not show**, and the report says so every time: the keys are the file's own, so a valid signature shows the holder
+  of that key signed and not who holds it (compare each `kid` with the merchant's registry); the PayPal references are the
+  merchant's record (look the capture up in PayPal); the manifest detects a changed file but is not a signature, since a forger
+  can recompute it, so the signatures are what carry the proof; the policy replay assumes no earlier purchase under the intent
+  (the package has no ledger), and a package made under another `POLICY_VERSION` is flagged; a retired key is flagged, because
+  whether the mandate predates the retirement depends on when the merchant first saw it, which the package does not carry.
+- **The route** is merchant data, so it needs the operator token like every other read (#163). It is read-only. It answers 404 for an
+  unknown order, and 409 `proof_unavailable` naming what is missing when an order has no stored mandate, when the cart was signed
+  by a merchant key the server no longer holds, or when a registered key is gone, rather than building a partial package. The
+  Payment Mandate is found by the cart it committed to (`findPaymentMandateForCart`), the earliest one when the same cart was
+  paid for again (#159). The dashboard offers the download on a live dispute's mandate card.
+- **Not in the package:** the shopper's approval countersignature (`CartApproval`), the audit log and the PayPal webhook events.
+
 ## Acceptance criteria
 
 1. Key order does not change canonical bytes or the hash. _(test, done)_
@@ -80,6 +113,12 @@ key's RFC 7638 thumbprint, so the same key always has the same id. Over HTTP: `/
 6. The browser key is ECDSA P-256 and non-extractable. _(done)_
 7. A mandate signed in the browser verifies on the server. _(done: `apps/buyer/src/buyer.test.ts` runs the page's
    WebCrypto code against `verifyMandate`; `pnpm smoke:shop` drives the page itself and checks the stored key is non-extractable)_
+
+8. A proof package for a captured order verifies on its own, with every check passed, and an edit to any part of it, or a
+   signature, key, binding or pointer that does not hold, fails the check that covers it, including when the forger re-seals
+   the manifest. _(done, #177: `packages/proof/src/proof.test.ts`, `apps/api/src/proof.test.ts`)_
+9. `pnpm proof:verify` exits 0 for a genuine package, 1 for one that fails a check and 2 for a file it cannot read, and prints what
+   a pass does not show. _(done, #177: `apps/api/src/proof.test.ts`)_
 
 ## As built (apps/buyer)
 
