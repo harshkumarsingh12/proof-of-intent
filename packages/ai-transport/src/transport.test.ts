@@ -261,3 +261,12 @@ test("a late successful response cannot escape a delayed deadline timer", async 
   expect(s.requests).toHaveLength(1);
   expect(s.attempts[0]).toMatchObject({ outcome: "error", failure: "deadline_exceeded" });
 });
+
+test("public provider failures expose bounded diagnostics without provider response bodies", async () => {
+  const s = setup(() => Response.json({ error: { message: "secret echo of credentials" } }, { status: 401 }));
+  const error = (await s.ask().catch((value: unknown) => value)) as Error & { statusCode?: number };
+  expect(error).toBeInstanceOf(Error);
+  expect(error.statusCode).toBe(401);
+  expect(error.message).toContain("http_401");
+  expect(error.message).not.toContain("secret echo");
+});
