@@ -33,6 +33,7 @@ import { generateShopperKey, jwsPayloadText, publicJwk, sha256Hex, signCompact }
 import { stepUpApproval, stepUpListProof } from "../../src/stepup";
 import { initialVoice, voiceReducer } from "../../src/voice";
 import { removeProof, setupProof } from "../../src/wallet";
+import AuthorizationCard from "./AuthorizationCard";
 import ChatPanel from "./ChatPanel";
 import { useSpeech } from "./useVoice";
 
@@ -714,6 +715,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
               expires {new Date(signed.intent.intent_expiry).toLocaleDateString()}
             </p>
             <p className="meta">{describePermission(signed.intent)}</p>
+            <AuthorizationCard intent={signed.intent} />
           </div>
         )}
       </section>
