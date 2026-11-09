@@ -17,9 +17,9 @@ docker compose up --build
 Set both operator values before the first start. The shop needs `OPERATOR_TOKEN` to register its agent key (journey A),
 and the dashboard's operator actions need both (log in as user `operator` with the `OPERATOR_PASSWORD` value).
 
-The first `docker compose up --build` builds four images, which takes several minutes (about 4.5 minutes on a machine
-that already had the base images; longer on a new one). It stays in the foreground: run the later `docker compose exec`
-commands in a second terminal, or start the stack with `docker compose up --build -d`.
+The first `docker compose up --build` builds four images, which takes several minutes (about 8.5 minutes on a fresh
+2-core machine, about 4.5 with the base images already pulled). It stays in the foreground: run the later
+`docker compose exec` commands in a second terminal, or start the stack with `docker compose up --build -d`.
 
 | Service              | URL                           |
 | -------------------- | ----------------------------- |
@@ -104,8 +104,10 @@ pnpm install
 pnpm test                # unit tests + ledger entries; db tests run when DATABASE_URL is set (packages/db/README.md)
 pnpm dev:api             # :3000
 pnpm dev:buyer           # :3001
-pnpm dev:dashboard       # :3002
+API_INTERNAL_URL=http://localhost:3000 pnpm dev:dashboard   # :3002
 ```
+
+The dev servers use the same ports as the Docker stack in §1: stop that first (`docker compose stop`).
 
 Before you push, run what CI runs: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. For the dashboard
 alone: `pnpm vitest run apps/dashboard` and `pnpm --filter @poi/dashboard build`.
