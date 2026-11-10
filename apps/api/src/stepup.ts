@@ -63,15 +63,31 @@ async function find(db: Db, token: string): Promise<StoredStepUp | null> {
   return db.findStepUp(stepUpTokenHash(token));
 }
 
-/** What the shopper sees before approving. An expired link still shows, marked EXPIRED, so the page can say so. */
+/**
+ * What the shopper sees before approving. Once the step-up is over (approved, expired, refused or failed) there is nothing
+ * left to decide, so the cart is no longer shown: a token copied from an old link or a log reveals nothing about the
+ * purchase (#257, #261).
+ */
 export async function viewStepUp(
   token: string,
   deps: Pick<StepUpDeps, "db" | "now">,
 ): Promise<StepUpViewResult> {
   const st = await find(deps.db, token);
   if (!st) return notFound;
-  return { status: 200, body: toView(st, deps.now()) };
+  const now = deps.now();
+  if (st.status === "APPROVED") return closed("This purchase was already approved. There is nothing more to do here");
+  if (st.status === "EXPIRED" || (st.status === "PENDING" && isExpired(st, now)))
+    return closed("This approval link has expired. Nothing was charged");
+  // Refused at approval (the cart no longer fit, or the intent was revoked, #176): nothing was charged.
+  if (st.status === "REJECTED")
+    return closed("This cart no longer fits your signed intent, so it can't be bought. Nothing was charged");
+  // PayPal failed at approval; it may have charged before the error reached us, so this never says nothing was.
+  if (st.status === "FAILED") return closed("PayPal couldn't complete this purchase. Ask your agent to try again");
+  return { status: 200, body: toView(st, now) };
 }
+
+/** A step-up that is over: a plain message, with no cart lines and no order id. */
+const closed = (message: string): Failure => ({ status: 410, body: { error: "stepup_closed", message } });
 
 function toView(st: StoredStepUp, now: string): StepUpView {
   const cart = CartMandate.parse(st.cart);
@@ -134,9 +150,13 @@ async function approveFound(
 ): Promise<StepUpApproveResult> {
   const now = deps.now();
 
-  // A retry after success answers the same; nothing is charged twice.
-  if (st.status === "APPROVED" && st.orderId)
+  // A retry after success answers the same; nothing is charged twice. It still needs the shopper's signature, so a token
+  // alone (from an old link or a log) can't read the approved order's ids.
+  if (st.status === "APPROVED" && st.orderId) {
+    const retryReasons = await checkApproval(st, approvalJws, now, deps.db);
+    if (retryReasons.length > 0) return approvalInvalid(retryReasons);
     return { status: 200, body: await approved(deps.db, st.orderId) };
+  }
   if (st.status === "EXPIRED" || (st.status === "PENDING" && isExpired(st, now))) {
     if (st.status === "PENDING") await finish(deps.db, st.id, "EXPIRED");
     return expired;
@@ -150,16 +170,7 @@ async function approveFound(
 
   // 3. The shopper's own signature over this step-up and this exact cart.
   const sigReasons = await checkApproval(st, approvalJws, now, deps.db);
-  if (sigReasons.length > 0) {
-    return {
-      status: 403,
-      body: {
-        error: "approval_invalid",
-        message: "The approval was not signed for this cart",
-        reasons: sigReasons,
-      },
-    };
-  }
+  if (sigReasons.length > 0) return approvalInvalid(sigReasons);
 
   // The stored rows must still be what checkout verified.
   const cart = CartMandate.parse(st.cart);
@@ -260,6 +271,11 @@ async function checkApproval(st: StoredStepUp, jws: string, now: string, db: Db)
     return ["MANDATE_MISMATCH"];
   return [];
 }
+
+const approvalInvalid = (reasons: ReasonCode[]): Failure => ({
+  status: 403,
+  body: { error: "approval_invalid", message: "The approval was not signed for this cart", reasons },
+});
 
 async function approved(db: Db, orderId: string): Promise<StepUpApproveResponse> {
   const order = await db.getOrder(orderId);

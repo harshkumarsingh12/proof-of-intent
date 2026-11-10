@@ -75,6 +75,9 @@ function setup(opts: { vaultId?: string; db?: Db } = {}) {
     (
       await app.inject({ method: "POST", url: "/stepup/view", payload: { token: token(i) } })
     ).json() as StepUpView;
+  /** The view's HTTP response, for a step-up that may be closed (410 with no cart). */
+  const viewResponse = (i = 0) =>
+    app.inject({ method: "POST", url: "/stepup/view", payload: { token: token(i) } });
   const approve = (approval_jws: string, i = 0) =>
     app.inject({ method: "POST", url: "/stepup/approve", payload: { token: token(i), approval_jws } });
   /** What the buyer app's /approve page signs, with the browser's key. */
@@ -103,6 +106,7 @@ function setup(opts: { vaultId?: string; db?: Db } = {}) {
     checkout,
     token,
     view,
+    viewResponse,
     approve,
     sign,
     stepUp,
@@ -161,11 +165,40 @@ describe("step-up approval links (#35)", () => {
     expect(s.mem.audit.map((a) => a.action)).toEqual(
       expect.arrayContaining(["stepup.created", "stepup.approved"]),
     );
-    expect((await s.view()).status).toBe("APPROVED");
+    // Approved, so the link no longer shows the cart or the order (#257).
+    const closedView = await s.viewResponse();
+    expect(closedView.statusCode).toBe(410);
+    expect(closedView.json()).toEqual({
+      error: "stepup_closed",
+      message: "This purchase was already approved. There is nothing more to do here",
+    });
 
     // Clicking again (or a retry after a dropped response) charges nothing more.
     const again = await s.approve(await s.sign(v));
     expect(again.json()).toEqual(ok.json());
+    expect(s.createOrder).toHaveBeenCalledTimes(1);
+  });
+
+  test("once approved, a token alone reveals nothing: no cart, and no order ids without the shopper's signature", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    const v = await s.view();
+    const ok = await s.approve(await s.sign(v));
+    expect(ok.statusCode).toBe(200);
+    const orderId = ok.json().order_id as string;
+
+    const closedView = await s.viewResponse();
+    expect(closedView.statusCode).toBe(410);
+    expect(JSON.stringify(closedView.json())).not.toContain(orderId);
+    expect(JSON.stringify(closedView.json())).not.toContain(v.lines[0]!.sku);
+
+    // Someone holding the token but not the shopper's key gets the 403, never the order's ids.
+    for (const jws of ["not-a-jws", await s.sign(v, agent)]) {
+      const retry = await s.approve(jws);
+      expect(retry.statusCode).toBe(403);
+      expect(retry.json().error).toBe("approval_invalid");
+      expect(JSON.stringify(retry.json())).not.toContain(orderId);
+    }
     expect(s.createOrder).toHaveBeenCalledTimes(1);
   });
 
@@ -174,7 +207,10 @@ describe("step-up approval links (#35)", () => {
     await s.stepUp();
     const v = await s.view();
     s.clock.now = at(24 * HOUR);
-    expect((await s.view()).status).toBe("EXPIRED");
+    const closedView = await s.viewResponse();
+    expect(closedView.statusCode).toBe(410);
+    expect(closedView.json().error).toBe("stepup_closed");
+    expect(JSON.stringify(closedView.json())).not.toContain(v.lines[0]!.sku);
     const res = await s.approve(await s.sign(v));
     expect(res.statusCode).toBe(410);
     expect(res.json().error).toBe("stepup_expired");
@@ -190,8 +226,9 @@ describe("step-up approval links (#35)", () => {
     const s = setup({ vaultId: "VAULT-1" });
     await s.stepUp(partialCart); // cart_expiry 15 minutes after NOW
     expect(s.links[0]!.expiresAt).toBe(new Date(partialCart.contents.cart_expiry).toISOString());
+    const seen = await s.view(); // what the shopper saw while it was open
     s.clock.now = at(20 * 60_000);
-    expect((await s.approve(await s.sign(await s.view()))).statusCode).toBe(410);
+    expect((await s.approve(await s.sign(seen))).statusCode).toBe(410);
     expect(s.createOrder).not.toHaveBeenCalled();
   });
 
@@ -234,7 +271,14 @@ describe("step-up approval links (#35)", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ error: "stepup_no_longer_valid", reasons: ["BUDGET_EXCEEDED"] });
     expect(s.createOrder).toHaveBeenCalledTimes(1); // the jacket only
-    expect((await s.view()).status).toBe("REJECTED");
+    // Refused, so it's over: the link no longer shows the cart.
+    const closedView = await s.viewResponse();
+    expect(closedView.statusCode).toBe(410);
+    expect(closedView.json()).toMatchObject({
+      error: "stepup_closed",
+      message: expect.stringMatching(/Nothing was charged/),
+    });
+    expect(JSON.stringify(closedView.json())).not.toContain(shellCart.contents.lines[0]!.sku);
   });
 
   test("without a saved wallet nothing is charged, and the link still works once there is one", async () => {
@@ -280,7 +324,10 @@ describe("step-up approval links (#35)", () => {
     const res = await s.approve(await s.sign(await s.view()));
     expect(res.statusCode).toBe(402);
     expect(res.json().error).toBe("payment_declined");
-    expect((await s.view()).status).toBe("FAILED");
+    const closedView = await s.viewResponse(); // failed, so it's over: no cart
+    expect(closedView.statusCode).toBe(410);
+    expect(closedView.json().error).toBe("stepup_closed");
+    expect(closedView.json().message).not.toMatch(/nothing was charged/i); // PayPal may have charged before failing
   });
 
   test("a token in the URL path is refused with 410: it is never looked up, and approves nothing (#257)", async () => {
@@ -462,14 +509,16 @@ describe.runIf(process.env.DATABASE_URL)("step-up links with Postgres", () => {
       const statuses = both.map((r) => r.statusCode).sort();
       expect(statuses[0]).toBe(200);
       expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(1);
-      expect((await s.view(0)).status).toBe("APPROVED");
+      expect((await s.viewResponse(0)).statusCode).toBe(410); // approved: the cart is no longer shown
 
       expect(await db.listPendingStepUps(shopper.kid, NOW)).toHaveLength(1);
       expect(await db.listPendingStepUps(shopper.kid, at(24 * HOUR + 1000))).toEqual([]); // expired
 
       // The second link, a day later: nothing.
+      const seenLate = await s.view(1); // what the shopper saw while it was open
       s.clock.now = at(24 * HOUR + 1000);
-      const late = await s.approve(await s.sign(await s.view(1)), 1);
+      expect((await s.viewResponse(1)).statusCode).toBe(410);
+      const late = await s.approve(await s.sign(seenLate), 1);
       expect(late.statusCode).toBe(410);
       expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(1);
       expect(
