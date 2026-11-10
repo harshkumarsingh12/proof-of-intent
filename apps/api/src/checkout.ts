@@ -535,7 +535,8 @@ async function createStepUp(
       expiresAt: st.expiresAt,
     },
   });
-  const url = `${deps.stepUp.linkBase.replace(/\/+$/, "")}/approve/${token}`;
+  // After `#`: a browser never sends the fragment to a server, so no proxy, CDN or access log sees the token (#257).
+  const url = `${deps.stepUp.linkBase.replace(/\/+$/, "")}/approve#${token}`;
   await deps.stepUp.send({ stepUpId: id, shopperId, url, expiresAt: st.expiresAt });
 }
 

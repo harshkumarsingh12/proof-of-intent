@@ -27,12 +27,23 @@ describe("what the API logs (SECURITY.md: no secrets in logs)", () => {
     expect(redactUrl(`/stepup/${TOKEN}`)).toBe("/stepup/[redacted]");
     expect(redactUrl(`/stepup/${TOKEN}/approve`)).toBe("/stepup/[redacted]/approve");
     expect(redactUrl(`/stepup/${TOKEN}?x=1`)).toBe("/stepup/[redacted]?x=1");
-    for (const path of ["/stepups/pending", "/stepups/stp_1/approve", "/checkout/ord_1/approve", "/healthz", "/readyz"]) {
+    for (const path of ["/stepup/view", "/stepup/approve", "/stepup/approve?x=1", "/stepups/pending", "/stepups/stp_1/approve", "/checkout/ord_1/approve", "/healthz", "/readyz"]) {
       expect(redactUrl(path)).toBe(path);
     }
   });
 
-  test("a step-up link's token is not in the request log, for the view or the approval", async () => {
+  test("a step-up token sent in the body, the way the approval page sends it (#257), is not in the request log", async () => {
+    const log = capture();
+    const app = buildApp({ paypal: createMockClient(), db: memoryDb().db, logStream: log.stream });
+    await app.inject({ method: "POST", url: "/stepup/view", payload: { token: TOKEN } });
+    await app.inject({ method: "POST", url: "/stepup/approve", payload: { token: TOKEN, approval_jws: "a.b.c" } });
+    await app.close();
+    expect(log.text()).not.toContain(TOKEN);
+    const urls = log.entries().flatMap((e) => (e.req as { url?: string } | undefined)?.url ?? []);
+    expect(urls).toEqual(["/stepup/view", "/stepup/approve"]);
+  });
+
+  test("a step-up link's token in an old-style path is still not in the request log, for the view or the approval", async () => {
     const log = capture();
     const app = buildApp({ paypal: createMockClient(), db: memoryDb().db, logStream: log.stream });
     await app.inject({ method: "GET", url: `/stepup/${TOKEN}` });
@@ -44,7 +55,7 @@ describe("what the API logs (SECURITY.md: no secrets in logs)", () => {
     // The rest of the request log is kept: method, host, address and the response status.
     const first = log.entries().find((e) => e.req) as { req: Record<string, unknown> };
     expect(first.req).toMatchObject({ method: "GET", host: expect.any(String), remoteAddress: expect.any(String) });
-    expect(log.entries().some((e) => (e.res as { statusCode?: number } | undefined)?.statusCode === 404)).toBe(true);
+    expect(log.entries().some((e) => (e.res as { statusCode?: number } | undefined)?.statusCode === 410)).toBe(true);
   });
 });
 
@@ -89,7 +100,7 @@ describe("the step-up link written when a cart is held", () => {
     const { log, verdict } = await heldCart();
     expect(verdict.outcome).toBe("STEP_UP");
     expect(log.text()).toContain("step-up created");
-    expect(log.text()).not.toMatch(/\/approve\/[A-Za-z0-9_-]{20,}/);
+    expect(log.text()).not.toMatch(/\/approve[#/][A-Za-z0-9_-]{20,}/);
     expect(log.text()).not.toContain("localhost:3001/approve");
     // What is useful stays: which step-up, for whom and until when.
     const row = log.entries().find((e) => e.stepUpId);
@@ -101,7 +112,7 @@ describe("the step-up link written when a cart is held", () => {
     process.env.LOG_STEPUP_LINKS = "1";
     try {
       const { log } = await heldCart();
-      expect(log.text()).toMatch(/\/approve\/[A-Za-z0-9_-]{20,}/);
+      expect(log.text()).toMatch(/\/approve#[A-Za-z0-9_-]{20,}/);
     } finally {
       delete process.env.LOG_STEPUP_LINKS;
     }

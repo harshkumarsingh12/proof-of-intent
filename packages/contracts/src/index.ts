@@ -234,7 +234,7 @@ export const ApproveResponse = z.object({
 export type ApproveResponse = z.infer<typeof ApproveResponse>;
 
 /**
- * GET /stepup/:token: what the shopper is asked to approve (agent alone, docs/specs/0003, #35). The shopper signs
+ * POST /stepup/view `{ token }`: what the shopper is asked to approve (agent alone, docs/specs/0003, #35). The shopper signs
  * a CartApproval with `order_id` = `stepup_id` and this `cart_mandate_hash`, using the key named by `shopper_kid`.
  */
 export const StepUpView = z.object({
@@ -252,7 +252,7 @@ export const StepUpView = z.object({
 });
 export type StepUpView = z.infer<typeof StepUpView>;
 
-/** POST /stepup/:token/approve, body ApproveRequest. The order exists only from here. */
+/** POST /stepup/approve, body ApproveRequest plus `token` (#257). The order exists only from here. */
 /** POST /stepups/pending: `{ proof_jws }` (purpose stepup.list) → the shopper's own unexpired, pending step-ups. */
 export const StepUpListRequest = z.object({ proof_jws: z.string().min(1) });
 
