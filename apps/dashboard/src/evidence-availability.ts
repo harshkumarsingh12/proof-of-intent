@@ -7,9 +7,8 @@ export function evidenceAvailability(dispute: DisputeDetail) {
     { label: "Cart record", available: dispute.cartLines.length > 0 },
     {
       label: "Checkout finding",
-      available:
-        ["APPROVE", "REJECT", "STEP_UP"].includes(dispute.checkoutVerdict ?? "") &&
-        dispute.constraintChecks.length > 0,
+      // A budget-only mandate can have a saved verdict without any displayed per-rule checks.
+      available: ["APPROVE", "REJECT", "STEP_UP"].includes(dispute.checkoutVerdict ?? ""),
     },
     // The worker builds the attestation PDF only for a compliant dispute (a defend package). For a concede or a no-mandate
     // dispute none is ever expected, so counting it would show "missing" for something that was never going to exist.
