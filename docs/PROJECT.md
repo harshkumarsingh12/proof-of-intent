@@ -20,8 +20,10 @@ mandate into evidence, or into a fair refund.
 **Who it serves.** Primary: small and mid-size PayPal merchants starting to receive agent orders. Secondary:
 developers of buyer agents who need a merchant endpoint that accepts mandates; dispute analysts.
 
-**Who sends the mandates?** We accept the AP2 mandate format, so any agent that speaks AP2 works with no custom
-integration. Orders without a mandate take the standard `NO_MANDATE` path, so installing Proof of Intent never
+**Who sends the mandates?** We use AP2-style mandates: the Intent Mandate's core fields follow AP2 v0.1, and our
+Cart and Payment Mandates and the `constraints` extension are our own `poi/0.1` shapes. An external agent integrates
+through the documented checkout endpoint with a registered agent key, so an AP2 agent needs that mapping.
+Orders without a mandate take the standard `NO_MANDATE` path, so installing Proof of Intent never
 makes a merchant worse off.
 
 **Positioning.** PayPal-native, preventive, standards-aligned: the mandate model PayPal itself described for AP2,

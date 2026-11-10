@@ -27,6 +27,9 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 3. **The proof rides on the PayPal order.** A pointer to the signed mandate is written into `custom_id`.
 4. **Disputes get answered with the record.** Compliant order: the copilot drafts an evidence package from
    the signed mandates. Overreaching order: it recommends accepting the claim. The operator decides.
+5. **Anyone can check the record.** Each disputed order exports a proof package (the three signed mandates, their
+   public keys, the PayPal references and the policy version). `pnpm proof:verify` checks it offline and says what a
+   valid package does not prove.
 
 | PayPal surface | How we use it |
 |---|---|
@@ -37,9 +40,10 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 | Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |
 
 The checkout checks semantic fit through the Vercel AI SDK using NVIDIA Nemotron or versioned replay responses.
-On Nov 7 the live model scored 20/20 on the semantic-fit set (none of the 6 mismatches approved; measured after checkout's local guards)
-and 12/12 on dispute explanations that cite the policy finding, with every model answer schema-valid (31/31).
-See the [eval report](docs/evals/2026-11-07.md).
+On Nov 10 the live model scored 20/20 on the semantic-fit set (none of the 6 mismatches approved; measured after checkout's local guards)
+and 12/12 on dispute explanations that cite the policy finding, with every model answer schema-valid (31/31), matching Nov 7.
+Each answer is attributed to the endpoint that produced it, and the backup was tested on its own.
+See the [eval report](docs/evals/2026-11-09T23-45-49-348Z-primary.md) and [how evals are run](docs/evals/README.md).
 The dispute worker replays the checkout rules to recommend a response. The operations dashboard uses AG Grid for
 orders and checkout verdicts, and **Dispute Studio** (AG Studio) for the dispute workspace: KPI tiles, a class donut that
 filters everything, an AG Grid of disputes, a mandate diff and evidence preview that follow the selected dispute, custom
@@ -51,7 +55,7 @@ has a buyer agent that chooses the cart itself and a merchant check that refuses
 
 | Path | What you need |
 |---|---|
-| **Hosted demo** | [Shop](https://poi-buyer.iotkiit.in/shop) · [Operations dashboard](https://poi-dashboard.iotkiit.in). Follow the [judge click path](docs/DEMO.md#judge-click-path). Demo logins are shared through the Devpost testing instructions. |
+| **Hosted demo** | [Shop](https://poi-buyer.iotkiit.in/shop) · [Operations dashboard](https://poi-dashboard.iotkiit.in). Follow the [judge click path](docs/DEMO.md#judge-click-path) and the [testing instructions](docs/JUDGE_TESTING.md). Demo logins are shared through the Devpost testing instructions. |
 | **Your own sandbox** | Judge sandbox shopper accounts are in the Devpost testing instructions. |
 | **Run locally, zero credentials** | Docker. `PAYPAL_MODE=mock` and `AI_MODE=replay` are the defaults. Follow the [local mock walkthrough](docs/DEMO.md#local-mock-walkthrough) to inspect both scripted disputes. |
 

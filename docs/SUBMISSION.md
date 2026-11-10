@@ -13,7 +13,9 @@ semantic matches ask the shopper to confirm. A refused proposal creates no order
 When a completed purchase is disputed, the operator can inspect the signed intent, the checked cart, the PayPal
 capture and the policy finding. The copilot drafts an evidence preview or recommends conceding an overreach.
 The operator reviews the record and initiates supported dispute actions. An operator can override a defend
-recommendation with a recorded note. Studio answers read-only questions and drafts text for review.
+recommendation with a recorded note. Studio answers read-only questions and drafts text for review. Each disputed
+order also exports a proof package (the three signed mandates, their public keys, the PayPal references and the policy
+version) that anyone can check offline with `pnpm proof:verify`, without trusting our server.
 
 Our buyer and merchant exchange the signed mandates through our merchant API. The PayPal order carries a
 `custom_id` reference to that record. We do not claim PayPal validates the mandate or that intent compliance
@@ -27,8 +29,9 @@ alone proves delivery, legal authorization of every aspect of a transaction, or 
 - Webhooks: verify PayPal events and process them through the persistent inbox to update orders and disputes.
 - Customer Disputes v1: retrieve case details and permitted actions, preview/submit evidence, accept a claim,
   message or escalate when PayPal allows it and the operator chooses the action.
-- PayPal Agent Toolkit: sandbox dispute/tracking integration where used by the configured server. The
-  application keeps credentials server-side and does not grant a model authority to move money.
+- PayPal Agent Toolkit: the worker reads disputes with `get_dispute` and catches missed webhooks with `list_disputes`;
+  `accept_dispute_claim` and `create_shipment_tracking` run only on an audited operator click. Credentials stay
+  server-side, and no model is given authority to move money.
 
 ## AI tools and their limits
 
@@ -37,11 +40,13 @@ explanations/drafts. The buyer assistant proposes products and unsigned intent f
 replay keys are versioned. Common Studio questions use a deterministic read-only planner; open-ended questions
 can use the configured model. Replay mode supports repeatable demonstrations without a provider call.
 
-The [November 7 report](evals/2026-11-07.md) measured J1 20/20 after checkout guards, no mismatch labelled match,
-J2 policy agreement with a policy citation 12/12, and schema validity after retry 31/31 model cases. J2 receives
-the deterministic policy decision, so that result measures explanation faithfulness. These are fixed-set
-historical results, not claims of general accuracy, a validated backup model or business impact. Include new
-review-derived eval results only after the actual run is checked.
+The [November 10 report](evals/2026-11-09T23-45-49-348Z-primary.md) measured J1 20/20 after checkout guards, no mismatch
+labelled match, J2 policy agreement with a policy citation 12/12, and schema validity after retry 31/31 model cases,
+the same as the [November 7 report](evals/2026-11-07.md), now with each answer attributed to the endpoint that produced
+it. J2 receives the deterministic policy decision, so that result measures explanation faithfulness. The configured
+backup provider passed the same set on November 10 only when its calls were paced to its free-tier rate limit; run back
+to back it was rate-limited after 12 cases. If the primary fails under load, J1 falls back to asking the shopper and J2
+to the rule-only recommendation. These are fixed-set results, not claims of general accuracy or business impact.
 
 ## Public links for the entry
 
@@ -54,7 +59,7 @@ review-derived eval results only after the actual run is checked.
 | Judge walkthrough                     | [DEMO.md](DEMO.md#judge-click-path)                                   |
 | Testing instructions                  | [JUDGE_TESTING.md](JUDGE_TESTING.md)                                  |
 | Release tag and deployed commit       | Awaiting release/deployment confirmation from #48; do not guess a tag |
-| Public YouTube URL and final duration | Awaiting team recording, review and upload (#47)                      |
+| Public YouTube URL and final duration | Rough cut 2:44.5 (Nov 10, captions, no voiceover); upload pending (#47) |
 | Devpost project and Representative    | Awaiting team confirmation; reconcile with PROJECT.md section 6       |
 
 ## Private testing field
@@ -76,6 +81,8 @@ commit and date with each result and keep credentials in the team's secret store
 | #49   | Every public link checked signed out; release tag matches deployed build; testing field checked privately; confirmed Representative sees Devpost entry as submitted       | Pending              |
 | #122  | Both judge shoppers sign in, buy and report a problem; fresh December backup pair recorded privately around Dec 1                                                         | Pending              |
 
-Record video dry-run times for Nov 9 and Nov 10 and the final runtime here when the team supplies them. Keep
+Nov 10: silent rough cut assembled from the hosted sandbox (signing, refusal, PayPal approval, the agent paying alone,
+dispute `PP-R-HKU-10197912`, its proof package verified 13 of 13) and the local seeded stack (historical `PP-D-1002`,
+Studio), 2:44.5. Record the voiced final cut's runtime and the dry-run times here when the team supplies them. Keep
 #45, #47, #49 and #122 open until their specific evidence exists. A prepared description or a successful PR
 does not prove an external submission, account test or video upload happened.
