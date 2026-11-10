@@ -3,12 +3,15 @@
 // Step-up approval (docs/specs/0003, #35). The buyer agent wasn't sure enough to buy alone, so the merchant sent
 // this link. The shopper checks the cart and approves it with the key this browser made when they signed the
 // intent; the merchant re-checks and only then charges their saved PayPal wallet.
+//
+// The link is `/approve#<token>`. The browser never sends what follows `#` to a server, so this page reads it here
+// and posts it in a request body: no proxy, CDN or access log on the way sees the token (#257).
 import type { ReasonCode, StepUpApproveResponse, StepUpView } from "@poi/contracts";
 import { useCallback, useEffect, useState } from "react";
-import { loadShopper, type StoredShopper } from "../../../src/key-store";
-import { REASON_TEXT } from "../../../src/reasons";
-import { signCompact } from "../../../src/signing";
-import { canApprove, stepUpApproval } from "../../../src/stepup";
+import { loadShopper, type StoredShopper } from "../../src/key-store";
+import { REASON_TEXT } from "../../src/reasons";
+import { signCompact } from "../../src/signing";
+import { canApprove, isStepUpToken, stepUpApproval, tokenFromHash } from "../../src/stepup";
 
 interface ApiError {
   error: string;
@@ -51,7 +54,17 @@ const STATUS_TEXT: Record<StepUpView["status"], string> = {
   FAILED: "PayPal couldn't complete this purchase. Ask your agent to try again.",
 };
 
-export default function ApproveFlow({ token }: { token: string }) {
+const post = (path: string, body: object) =>
+  fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+export default function ApproveFlow() {
+  // Read once in the browser; undefined until then (the server never has it).
+  const [token, setToken] = useState<string | null>();
   const [view, setView] = useState<StepUpView>();
   const [loadError, setLoadError] = useState<string>();
   const [shopper, setShopper] = useState<StoredShopper | null>();
@@ -59,13 +72,30 @@ export default function ApproveFlow({ token }: { token: string }) {
   const [result, setResult] = useState<StepUpApproveResponse>();
   const [error, setError] = useState<ApiError>();
 
+  useEffect(() => {
+    const read = () => {
+      const t = tokenFromHash(window.location.hash);
+      setToken(t && isStepUpToken(t) ? t : null);
+      setView(undefined);
+      setLoadError(undefined);
+      setResult(undefined);
+      setError(undefined);
+    };
+    read();
+    // Another link pasted into this tab changes only the fragment, which doesn't reload the page.
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+
   const load = useCallback(async () => {
-    const body = await readJson<StepUpView>(await fetch(`/api/stepup/${encodeURIComponent(token)}`));
+    if (!token) return;
+    const body = await readJson<StepUpView>(await post("/api/stepup/view", { token }));
     if (isError(body)) setLoadError(body.message);
     else setView(body);
   }, [token]);
 
   useEffect(() => {
+    if (token === null) setLoadError("This approval link is not valid. Nothing was charged.");
     load().catch(() => setLoadError("The shop couldn't be reached. Try again in a moment."));
     loadShopper()
       .then((s) => setShopper(s ?? null))
@@ -73,16 +103,12 @@ export default function ApproveFlow({ token }: { token: string }) {
   }, [load]);
 
   const approve = useCallback(async () => {
-    if (!view || !shopper) return;
+    if (!view || !shopper || !token) return;
     setBusy(true);
     setError(undefined);
     try {
       const jws = await signCompact(stepUpApproval(view, new Date()), shopper.key.privateKey, shopper.kid);
-      const res = await fetch(`/api/stepup/${encodeURIComponent(token)}/approve`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ approval_jws: jws }),
-      });
+      const res = await post("/api/stepup/approve", { token, approval_jws: jws });
       const body = await readJson<StepUpApproveResponse>(res);
       if (isError(body)) {
         setError(body);

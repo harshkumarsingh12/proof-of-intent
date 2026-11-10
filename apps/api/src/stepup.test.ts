@@ -70,10 +70,13 @@ function setup(opts: { vaultId?: string; db?: Db } = {}) {
   });
   const checkout = (body: unknown) =>
     app.inject({ method: "POST", url: "/checkout", payload: body as object });
-  const token = (i = 0) => links[i]!.url.split("/approve/")[1]!;
-  const view = async (i = 0) => (await app.inject(`/stepup/${token(i)}`)).json() as StepUpView;
+  const token = (i = 0) => new URL(links[i]!.url).hash.slice(1);
+  const view = async (i = 0) =>
+    (
+      await app.inject({ method: "POST", url: "/stepup/view", payload: { token: token(i) } })
+    ).json() as StepUpView;
   const approve = (approval_jws: string, i = 0) =>
-    app.inject({ method: "POST", url: `/stepup/${token(i)}/approve`, payload: { approval_jws } });
+    app.inject({ method: "POST", url: "/stepup/approve", payload: { token: token(i), approval_jws } });
   /** What the buyer app's /approve page signs, with the browser's key. */
   const sign = (v: StepUpView, key: Party = shopper, over: object = {}) =>
     signMandate(
@@ -117,7 +120,9 @@ describe("step-up approval links (#35)", () => {
     expect(JSON.stringify(res.json())).not.toContain("approve");
     expect(s.links).toHaveLength(1);
     expect(s.links[0]).toMatchObject({ shopperId: "shopper-1", expiresAt: at(24 * HOUR) });
-    expect(s.links[0]!.url).toMatch(/^https:\/\/shop\.example\/approve\/[A-Za-z0-9_-]{43}$/);
+    // The token is after `#`, which no browser sends to a server, so no proxy or CDN on the way sees it (#257).
+    expect(s.links[0]!.url).toMatch(/^https:\/\/shop\.example\/approve#[A-Za-z0-9_-]{43}$/);
+    expect(new URL(s.links[0]!.url).pathname).toBe("/approve");
     // Only the token's hash is stored.
     const [row] = [...s.mem.stepups.values()];
     expect(row!.tokenHash).toMatch(/^[0-9a-f]{64}$/);
@@ -248,14 +253,36 @@ describe("step-up approval links (#35)", () => {
     expect(s.createOrder).toHaveBeenCalledWith(expect.objectContaining({ vaultId: "VAULT-2" }));
   });
 
+  test("a token in the URL path is refused with 410: it is never looked up, and approves nothing (#257)", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    const v = await s.view();
+    const oldView = await s.app.inject(`/stepup/${s.token()}`);
+    expect(oldView.statusCode).toBe(410);
+    expect(oldView.json().error).toBe("stepup_link_moved");
+    expect(JSON.stringify(oldView.json())).not.toContain(v.stepup_id); // nothing about the cart is shown
+    const oldApprove = await s.app.inject({
+      method: "POST",
+      url: `/stepup/${s.token()}/approve`,
+      payload: { approval_jws: await s.sign(v) },
+    });
+    expect(oldApprove.statusCode).toBe(410);
+    expect(s.createOrder).not.toHaveBeenCalled();
+    expect((await s.view()).status).toBe("PENDING"); // and the same token in a body still works
+    expect((await s.approve(await s.sign(v))).json().status).toBe("CAPTURED");
+  });
+
   test("an unknown or malformed token is a 404; a human-present step-up sends no link", async () => {
     const s = setup({ vaultId: "VAULT-1" });
-    expect((await s.app.inject("/stepup/unknown-token-0123456789abcdef")).statusCode).toBe(404);
-    expect((await s.app.inject("/stepup/%27%20or%201=1")).statusCode).toBe(404);
+    const viewOf = (token: unknown) =>
+      s.app.inject({ method: "POST", url: "/stepup/view", payload: { token } });
+    expect((await viewOf("unknown-token-0123456789abcdef")).statusCode).toBe(404);
+    expect((await viewOf("' or 1=1")).statusCode).toBe(404);
+    expect((await s.app.inject({ method: "POST", url: "/stepup/view", payload: {} })).statusCode).toBe(400);
     const bad = await s.app.inject({
       method: "POST",
-      url: "/stepup/unknown-token-0123456789abcdef/approve",
-      payload: { approval_jws: "x.y.z" },
+      url: "/stepup/approve",
+      payload: { token: "unknown-token-0123456789abcdef", approval_jws: "x.y.z" },
     });
     expect(bad.statusCode).toBe(404);
 

@@ -61,7 +61,7 @@ any other reasons:
 | --- | --- |
 | Stage 1 `POST /checkout` (shopper present or agent alone) | `REJECT`; no order, no Cart Mandate, no PayPal call |
 | Stage 2 `POST /checkout/:id/approve` | re-checked with `freshness` (#161) → `{ status: "VOIDED", reasons }`; a hold is voided, nothing captured |
-| Step-ups (`/stepup/:token/approve`, `/stepups/:id/approve`) | refused, nothing created or charged; `/stepups/pending` stops listing that intent's carts |
+| Step-ups (`/stepup/approve`, `/stepups/:id/approve`) | refused, nothing created or charged; `/stepups/pending` stops listing that intent's carts |
 | Reservations (spec 0003 §Reservation) | pending orders under the intent release what they set aside |
 
 Orders captured before `revoked_at` are unchanged, and disputes about them are judged as before.

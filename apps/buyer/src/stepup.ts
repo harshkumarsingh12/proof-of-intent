@@ -7,6 +7,12 @@ import type { CartApproval, StepUpListProof, StepUpView } from "@poi/contracts";
 /** Link tokens are 43 base64url characters (32 random bytes). */
 export const isStepUpToken = (token: string): boolean => /^[A-Za-z0-9_-]{20,128}$/.test(token);
 
+/** The token from the link's fragment (`/approve#<token>`, #257): what follows `#`, or null when there is none. */
+export const tokenFromHash = (hash: string): string | null => {
+  const token = hash.replace(/^#/, "");
+  return token === "" ? null : token;
+};
+
 /** What the shopper signs: this step-up and this exact cart, now. */
 export const stepUpApproval = (view: StepUpView, now: Date): CartApproval => ({
   order_id: view.stepup_id,

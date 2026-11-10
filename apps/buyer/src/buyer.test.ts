@@ -21,7 +21,8 @@ import { evaluate } from "@poi/policy-engine";
 import { agentCheckout, intentFromJws } from "./agent-server";
 import { paymentMandate, proposeCart } from "./cart";
 import { CATALOG, CATEGORIES, PRESETS, productsIn } from "./catalog";
-import { canApprove, isStepUpId, isStepUpToken, stepUpApproval, stepUpListProof } from "./stepup";
+import { canApprove, isStepUpId, isStepUpToken, stepUpApproval, stepUpListProof, tokenFromHash } from "./stepup";
+import { stepUpBody } from "./stepup-relay";
 import {
   isNotApprovedYet,
   isSetupTokenId,
@@ -366,6 +367,31 @@ describe("step-up approval page (#35)", () => {
     expect(isStepUpToken("A".repeat(43))).toBe(true);
     for (const bad of ["", "short", "../keys/agent", "a b c d e f g h i j k l", "x".repeat(200)])
       expect(isStepUpToken(bad)).toBe(false);
+  });
+
+  test("the approval page takes the token from the link's fragment, which no server receives (#257)", () => {
+    const token = "A".repeat(43);
+    expect(tokenFromHash(`#${token}`)).toBe(token);
+    expect(new URL(`https://shop.example/approve#${token}`).pathname).toBe("/approve");
+    expect(tokenFromHash("")).toBeNull();
+    expect(tokenFromHash("#")).toBeNull();
+  });
+
+  test("the shop's step-up proxy takes the token from the body and passes on only the expected fields", async () => {
+    const token = "A".repeat(43);
+    const req = (body: string) => new Request("https://shop.example/api/stepup/view", { method: "POST", body });
+    expect(await stepUpBody(req(JSON.stringify({ token, extra: "x" })), false)).toEqual({ token });
+    expect(await stepUpBody(req(JSON.stringify({ token, approval_jws: "a.b.c", extra: "x" })), true)).toEqual({
+      token,
+      approval_jws: "a.b.c",
+    });
+    const status = async (body: string, withApproval = false) =>
+      ((await stepUpBody(req(body), withApproval)) as Response).status;
+    expect(await status("not json")).toBe(400);
+    expect(await status("{}")).toBe(400);
+    expect(await status(JSON.stringify({ token }), true)).toBe(400); // approving needs the signature
+    expect(await status(JSON.stringify({ token: "../keys/agent" }))).toBe(404); // never forwarded
+    expect(await status(JSON.stringify({ token, pad: "x".repeat(20_000) }))).toBe(400);
   });
 });
 
