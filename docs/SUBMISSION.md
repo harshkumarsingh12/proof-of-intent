@@ -58,7 +58,7 @@ to the rule-only recommendation. These are fixed-set results, not claims of gene
 | Setup                                 | [SETUP.md](SETUP.md)                                                  |
 | Judge walkthrough                     | [DEMO.md](DEMO.md#judge-click-path)                                   |
 | Testing instructions                  | [JUDGE_TESTING.md](JUDGE_TESTING.md)                                  |
-| Release tag and deployed commit       | Awaiting release/deployment confirmation from #48; do not guess a tag |
+| Release tag and deployed commit       | [`v0.1.0-hackathon`](https://github.com/harshkumarsingh12/proof-of-intent/releases/tag/v0.1.0-hackathon) at `5d25fca` (Nov 10). Dokploy deploys `main`, which was at that commit; read the live commit off Dokploy's Deployments tab |
 | Public YouTube URL and final duration | Rough cut 2:44.5 (Nov 10, captions, no voiceover); upload pending (#47) |
 | Devpost project and Representative    | Awaiting team confirmation; reconcile with PROJECT.md section 6       |
 
