@@ -96,7 +96,10 @@ from the repository or from outside, and stay unticked until someone looks at th
 - [ ] Proxy logs outside this app (Dokploy, Cloudflare) can still record URL paths, tracked in #202. Checked on the server
   November 10: Traefik logged the full `/stepup/<token>` path, so `RequestPath` and `RequestLine` are now dropped in its
   `traefik.yml`, and after a restart the path no longer appears. Still open: Cloudflare (Free plan) records the full path
-  in Traffic analytics with no setting to redact it. Closing it means moving the token out of the URL path.
+  in Traffic analytics with no setting to redact it. Not ticked as an accepted risk: a token seen there can't approve or
+  charge anything (approval needs a signature from the intent's key, once, within 24 h; `apps/api/src/stepup.ts`), but it
+  keeps opening the cart's details (lines, total, agent, shopper key id) after approval and expiry. Closing it means
+  moving the token out of the URL path: #257.
 - [x] gitleaks clean on the full history. gitleaks (default rules) scanned 176 commits: no leaks. Separately, every secret
   value in the developer's local `.env` (the same variables the server uses: the signing keys, the AI keys, the PayPal client
   secret, the operator token and the AG Studio license) was searched for in all 180 revisions: none found. The server's own
@@ -106,7 +109,7 @@ from the repository or from outside, and stay unticked until someone looks at th
   only `dokploy-traefik` publishes public ports (80, 443 and 8080), the POI containers bind to `127.0.0.1`, nothing maps
   5432, `ss` shows no listener on 5432 and `nc -vz <server ip> 5432` from outside is refused. ufw is inactive and
   DOCKER-USER is empty, since nothing else is published. Follow-up: confirm port 8080 (Traefik's dashboard) needs to be
-  public, and close it if not.
+  public, and close it if not (asked in #202).
 - [x] Demo logins: viewer cannot act. On the hosted site, the operator-only API routes (dispute actions, tracking, agent
   keys, `/ai/studio`) answer 401 with no token and with a wrong one, and the dashboard's proxy answers 401 to a viewer or a
   wrong password and 404 to any POST it doesn't allow.
