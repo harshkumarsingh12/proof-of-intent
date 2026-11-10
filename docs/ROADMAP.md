@@ -119,7 +119,7 @@ drafting and a `platform_summary` Studio tool.
 | README final, DEMO.md click path             | Sumedha  | Updated Nov 10 (proof package, Studio filters, Nov 10 evals); the independent walkthrough is pending |
 | SETUP.md verified on a clean machine         | Sristee  | ✅ Nov 9 on a fresh GitHub Codespace (2 cores, 8 GB, nothing cached): §1 to a running stack in 8 min 40 s, the demo seed in 3 s, §2 in under 3 min; snags fixed in SETUP.md (#212 and this PR) |
 | Video recorded, edited, public on YouTube    | Sumedha  | Rough cut Nov 10: 2:44.5, 1080p, every scene captioned, no voiceover yet. Voiceover, review and upload pending |
-| Tag `v0.1.0-hackathon`, deployed, monitored  | Harsh    | Pending |
+| Tag `v0.1.0-hackathon`, deployed, monitored  | Harsh    | ✅ Nov 10: tag at `5d25fca`, release workflow green (four images on GHCR, public checks passed), GitHub Release published; monitored by `uptime.yml` (#48) |
 | Devpost submission with testing instructions | Sumedha  | Pending |
 | Prize split agreed                           | everyone | Pending |
 | AG Studio license covers judging             | Sikruti  | ✅ Expires Dec 21, after judging ends Dec 15; no renewal needed |

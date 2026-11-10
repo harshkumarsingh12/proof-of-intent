@@ -150,7 +150,11 @@ Env: see `.env.example`. Repository secrets: `SERVER_HOST`, `SERVER_USER`, `SERV
    real API; write the measured time here.
    `/readyz` answers 503 when the database can't be reached. _(done, #120: `apps/api/src/api.test.ts`, and checked against a live and a dead database)_
 5. Pushing `v0.1.0-hackathon` deploys, and the release is published only after `scripts/deploy/verify-release.sh` and (when
-   configured) the public checks pass. _(M4; the script is tested against a real stack, see Release verification, #175)_
+   configured) the public checks pass. _(done Nov 10, #48: `v0.1.0-hackathon` at `5d25fca`. The four images were pushed to
+   GHCR; there is no SSH deploy on Dokploy (no `SERVER_HOST`), so the server job skipped it as designed; `verify-public`
+   passed all four checks against the live site (API ready with the database reachable, dispute worker keeping up, shop,
+   dashboard); then the GitHub Release was published. As noted under Release verification, this shows the live stack is
+   healthy, not which commit it runs: Dokploy deploys `main`, which was at the tagged commit.)_
 
 ## Open questions
 
