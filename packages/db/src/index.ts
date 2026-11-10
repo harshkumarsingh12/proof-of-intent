@@ -55,6 +55,8 @@ export interface MandateRecord {
    * means "now" (the database's clock).
    */
   seenAt?: string;
+  /** Intents only: when the shopper revoked it (docs/specs/0013, #176). Set once, never cleared. */
+  revokedAt?: string;
 }
 
 export interface VerdictRecord {
@@ -248,6 +250,14 @@ export interface Db {
    * fits. `check` returns the reasons to refuse (none to accept); a refusal creates nothing.
    */
   reserveOrder(o: OrderRecord, now: string, check: (ledger: SpendLedger) => string[]): Promise<Reservation>;
+  /**
+   * Marks the intent stored under `hash` revoked as of `at`, unless it already is: the first revocation wins (#176). Takes the
+   * same per-intent lock as `reserveOrder`, which refuses with MANDATE_REVOKED once this is set, so a reservation and a
+   * revocation can't cross. Returns the revocation time in force, or null when no intent is stored under `hash`.
+   */
+  revokeIntent(hash: string, at: string): Promise<string | null>;
+  /** Every order under an intent, oldest first, for the shopper's receipt. */
+  ordersForIntent(intentMandateId: string): Promise<StoredOrder[]>;
   recordVerdict(v: VerdictRecord): Promise<void>;
   createOrder(o: OrderRecord): Promise<void>;
   getOrder(id: string): Promise<StoredOrder | null>;
@@ -524,7 +534,14 @@ export function createDb(databaseUrl: string): Db {
         await client.query("begin");
         // One reservation at a time per intent: the lock is released at commit or rollback.
         await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [o.intentMandateId]);
-        const reasons = check(await activeLedgerOf(client, o.intentMandateId, now));
+        const revoked = await client.query(
+          "select 1 from mandates where hash = $1 and revoked_at is not null and revoked_at <= $2",
+          [o.intentMandateHash, now],
+        );
+        const reasons = [
+          ...(revoked.rowCount ? ["MANDATE_REVOKED"] : []),
+          ...check(await activeLedgerOf(client, o.intentMandateId, now)),
+        ];
         if (reasons.length > 0) {
           await client.query("rollback");
           return { ok: false, reasons };
@@ -538,6 +555,45 @@ export function createDb(databaseUrl: string): Db {
       } finally {
         client.release();
       }
+    },
+
+    async revokeIntent(hash, at) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const row = (
+          await client.query<{ mandate_id: string }>(
+            "select mandate_id from mandates where hash = $1 and kind = 'intent'",
+            [hash],
+          )
+        ).rows[0];
+        if (!row) {
+          await client.query("rollback");
+          return null;
+        }
+        // The lock reserveOrder takes for this intent: a reservation is either before this (and its order is judged as
+        // pending) or after it (and refused).
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [row.mandate_id]);
+        const res = await client.query<{ revoked_at: Date }>(
+          "update mandates set revoked_at = coalesce(revoked_at, $2) where hash = $1 returning revoked_at",
+          [hash, at],
+        );
+        await client.query("commit");
+        return res.rows[0]!.revoked_at.toISOString();
+      } catch (err) {
+        await client.query("rollback").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
+
+    async ordersForIntent(intentMandateId) {
+      const res = await pool.query(
+        "select * from orders where intent_mandate_id = $1 order by created_at, id",
+        [intentMandateId],
+      );
+      return res.rows.map(toOrder);
     },
 
     async getOrder(id) {
@@ -577,8 +633,10 @@ export function createDb(databaseUrl: string): Db {
 
     async listPendingStepUps(shopperKid, now) {
       const { rows } = await pool.query(
-        `select * from stepups where shopper_kid = $1 and status = 'PENDING' and expires_at > $2
-          order by created_at desc limit 20`,
+        `select s.* from stepups s
+          where s.shopper_kid = $1 and s.status = 'PENDING' and s.expires_at > $2
+            and not exists (select 1 from mandates m where m.hash = s.intent_mandate_hash and m.revoked_at is not null)
+          order by s.created_at desc limit 20`,
         [shopperKid, now],
       );
       return rows.map(toStepUp);
@@ -963,6 +1021,7 @@ function toMandate(r: Row): MandateRecord {
     jws: r.jws as string,
     kid: r.kid as string,
     seenAt: (r.created_at as Date).toISOString(),
+    ...(r.revoked_at ? { revokedAt: (r.revoked_at as Date).toISOString() } : {}),
   };
 }
 

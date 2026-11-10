@@ -103,6 +103,9 @@ button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .authz { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 10px 0 0; font-size: 14px; }
 .authz dt { color: var(--muted); }
 .authz dd { margin: 0; }
+.intent-controls { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.intent-controls h4 { margin: 0; font-size: 14px; }
+.revoke-confirm { margin-top: 8px; }
 .error { color: var(--danger); font-size: 14px; margin: 8px 0 0; }
 .paypal-slot { max-width: 360px; margin-top: 12px; }
 @media (max-width: 900px) {

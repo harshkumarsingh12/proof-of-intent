@@ -56,6 +56,7 @@ describe.runIf(ADMIN_URL)("db", () => {
       "0005_shared_vault_id.sql",
       "0006_reservations.sql",
       "0007_inbox_retries.sql",
+      "0008_intent_revocation.sql",
     ]);
     expect(await db.migrate()).toEqual([]);
   });
@@ -303,6 +304,75 @@ describe.runIf(ADMIN_URL)("db", () => {
     expect((await db.activeLedger("m-rt", t0)).capturedTotal).toBe(14800);
     const room = await Promise.all(["ord_res4", "ord_res5"].map((id) => reserve(id)));
     expect(room.filter((r) => r.ok)).toHaveLength(1); // 14800 + 1000 fits once; the second would be 16800
+  });
+
+  test("revoking an intent: the first time wins, a reservation after it is refused, and its held carts aren't listed (#176)", async () => {
+    const h = (c: string) => c.repeat(64);
+    await raw.query("insert into shoppers (id) values ('shopper-rev') on conflict do nothing");
+    await raw.query(
+      `insert into shopper_keys (kid, shopper_id, public_jwk) values ('kid-rev', 'shopper-rev', '{"kty":"EC"}') on conflict do nothing`,
+    );
+    const intent = {
+      hash: h("5"),
+      kind: "intent" as const,
+      mandateId: "m-rev",
+      canonical: "{}",
+      jws: "j",
+      kid: "kid-rev",
+    };
+    await db.saveMandate(intent);
+    await db.saveMandate({ ...intent, hash: h("6"), kind: "cart", mandateId: "cart-rev" });
+    expect(await db.revokeIntent(h("7"), "2026-11-02T10:00:00.000Z")).toBeNull(); // nothing stored under it
+    expect(await db.revokeIntent(h("6"), "2026-11-02T10:00:00.000Z")).toBeNull(); // a cart is not an intent
+
+    const order = {
+      intentMandateId: "m-rev",
+      intentMandateHash: h("5"),
+      cartMandateHash: h("6"),
+      customId: "poi:m-rev:5555555555555555",
+      paypalIntent: "AUTHORIZE" as const,
+      status: "PENDING",
+      totalValue: 1000,
+      currency: "USD",
+      agentPlatform: "Northstar",
+      humanPresent: true,
+      reservedUntil: "2026-11-02T12:00:00.000Z",
+    };
+    const at = "2026-11-02T10:00:00.000Z";
+    expect(await db.reserveOrder({ ...order, id: "ord_rev1" }, "2026-11-02T09:59:00.000Z", () => [])).toEqual(
+      { ok: true },
+    );
+
+    expect(await db.revokeIntent(h("5"), at)).toBe(at);
+    expect(await db.revokeIntent(h("5"), "2026-11-02T11:00:00.000Z")).toBe(at); // the first wins
+    expect((await db.getMandate(h("5")))?.revokedAt).toBe(at);
+    expect((await db.getMandate(h("6")))?.revokedAt).toBeUndefined();
+
+    expect(await db.reserveOrder({ ...order, id: "ord_rev2" }, "2026-11-02T10:01:00.000Z", () => [])).toEqual(
+      {
+        ok: false,
+        reasons: ["MANDATE_REVOKED"],
+      },
+    );
+    expect(await db.getOrder("ord_rev2")).toBeNull();
+    expect((await db.ordersForIntent("m-rev")).map((o) => o.id)).toEqual(["ord_rev1"]); // made before: unchanged
+
+    await db.createStepUp({
+      id: "stp_rev",
+      tokenHash: h("8"),
+      intentMandateId: "m-rev",
+      intentMandateHash: h("5"),
+      cartMandateHash: h("6"),
+      cart: {},
+      shopperKid: "kid-rev",
+      agentPlatform: "Northstar",
+      reasons: [],
+      expiresAt: "2026-11-03T00:00:00.000Z",
+    });
+    expect(await db.listPendingStepUps("kid-rev", "2026-11-02T10:30:00.000Z")).toEqual([]);
+    await expect(
+      raw.query("update mandates set revoked_at = now() where hash = $1", [h("6")]),
+    ).rejects.toThrow(/mandates_revoked_intent_only/);
   });
 
   test("dispute events form the worker's inbox until marked processed", async () => {

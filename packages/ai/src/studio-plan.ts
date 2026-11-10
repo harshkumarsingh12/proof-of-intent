@@ -138,6 +138,7 @@ const REASON_TEXT: Record<string, string> = {
   INTENT_ALREADY_USED: "the shopper's intent allowed one purchase and it had already been made",
   CATALOG_MISMATCH: "the cart's product or price didn't match the merchant's catalog",
   UNATTENDED_NOT_PERMITTED: "the shopper had not signed permission for the agent to pay without them",
+  MANDATE_REVOKED: "the shopper had revoked the intent",
   SEMANTIC_UNCERTAIN: "the semantic check wasn't sure it was what they meant",
   SEMANTIC_MISMATCH: "the semantic check said it wasn't what they described",
 };

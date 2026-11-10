@@ -254,6 +254,8 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 | POST   | `/webhooks/paypal`                                           | Harsh   | spec 0004                                                                                                                                                                                                                      |
 | POST   | `/keys/shopper`                                              | Sristee | `{ public_jwk }` (P-256) → `{ kid, shopper_id }`; public, rate-limited, `kid` = `shp_<RFC 7638 thumbprint>` (spec 0001)                                                                                                        |
 | POST   | `/keys/agent`                                                | Sristee | `{ public_jwk, platform }` → `{ kid }`; operator token; `kid` = `agt_<thumbprint>`                                                                                                                                             |
+| POST   | `/intents/:id/revoke`                                        | Sristee | `{ revocation_jws }` (`IntentRevocation`, signed by the intent's key, retired or not) → `{ mandate_id, revoked_at }`; first wins; 404 `intent_not_found`, 403 `revocation_invalid`; public, rate-limited; spec 0013                  |
+| POST   | `/intents/:id/receipt`                                       | Sristee | `{ proof_jws }` (`IntentReceiptProof`) → `IntentReceipt`: spent, held and remaining authority, and each order; 404 for another shopper's intent or one never seen; spec 0013                                                 |
 | POST   | `/vault/setup`                                               | Harsh   | `{ proof_jws }` (`VaultProof` purpose `vault.setup`) → `{ setup_token_id, approval_url }`; public, rate-limited; spec 0004 §Vault                                                                                              |
 | POST   | `/vault/save`                                                | Harsh   | `{ setup_token_id, proof_jws }` (purpose `vault.save`, naming that setup token) → `{ wallet: true }`; 409 `setup_not_available` if it isn't this shopper's or was used; 409 `paypal_refused` if PayPal hasn't got the approval |
 | POST   | `/vault/remove`                                              | Harsh   | `{ proof_jws }` (purpose `vault.remove`) → `{ wallet: false }`; clears the saved wallet at once, then revokes it at PayPal; harmless if there is none                                                                          |
@@ -276,4 +278,4 @@ A REJECT is HTTP 200 with `verdict.outcome = "REJECT"`. Errors follow docs/CONVE
 ## Out of scope
 
 Multi-merchant tenancy and API keys (stretch).
-Enforcing a revoked intent: proposed, not built, in spec 0013 (#176).
+Enforcing a revoked intent (`MANDATE_REVOKED` at checkout, stage-two approval, step-ups and the reservation): spec 0013 (#176).
