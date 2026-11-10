@@ -179,12 +179,17 @@ and the agent's response carries no link.
   plain random secret.
 - **Expiry:** 24 h, or the cart's `cart_expiry` or the intent's `intent_expiry` if sooner. An expired link answers
   410 `stepup_expired` and creates nothing. An agent that wants the full day sets `cart_expiry` accordingly.
+- **Closed step-ups show nothing (#257, #261):** once a step-up is approved or expired, `POST /stepup/view` answers
+  410 `stepup_closed` with a plain message and no cart lines, cart hash or order id. A token copied from an old link or
+  recorded before #261 (when it travelled in a path) therefore reveals nothing about a purchase that is over. Pending
+  and in-progress step-ups still show, since the shopper has something to decide.
 - **At approval:** check the signature (403 `approval_invalid` with reason codes, and the link stays usable). Then
   claim the row (`PENDING → APPROVING`, so exactly one request goes on) and run the hard rules again with the
   current active ledger (captured and reserved), because budget may have been spent since the link was sent (409
   `stepup_no_longer_valid`). Then require a vaulted wallet (409 `no_vaulted_wallet`, and the link stays usable).
   Finally, sign the Cart Mandate and create the order with intent `CAPTURE` against the vault id, through the same
-  `placeOrder` as checkout. The order's verdict is `STEP_UP`. A retry after success returns the same answer.
+  `placeOrder` as checkout. The order's verdict is `STEP_UP`. A retry after success returns the same answer, but only
+  with a valid signature: the token alone gets 403 `approval_invalid`, never the approved order's ids.
 - **PayPal failing at approval** marks the step-up `FAILED` and answers 502. The link doesn't retry blind,
   because PayPal may have charged before the error reached us. The agent starts a new checkout.
 - **Delivery:** no email provider is wired, and the link carries a secret token, so by default the API logs only the
@@ -239,7 +244,7 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 | ------ | ------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | POST   | `/checkout`                                                  | Harsh   | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, order_id?, cart_mandate_jws?, paypal_order_id?, approval_url?, capture_id? }` (`capture_id` only for an agent-alone order, charged at creation)                      |
 | POST   | `/checkout/:id/approve`                                      | Harsh   | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }`                                                                                                                                                        |
-| POST   | `/stepup/view`                                               | Sristee | `{ token }` → the waiting cart for the approval page → `StepUpView`; `cache-control: no-store`. The token is never in a path (#257)                                                                                             |
+| POST   | `/stepup/view`                                               | Sristee | `{ token }` → the waiting cart for the approval page → `StepUpView`, or 410 `stepup_closed` once approved or expired; `cache-control: no-store`. The token is never in a path (#257)                                                                                             |
 | POST   | `/stepup/approve`                                            | Sristee | `{ token, approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse`                                                                                                     |
 | GET, POST | `/stepup/:token`, `/stepup/:token/approve`                | Sristee | the old path routes: 410 `stepup_link_moved`, the token is not looked up (#257); to be removed                                                                                                                               |
 | POST   | `/stepups/pending`                                           | Sristee | `{ proof_jws }` (`StepUpListProof`, purpose `stepup.list`) → `{ stepups: StepUpView[] }`: this shopper's own pending, unexpired carts; `cache-control: no-store`                                                               |
