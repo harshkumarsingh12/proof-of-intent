@@ -1,0 +1,691 @@
+{
+  "runId": "2026-11-09T23-45-49-348Z-primary",
+  "sourceCommit": "3976a3dca9d2e8e5e3d6f4b46ab8f7e2ced835da",
+  "profile": "primary-with-configured-fallback",
+  "cases": [
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1707,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1708,
+      "job": "J1",
+      "label": "grey running jacket",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1622,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1623,
+      "job": "J1",
+      "label": "hooded rain shell",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1738,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1738,
+      "job": "J1",
+      "label": "red running jacket",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 2031,
+          "httpRequests": 1,
+          "failure": "timeout"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "fallback",
+          "outcome": "success",
+          "elapsedMs": 764,
+          "httpRequests": 1,
+          "fallbackReason": "timeout"
+        }
+      ],
+      "elapsedMs": 2795,
+      "job": "J1",
+      "label": "navy rain shell",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1252,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1252,
+      "job": "J1",
+      "label": "black insulated gloves",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1176,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1176,
+      "job": "J1",
+      "label": "green trail vest",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1023,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1023,
+      "job": "J1",
+      "label": "white cycling helmet",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1169,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1169,
+      "job": "J1",
+      "label": "red thermos",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1309,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1309,
+      "job": "J1",
+      "label": "blue yoga mat",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1039,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1039,
+      "job": "J1",
+      "label": "trail shoes for road running",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1213,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1214,
+      "job": "J1",
+      "label": "unrated warmth",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1564,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1564,
+      "job": "J1",
+      "label": "small sock pack",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1281,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1281,
+      "job": "J1",
+      "label": "zip pockets unverified",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1352,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1353,
+      "job": "J1",
+      "label": "carry-on dimensions unverified",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1617,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1617,
+      "job": "J1",
+      "label": "unverified tumbler capacity",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1330,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1330,
+      "job": "J1",
+      "label": "jacket versus tent",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1230,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1230,
+      "job": "J1",
+      "label": "wrong helmet color",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 921,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 921,
+      "job": "J1",
+      "label": "cordless requirement",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1125,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1125,
+      "job": "J1",
+      "label": "dairy conflict",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 0,
+      "providerAttempts": [],
+      "elapsedMs": 0,
+      "job": "J1",
+      "label": "injected cart title",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": true
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2451,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 2457,
+      "job": "J2",
+      "label": "grey jacket as requested",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2322,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 2322,
+      "job": "J2",
+      "label": "delivery alleged missing",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 3617,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 3617,
+      "job": "J2",
+      "label": "shopper approved exact cart",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2151,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 2151,
+      "job": "J2",
+      "label": "price and color violations",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1433,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1433,
+      "job": "J2",
+      "label": "unapproved merchant",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 4015,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 4016,
+      "job": "J2",
+      "label": "too many units",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2024,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 2025,
+      "job": "J2",
+      "label": "rain shell substitution",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1701,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1701,
+      "job": "J2",
+      "label": "road versus trail shoes",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1740,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1740,
+      "job": "J2",
+      "label": "missing insulation",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 2908,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 2909,
+      "job": "J2",
+      "label": "ordinary checkout",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "NO_MANDATE / STANDARD_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 5002,
+          "httpRequests": 1,
+          "failure": "timeout"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "fallback",
+          "outcome": "success",
+          "elapsedMs": 1246,
+          "httpRequests": 1,
+          "fallbackReason": "timeout"
+        }
+      ],
+      "elapsedMs": 6248,
+      "job": "J2",
+      "label": "pointer mismatch",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "NO_MANDATE / STANDARD_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "nvidia",
+          "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1941,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1941,
+      "job": "J2",
+      "label": "injected buyer note",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "NO_MANDATE / STANDARD_EVIDENCE",
+      "passed": true,
+      "guarded": false
+    }
+  ],
+  "passed": true
+}

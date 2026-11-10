@@ -1,0 +1,861 @@
+{
+  "runId": "2026-11-09T23-46-10-807Z-backup",
+  "sourceCommit": "3976a3dca9d2e8e5e3d6f4b46ab8f7e2ced835da",
+  "profile": "backup-only",
+  "cases": [
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1050,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1051,
+      "job": "J1",
+      "label": "grey running jacket",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1308,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1309,
+      "job": "J1",
+      "label": "hooded rain shell",
+      "expected": "partial",
+      "actual": "match",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 920,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 921,
+      "job": "J1",
+      "label": "red running jacket",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 684,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 684,
+      "job": "J1",
+      "label": "navy rain shell",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 646,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 646,
+      "job": "J1",
+      "label": "black insulated gloves",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1599,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1599,
+      "job": "J1",
+      "label": "green trail vest",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 793,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 793,
+      "job": "J1",
+      "label": "white cycling helmet",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1905,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1905,
+      "job": "J1",
+      "label": "red thermos",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 562,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 562,
+      "job": "J1",
+      "label": "blue yoga mat",
+      "expected": "match",
+      "actual": "match",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 871,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 871,
+      "job": "J1",
+      "label": "trail shoes for road running",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1230,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1230,
+      "job": "J1",
+      "label": "unrated warmth",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": true,
+      "attempts": 1,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "success",
+          "elapsedMs": 1126,
+          "httpRequests": 1
+        }
+      ],
+      "elapsedMs": 1126,
+      "job": "J1",
+      "label": "small sock pack",
+      "expected": "partial",
+      "actual": "partial",
+      "passed": true,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 105,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 147,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 252,
+      "job": "J1",
+      "label": "zip pockets unverified",
+      "expected": "partial",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 79,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 119,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 199,
+      "job": "J1",
+      "label": "carry-on dimensions unverified",
+      "expected": "partial",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 76,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 151,
+      "job": "J1",
+      "label": "unverified tumbler capacity",
+      "expected": "partial",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 124,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 71,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 196,
+      "job": "J1",
+      "label": "jacket versus tent",
+      "expected": "mismatch",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 78,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 151,
+      "job": "J1",
+      "label": "wrong helmet color",
+      "expected": "mismatch",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 71,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 146,
+      "job": "J1",
+      "label": "cordless requirement",
+      "expected": "mismatch",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 146,
+      "job": "J1",
+      "label": "dairy conflict",
+      "expected": "mismatch",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 0,
+      "providerAttempts": [],
+      "elapsedMs": 0,
+      "job": "J1",
+      "label": "injected cart title",
+      "expected": "mismatch",
+      "actual": "mismatch",
+      "passed": true,
+      "guarded": true
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 155,
+      "job": "J2",
+      "label": "grey jacket as requested",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 72,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 118,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 190,
+      "job": "J2",
+      "label": "delivery alleged missing",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 72,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 77,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 149,
+      "job": "J2",
+      "label": "shopper approved exact cart",
+      "expected": "MANDATE_COMPLIANT / PROVIDE_EVIDENCE",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 77,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 151,
+      "job": "J2",
+      "label": "price and color violations",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 123,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 77,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 200,
+      "job": "J2",
+      "label": "unapproved merchant",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 72,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 145,
+      "job": "J2",
+      "label": "too many units",
+      "expected": "AGENT_OVERREACH / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 76,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 72,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 148,
+      "job": "J2",
+      "label": "rain shell substitution",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 148,
+      "job": "J2",
+      "label": "road versus trail shoes",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 76,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 150,
+      "job": "J2",
+      "label": "missing insulation",
+      "expected": "INTENT_MISREAD / ACCEPT_CLAIM",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 71,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 145,
+      "job": "J2",
+      "label": "ordinary checkout",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 73,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 146,
+      "job": "J2",
+      "label": "pointer mismatch",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    },
+    {
+      "schemaValid": false,
+      "attempts": 2,
+      "providerAttempts": [
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 74,
+          "httpRequests": 1,
+          "failure": "http_429"
+        },
+        {
+          "provider": "groq",
+          "model": "openai/gpt-oss-120b",
+          "role": "primary",
+          "outcome": "error",
+          "elapsedMs": 84,
+          "httpRequests": 1,
+          "failure": "http_429"
+        }
+      ],
+      "elapsedMs": 159,
+      "job": "J2",
+      "label": "injected buyer note",
+      "expected": "NO_MANDATE / STANDARD_EVIDENCE",
+      "actual": "unavailable",
+      "passed": false,
+      "guarded": false
+    }
+  ],
+  "passed": false
+}
