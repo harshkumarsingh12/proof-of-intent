@@ -40,6 +40,12 @@ export interface StudioDisputeRow {
   atStake: number;
   /** Dollars on disputes the copilot recommends conceding (AGENT_OVERREACH): a recommendation, not a confirmed refund. */
   conceded: number;
+  /**
+   * Dollars PayPal confirmed went back to the buyer: a resolved dispute in the buyer's favour, at what PayPal says it
+   * refunded, else the disputed amount (the same rule as Analytics, #220). An operator's override counts here once PayPal
+   * resolves it; a recommendation never does.
+   */
+  refunded: number;
 }
 
 /** One row per signed limit per dispute: the table the mandate diff reads. */
@@ -91,6 +97,10 @@ export const disputeRows = (details: DisputeDetail[], now: Date = new Date()): S
       overdue: open && msLeft < 0 ? 1 : 0,
       atStake: open ? amount : 0,
       conceded: overreach ? amount : 0,
+      refunded:
+        d.status === "RESOLVED" && d.outcome?.result === "BUYER_FAVOUR"
+          ? (d.outcome.refunded?.value ?? d.amount.value) / 100
+          : 0,
     };
   });
 
@@ -165,6 +175,8 @@ export interface PlatformGroup {
   disputeClass: string;
   disputes: number;
   amount: number;
+  /** Dollars PayPal refunded in this group; absent when the widget's layout doesn't map the field (saved before it existed). */
+  refunded?: number;
 }
 
 export interface PlatformCard {
@@ -173,8 +185,10 @@ export interface PlatformCard {
   overreach: number;
   /** 0 to 1. */
   overreachRate: number;
-  /** Dollars on disputes classified AGENT_OVERREACH, which the copilot recommends conceding. */
-  concededAmount: number;
+  /** Dollars on disputes classified AGENT_OVERREACH, which the copilot recommends conceding: advice, not money moved. */
+  recommendedAmount: number;
+  /** Dollars PayPal confirmed it refunded to buyers, whatever the copilot recommended; undefined when not mapped. */
+  refundedAmount?: number;
 }
 
 export function platformCards(groups: PlatformGroup[]): PlatformCard[] {
@@ -185,20 +199,22 @@ export function platformCards(groups: PlatformGroup[]): PlatformCard[] {
       disputes: 0,
       overreach: 0,
       overreachRate: 0,
-      concededAmount: 0,
+      recommendedAmount: 0,
     };
     card.disputes += g.disputes;
     if (g.disputeClass === "AGENT_OVERREACH") {
       card.overreach += g.disputes;
-      card.concededAmount += g.amount;
+      card.recommendedAmount += g.amount;
     }
+    if (g.refunded !== undefined) card.refundedAmount = (card.refundedAmount ?? 0) + g.refunded;
     byPlatform.set(g.platform, card);
   }
   return [...byPlatform.values()]
     .map((c) => ({
       ...c,
       overreachRate: c.disputes ? c.overreach / c.disputes : 0,
-      concededAmount: Math.round(c.concededAmount * 100) / 100,
+      recommendedAmount: Math.round(c.recommendedAmount * 100) / 100,
+      ...(c.refundedAmount !== undefined ? { refundedAmount: Math.round(c.refundedAmount * 100) / 100 } : {}),
     }))
     .sort(
       (a, b) =>

@@ -72,8 +72,9 @@ export const initialState = {
             disputeClass: [{ id: "disputes.disputeClass" }],
             dispute: [{ id: "disputes.id" }],
             amount: [{ id: "disputes.amount" }],
+            refunded: [{ id: "disputes.refunded" }],
           },
-          format: { title: { text: "Agent platforms: overreach and conceded dollars", enabled: true } },
+          format: { title: { text: "Agent platforms: overreach and refunded dollars", enabled: true } },
         },
         grid: {
           type: "dispute-grid",
