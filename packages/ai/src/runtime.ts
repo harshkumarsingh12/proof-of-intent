@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { NotImplementedError } from "@poi/contracts";
 import { mandateHash } from "@poi/mandates";
-import { generateObject } from "ai";
+import { generateObject, wrapLanguageModel } from "ai";
 import type { z } from "zod";
 
 export type AiMode = "live" | "replay";
@@ -98,7 +98,10 @@ export interface GenerateRequest<T> {
 
 export interface ProviderAttempt {
   provider: string;
+  /** Requested model or alias; configuration alone does not identify the answering model. */
   model: string;
+  /** Provider-reported model identity, when present in the response. */
+  responseModel?: string;
   role: "primary" | "fallback";
   outcome: "success" | "error";
   elapsedMs: number;
@@ -263,13 +266,24 @@ export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Gener
     const call = async (e: Endpoint, role: ProviderAttempt["role"], fallbackReason?: string) => {
       const start = performance.now();
       let failure: string | undefined;
+      let responseModel: string | undefined;
       let httpRequests = 0;
       const provider = host(e, () => {
         httpRequests++;
       });
       try {
         const { object } = await generateObject({
-          model: provider.chatModel(e.model),
+          model: wrapLanguageModel({
+            model: provider.chatModel(e.model),
+            middleware: {
+              wrapGenerate: async ({ doGenerate }) => {
+                const result = await doGenerate();
+                // Observe provider metadata before the SDK substitutes the requested model for an absent identity.
+                responseModel = result.response?.modelId?.trim() || undefined;
+                return result;
+              },
+            },
+          }),
           schema,
           system,
           prompt,
@@ -286,6 +300,7 @@ export function createGenerate(cfg: LiveConfig, fetchImpl?: typeof fetch): Gener
         const attempt: ProviderAttempt = {
           provider: e.provider,
           model: e.model,
+          ...(responseModel ? { responseModel } : {}),
           role,
           outcome: failure ? "error" : "success",
           elapsedMs: Math.round(performance.now() - start),
