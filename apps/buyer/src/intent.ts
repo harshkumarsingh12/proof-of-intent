@@ -43,7 +43,7 @@ export function dollarsToCents(text: string): number {
   return cents;
 }
 
-const usd = (cents: number) => `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+export const usd = (cents: number) => `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 
 /**
  * What the signed intent lets the agent buy, in the words the shop shows after signing (#156). An intent with no budget

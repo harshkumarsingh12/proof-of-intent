@@ -100,10 +100,15 @@ button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .trace { margin: 8px 0 0; padding-left: 20px; font-size: 14px; display: grid; gap: 6px; }
 .trace code { font-size: 12px; color: var(--muted); }
 .meta { font-size: 13px; color: var(--muted); word-break: break-all; }
+.authz { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 10px 0 0; font-size: 14px; }
+.authz dt { color: var(--muted); }
+.authz dd { margin: 0; }
 .error { color: var(--danger); font-size: 14px; margin: 8px 0 0; }
 .paypal-slot { max-width: 360px; margin-top: 12px; }
 @media (max-width: 900px) {
   .row, .products { grid-template-columns: minmax(0, 1fr); }
+  .authz { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .authz dd { margin-bottom: 6px; }
   .hero { grid-template-columns: minmax(0, 1fr); padding-top: 32px; padding-bottom: 48px; gap: 32px; }
   h1 { font-size: 38px; }
   .steps { grid-template-columns: minmax(0, 1fr); }
