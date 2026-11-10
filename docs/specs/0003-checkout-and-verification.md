@@ -72,14 +72,15 @@ identifier and PayPal's `PayPal-Request-Id`:
 
 ### Reservation (#155)
 
-A signed `budget_cap` or `recurrence` is an aggregate limit, so it has to hold for orders that are **pending at the same
-time**, not only for captured ones. Spending authority is reserved when the order is created, before PayPal is contacted:
+A signed `budget_cap` or `recurrence` is an aggregate limit, and so is the default intent's one purchase (#156): each has to
+hold for orders that are **pending at the same time**, not only for captured ones. Spending authority is reserved when the order is created, before PayPal is contacted:
 
 - `Db.reserveOrder` creates the order and checks the aggregate rules in one step, under a per-intent lock
   (`pg_advisory_xact_lock` on the intent id). The check sees the ledger as it is inside that step, so two carts created
   together cannot both fit under a cap that only one fits. A refusal creates no order and no PayPal call: a `REJECT`
-  verdict with `BUDGET_EXCEEDED` / `RECURRENCE_EXCEEDED`. The earlier check in step 5 only turns away the obvious case
-  sooner.
+  verdict with `BUDGET_EXCEEDED` / `RECURRENCE_EXCEEDED` / `INTENT_ALREADY_USED`. The earlier check in step 5 only turns away
+  the obvious case sooner. (`INTENT_ALREADY_USED` was first checked only there, so two checkouts under a default intent that
+  arrived together could both be created and, with nobody present, both charged; it is now re-checked in the lock too.)
 - A reservation is the order itself (`orders.reserved_until` = the cart's expiry). `Db.activeLedger` counts, for an intent:
   captured orders (committed, they never stop counting), `UNKNOWN_OUTCOME` orders (they may have charged), and
   `PENDING` / `CREATED` / `APPROVED` / `AUTHORIZED` orders until `reserved_until`. A `VOIDED` or `PAYPAL_FAILED` order is
