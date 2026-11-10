@@ -189,6 +189,8 @@ Each run writes matching timestamped Markdown/JSON with the source commit; suppl
   - Backup alone, paced 7 s per call (`pnpm eval --backup --pace-ms=7000`, [report](../evals/2026-11-09T23-51-12-652Z-backup.md)):
     **passed**, J1 20/20 with 0 mismatches labelled match, J2 11/12 (missing insulation: the reasons did not cite the policy
     finding), schema 31/31, no 429s.
+  - These runs predate #253, so their "Answered by" column shows the requested model of the endpoint that succeeded, not a
+    provider-reported identity; re-run after #253 for the stricter attribution.
   - So the backup's answers are good enough, but its capacity is not a primary's: if the primary goes down during a burst of
     traffic, expect the backup to rate-limit after about a dozen calls a minute. Those calls fail closed (J1 `unavailable` is a
     step-up at checkout, J2 falls back to the rule-only recommendation), so nothing is approved by mistake.

@@ -1,8 +1,8 @@
 import { writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { J2_PROMPT_VERSION, J2_REPLAY, type DisputeClassification } from "../../packages/ai/src/dispute-jobs";
 import { evaluateJobs } from "../../packages/ai/src/evaluate";
 import { evaluationReport } from "../../packages/ai/src/eval-report";
+import { evaluationSourceCommit } from "../../packages/ai/src/eval-source";
 import { J1_PROMPT_VERSION, J1_REPLAY, type SemanticFit } from "../../packages/ai/src/j1";
 import {
   createGenerate,
@@ -35,7 +35,7 @@ if (backup && !configured.fallback)
 const config = backup ? configured.fallback! : configured;
 const profile =
   (backup ? "backup-only" : "primary-with-configured-fallback") + (paceMs ? `, paced ${paceMs} ms per call` : "");
-const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const sourceCommit = evaluationSourceCommit(new URL("../../", import.meta.url));
 
 const live = createGenerate(config);
 const paced: Generate = async (req) => {
