@@ -681,6 +681,32 @@ describe("POST /checkout: one purchase per default intent (#156)", () => {
     expect(second.json().verdict.reasons).toEqual(["INTENT_ALREADY_USED"]);
   });
 
+  test("two checkouts racing past the first check cannot both buy: the reservation refuses one", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const both = await Promise.all(
+      [1, 2].map(async (n) =>
+        s.checkout((await signedCheckout({ shopper, agent, cart: nth(n), humanPresent: false })).body),
+      ),
+    );
+    expect(both.map((r) => r.json().verdict.outcome).sort()).toEqual(["APPROVE", "REJECT"]);
+    expect(both.find((r) => r.json().verdict.outcome === "REJECT")!.json().verdict.reasons).toEqual([
+      "INTENT_ALREADY_USED",
+    ]);
+    expect(s.mem.orders.size).toBe(1);
+    expect(s.createOrder).toHaveBeenCalledTimes(1); // the wallet is charged once
+  });
+
+  test("a second pending order is refused before the first is captured, so a shopper cannot approve both", async () => {
+    const s = setup();
+    expect(
+      (await s.checkout((await signedCheckout({ shopper, agent, cart: nth(1) })).body)).json().verdict
+        .outcome,
+    ).toBe("APPROVE");
+    const second = await s.checkout((await signedCheckout({ shopper, agent, cart: nth(2) })).body);
+    expect(second.json().verdict).toEqual({ outcome: "REJECT", reasons: ["INTENT_ALREADY_USED"] });
+    expect(s.mem.orders.size).toBe(1);
+  });
+
   test("a refused attempt is not a purchase: the retry after a rejection still works", async () => {
     const s = setup();
     const rejected = await s.checkout(
@@ -1055,6 +1081,32 @@ describe.runIf(process.env.DATABASE_URL)("POST /checkout with Postgres", () => {
       const replay = await app.inject({ method: "POST", url: "/checkout", payload: body });
       expect(replay.json().verdict.reasons).toEqual(["NONCE_REPLAYED"]);
       expect((await raw.query("select count(*)::int as n from orders")).rows[0].n).toBe(1);
+      await app.close();
+    });
+  });
+
+  // #156 with #155: the default intent's one purchase is held by the same reservation, so two at once get one order.
+  test("two checkouts at once under a default intent: exactly one order, the other INTENT_ALREADY_USED", async () => {
+    await withPostgres(async ({ db, raw }) => {
+      const app = appFor(db);
+      const send = async (n: number) =>
+        app.inject({
+          method: "POST",
+          url: "/checkout",
+          payload: (
+            await signedCheckout({
+              shopper,
+              agent,
+              cart: { ...compliantCart, contents: { ...compliantCart.contents, cart_id: `cart-${n}` } },
+            })
+          ).body,
+        });
+      const together = await Promise.all([send(1), send(2), send(3)]);
+      expect(together.map((r) => r.json().verdict.outcome).sort()).toEqual(["APPROVE", "REJECT", "REJECT"]);
+      for (const r of together.filter((r) => r.json().verdict.outcome === "REJECT")) {
+        expect(r.json().verdict.reasons).toEqual(["INTENT_ALREADY_USED"]);
+      }
+      expect((await raw.query("select status from orders")).rows).toEqual([{ status: "CREATED" }]);
       await app.close();
     });
   });
