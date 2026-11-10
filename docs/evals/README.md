@@ -1,5 +1,11 @@
 # Evals
 
+Commit source changes before each canonical run (`pnpm eval` or `pnpm eval --backup`). The command checks
+the repository containing the script, rejects staged, unstaged and untracked changes before any model call,
+and records its exact commit. Ignored local configuration is allowed. A run creates reports and may update
+recordings; commit those artifacts before the next run, including a backup run. This keeps each report's
+source attribution reproducible without silently labelling uncommitted prompts or cases as `HEAD`.
+
 Run `pnpm eval` with `AI_MODEL` and `AI_API_KEY` in the environment. Set `AI_PROVIDER` for a provider other than
 NVIDIA and `AI_BASE_URL` for a custom OpenAI-compatible endpoint. With a local `.env`, the equivalent command
 is `pnpm exec tsx --env-file=.env scripts/ai/eval.ts`.
