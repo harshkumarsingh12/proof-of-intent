@@ -2,6 +2,29 @@ import { expect, test } from "vitest";
 import { getDisputeDetail } from "./dispute-details";
 import { confidenceDescription, evidenceAvailability } from "./evidence-availability";
 
+test.each(["APPROVE", "REJECT", "STEP_UP"])(
+  "a saved %s checkout finding is available without a displayed rule breakdown",
+  (checkoutVerdict) => {
+    // budget_cap/validity constraints are valid but do not produce the worker's displayed constraint checks.
+    const dispute = { ...getDisputeDetail("PP-D-1001")!, checkoutVerdict, constraintChecks: [] };
+    expect(evidenceAvailability(dispute).checks.find((c) => c.label === "Checkout finding")?.available).toBe(
+      true,
+    );
+    expect(evidenceAvailability(dispute)).toMatchObject({ available: 4, total: 4 });
+  },
+);
+
+test.each([undefined, "NONE", "", "unknown"])(
+  "a missing or unknown checkout verdict (%s) stays unavailable even with displayed checks",
+  (checkoutVerdict) => {
+    const dispute = { ...getDisputeDetail("PP-D-1001")!, checkoutVerdict };
+    expect(dispute.constraintChecks.length).toBeGreaterThan(0);
+    expect(evidenceAvailability(dispute).checks.find((c) => c.label === "Checkout finding")?.available).toBe(
+      false,
+    );
+  },
+);
+
 test("missing records and an unprepared preview are visible even for a compliant class", () => {
   const full = getDisputeDetail("PP-D-1001")!;
   const incomplete = {

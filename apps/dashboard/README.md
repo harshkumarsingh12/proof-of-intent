@@ -7,7 +7,8 @@ Next.js app for the merchant's operations team. Run: `pnpm dev:dashboard` (port 
 Dispute details separate the deterministic policy class from the model's optional, uncalibrated score.
 `classificationInfo.confidence` is `number | null`; missing/invalid scores are unavailable, never filled with
 100%. Record availability lists the intent, cart and checkout finding independently, and the prepared evidence preview only for a compliant dispute (the only class the worker builds a defend package for; a concede or no-mandate dispute has none to miss). It is
-not a completeness certification or a probability of winning. Delivery, cardholder authorization and completed
+not a completeness certification or a probability of winning. A saved checkout verdict counts independently
+of the optional displayed rule breakdown, which can be empty for a budget-only mandate. Delivery, cardholder authorization and completed
 refunds require separate evidence. Historical sample scores are unset. Old unbounded AI reasons are omitted
 until reprocessed with source-excerpt rendering; existing stored PDFs should be reviewed before reuse.
 
