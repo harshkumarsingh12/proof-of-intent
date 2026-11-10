@@ -99,7 +99,7 @@ button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .reasons code { font-size: 12px; color: var(--muted); }
 .trace { margin: 8px 0 0; padding-left: 20px; font-size: 14px; display: grid; gap: 6px; }
 .trace code { font-size: 12px; color: var(--muted); }
-.meta { font-size: 13px; color: var(--muted); word-break: break-all; }
+.meta { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .authz { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 10px 0 0; font-size: 14px; }
 .authz dt { color: var(--muted); }
 .authz dd { margin: 0; }
