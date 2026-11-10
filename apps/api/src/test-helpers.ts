@@ -47,6 +47,7 @@ export function memoryDb() {
         o.id !== excludeOrderId &&
         (o.capturedAt ||
           o.status === "UNKNOWN_OUTCOME" ||
+          o.status === "CAPTURE_PENDING" ||
           (["PENDING", "CREATED", "APPROVED", "AUTHORIZED"].includes(o.status) &&
             o.reservedUntil !== undefined &&
             o.reservedUntil > now)),

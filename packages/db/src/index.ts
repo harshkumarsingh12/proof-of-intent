@@ -236,8 +236,9 @@ export interface Db {
    */
   mandateLedger(intentMandateId: string, asOfOrderId?: string): Promise<SpendLedger>;
   /**
-   * What the intent has spent or set aside as of `now` (#155): captured orders, orders whose PayPal result is unknown, and
-   * pending orders whose reservation (the cart's expiry) has not passed. Voided and failed orders do not count. With
+   * What the intent has spent or set aside as of `now` (#155): captured orders, orders whose PayPal result is unknown or
+   * whose capture PayPal has accepted but not completed (CAPTURE_PENDING, #225), and pending orders whose reservation
+   * (the cart's expiry) has not passed. Voided and failed orders do not count. With
    * `excludeOrderId`, that order is left out, so an order's own reservation is not counted against itself.
    */
   activeLedger(intentMandateId: string, now: string, excludeOrderId?: string): Promise<SpendLedger>;
@@ -887,7 +888,7 @@ async function activeLedgerOf(
     `select total_value, coalesce(captured_at, created_at) as at from orders
       where intent_mandate_id = $1 and ($3::text is null or id <> $3)
         and (captured_at is not null
-             or status = 'UNKNOWN_OUTCOME'
+             or status in ('UNKNOWN_OUTCOME', 'CAPTURE_PENDING')
              or (status in ('PENDING', 'CREATED', 'APPROVED', 'AUTHORIZED') and reserved_until > $2))
       order by at`,
     [intentMandateId, now, excludeOrderId ?? null],

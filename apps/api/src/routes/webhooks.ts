@@ -19,6 +19,8 @@ interface PayPalEvent {
     id?: unknown;
     /** Our order id: we send it as invoice_id. */
     invoice_id?: unknown;
+    /** When PayPal made the capture. */
+    create_time?: unknown;
     supplementary_data?: { related_ids?: { order_id?: unknown } };
   };
 }
@@ -92,7 +94,7 @@ export const webhookRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
           requestBody: { eventId: event.id, eventType: event.event_type, transmissionId: h.transmissionId },
         });
       }
-      await settleUnknownOutcome(deps.db, event);
+      await settleCapture(deps.db, event);
       req.log.info(
         { eventId: event.id, eventType: event.event_type, duplicate: !stored },
         "webhook accepted",
@@ -102,27 +104,47 @@ export const webhookRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) => {
   );
 };
 
+/** Orders whose charge PayPal has not confirmed to us: a lost answer (#159) or a capture still PENDING (#225). */
+const UNSETTLED = new Set(["UNKNOWN_OUTCOME", "CAPTURE_PENDING"]);
+const DENIED = new Set(["PAYMENT.CAPTURE.DENIED", "PAYMENT.CAPTURE.DECLINED"]);
+
 /**
- * A verified PAYMENT.CAPTURE.COMPLETED for an order whose create-order answer was lost (UNKNOWN_OUTCOME) settles it:
- * the charge happened (#159). `invoice_id` is our order id. Nothing else here changes an order.
+ * A verified capture event for an order whose charge we haven't confirmed settles it. `invoice_id` is our order id.
+ *   - PAYMENT.CAPTURE.COMPLETED: the money moved. A lost create-order answer (UNKNOWN_OUTCOME, #159) or a PENDING capture
+ *     (#225) becomes captured, dated when PayPal made the capture (not when the event arrived, which for a pending capture
+ *     can be days later), because a dispute replays the rules at that time.
+ *   - PAYMENT.CAPTURE.DENIED / DECLINED: nothing was taken; the order is CAPTURE_DECLINED and stops counting against the intent.
+ * A CAPTURE_PENDING order is settled only by an event for its own capture id. Nothing else here changes an order.
  */
-async function settleUnknownOutcome(db: Db, event: PayPalEvent): Promise<void> {
-  if (event.event_type !== "PAYMENT.CAPTURE.COMPLETED") return;
-  const { id, invoice_id: invoiceId, supplementary_data: extra } = event.resource ?? {};
+async function settleCapture(db: Db, event: PayPalEvent): Promise<void> {
+  const type = event.event_type;
+  const completed = type === "PAYMENT.CAPTURE.COMPLETED";
+  if (!completed && !(typeof type === "string" && DENIED.has(type))) return;
+  const {
+    id,
+    invoice_id: invoiceId,
+    create_time: createTime,
+    supplementary_data: extra,
+  } = event.resource ?? {};
   if (typeof id !== "string" || typeof invoiceId !== "string") return;
   const order = await db.getOrder(invoiceId);
-  if (order?.status !== "UNKNOWN_OUTCOME") return;
+  if (!order || !UNSETTLED.has(order.status)) return;
+  if (order.status === "CAPTURE_PENDING" && order.captureId && order.captureId !== id) return;
   const paypalOrderId = extra?.related_ids?.order_id;
+  const madeAt =
+    typeof createTime === "string" && !Number.isNaN(Date.parse(createTime))
+      ? new Date(createTime).toISOString()
+      : new Date().toISOString();
   await db.updateOrder(order.id, {
-    status: "COMPLETED",
+    status: !completed ? "CAPTURE_DECLINED" : order.paypalIntent === "AUTHORIZE" ? "CAPTURED" : "COMPLETED",
     captureId: id,
-    capturedAt: new Date().toISOString(),
+    ...(completed ? { capturedAt: madeAt } : {}),
     ...(typeof paypalOrderId === "string" ? { paypalOrderId } : {}),
   });
   await db.appendAudit({
     actor: "paypal",
-    action: "order.outcome_confirmed",
+    action: completed ? "order.outcome_confirmed" : "order.capture_declined",
     subjectId: order.id,
-    requestBody: { captureId: id, via: event.event_type },
+    requestBody: { captureId: id, via: type, was: order.status },
   });
 }

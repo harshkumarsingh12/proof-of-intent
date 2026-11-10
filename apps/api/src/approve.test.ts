@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import type { SemanticFit } from "@poi/ai";
 import { compliantCart, greyJacketIntent, MERCHANT_ID, NOW } from "@poi/contracts/fixtures";
 import { generateSigningKeyPair, mandateHash, signMandate } from "@poi/mandates";
-import { createMockClient, PayPalError, type PayPalClient } from "@poi/paypal";
+import { createMockClient, createPayPalClient, PayPalError, type PayPalClient } from "@poi/paypal";
 import { buildApp } from "./app";
 import { memoryDb, party, signedCheckout, type Party } from "./test-helpers";
 
@@ -367,5 +369,140 @@ describe("POST /checkout/:id/approve", () => {
     const order = (await s.mem.db.getOrder(s.created.order_id))!;
     s.mem.orders.set(order.id, { ...order, humanPresent: false, paypalIntent: "CAPTURE" });
     expect((await s.approve(await s.approval())).json().error).toBe("not_a_human_present_order");
+  });
+});
+
+/**
+ * The real sandbox adapter over a fake PayPal (#225's reproduction): recorded create-order and authorize answers, a capture
+ * answer the test chooses, and a webhook check that passes. Counts the capture calls.
+ */
+function sandboxPayPal(capture: { id: string; status: string }) {
+  const recorded = (name: string) =>
+    JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../../packages/paypal/fixtures/sandbox", `${name}.json`),
+        "utf8",
+      ),
+    ) as { status: number; body: unknown };
+  let captures = 0;
+  const fetchFn: typeof fetch = async (url) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/v1/oauth2/token") return Response.json({ access_token: "t", expires_in: 32400 });
+    if (path.endsWith("/capture")) {
+      captures++;
+      return Response.json(capture, { status: 201 });
+    }
+    if (path.endsWith("/authorize")) {
+      const r = recorded("create-order-authorized");
+      return Response.json(r.body, { status: r.status });
+    }
+    if (path === "/v2/checkout/orders") {
+      const r = recorded("create-order-created");
+      return Response.json(r.body, { status: r.status });
+    }
+    if (path.endsWith("/verify-webhook-signature")) return Response.json({ verification_status: "SUCCESS" });
+    return new Response("not routed", { status: 599 });
+  };
+  const paypal = createPayPalClient("sandbox", {
+    clientId: "id",
+    clientSecret: "s",
+    webhookId: "WH",
+    fetch: fetchFn,
+  });
+  return { paypal, captures: () => captures };
+}
+
+const captureEvent = (eventType: string, resource: Record<string, unknown>) => ({
+  method: "POST" as const,
+  url: "/webhooks/paypal",
+  headers: {
+    "content-type": "application/json",
+    "paypal-transmission-id": `t-${randomUUID()}`,
+    "paypal-transmission-time": NOW,
+    "paypal-transmission-sig": "sig",
+    "paypal-cert-url": "https://api.sandbox.paypal.com/cert",
+    "paypal-auth-algo": "SHA256withRSA",
+  },
+  payload: JSON.stringify({ id: `WH-${randomUUID()}`, event_type: eventType, resource }),
+});
+
+describe("POST /checkout/:id/approve: only a COMPLETED capture is captured (#225)", () => {
+  test("a PENDING capture is CAPTURE_PENDING, not CAPTURED, and still holds the intent's authority", async () => {
+    const pp = sandboxPayPal({ id: "CAP-PENDING", status: "PENDING" });
+    const s = await orderedApp({ paypal: pp.paypal });
+    const res = await s.approve(await s.approval());
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: "CAPTURE_PENDING", capture_id: "CAP-PENDING" });
+    const order = await s.mem.db.getOrder(s.created.order_id);
+    expect(order).toMatchObject({ status: "CAPTURE_PENDING", captureId: "CAP-PENDING" });
+    expect(order?.capturedAt).toBeUndefined();
+    expect(s.mem.audit.map((a) => a.action)).toContain("paypal.capture.pending");
+    expect(s.mem.audit.map((a) => a.action)).not.toContain("paypal.capture");
+
+    // Not captured, so not in the record of purchases; but the money may still move, so it keeps its hold.
+    expect((await s.mem.db.mandateLedger(greyJacketIntent.mandate_id)).capturedTotal).toBe(0);
+    expect((await s.mem.db.activeLedger(greyJacketIntent.mandate_id, NOW)).capturedTotal).toBe(7400);
+
+    // A retry answers the same and doesn't capture again.
+    expect((await s.approve(await s.approval())).json()).toEqual({
+      status: "CAPTURE_PENDING",
+      capture_id: "CAP-PENDING",
+    });
+    expect(pp.captures()).toBe(1);
+  });
+
+  test("PayPal's PAYMENT.CAPTURE.COMPLETED for that capture settles it, dated when PayPal made the capture", async () => {
+    const pp = sandboxPayPal({ id: "CAP-PENDING", status: "PENDING" });
+    const s = await orderedApp({ paypal: pp.paypal });
+    await s.approve(await s.approval());
+    const id = s.created.order_id as string;
+
+    // An event for another capture changes nothing.
+    await s.app.inject(captureEvent("PAYMENT.CAPTURE.COMPLETED", { id: "CAP-OTHER", invoice_id: id }));
+    expect((await s.mem.db.getOrder(id))?.status).toBe("CAPTURE_PENDING");
+
+    const madeAt = "2026-11-01T12:00:30.000Z";
+    const res = await s.app.inject(
+      captureEvent("PAYMENT.CAPTURE.COMPLETED", { id: "CAP-PENDING", invoice_id: id, create_time: madeAt }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(await s.mem.db.getOrder(id)).toMatchObject({
+      status: "CAPTURED",
+      captureId: "CAP-PENDING",
+      capturedAt: madeAt,
+    });
+    expect((await s.mem.db.mandateLedger(greyJacketIntent.mandate_id)).capturedTotal).toBe(7400);
+    expect(s.mem.audit.map((a) => a.action)).toContain("order.outcome_confirmed");
+    expect((await s.approve(await s.approval())).json()).toEqual({
+      status: "CAPTURED",
+      capture_id: "CAP-PENDING",
+    });
+  });
+
+  test("PAYMENT.CAPTURE.DENIED for a pending capture releases it: nothing was taken", async () => {
+    const pp = sandboxPayPal({ id: "CAP-PENDING", status: "PENDING" });
+    const s = await orderedApp({ paypal: pp.paypal });
+    await s.approve(await s.approval());
+    const id = s.created.order_id as string;
+    await s.app.inject(captureEvent("PAYMENT.CAPTURE.DENIED", { id: "CAP-PENDING", invoice_id: id }));
+    const order = await s.mem.db.getOrder(id);
+    expect(order?.status).toBe("CAPTURE_DECLINED");
+    expect(order?.capturedAt).toBeUndefined();
+    expect((await s.mem.db.activeLedger(greyJacketIntent.mandate_id, NOW)).capturedTotal).toBe(0);
+    expect((await s.approve(await s.approval())).statusCode).toBe(402);
+  });
+
+  test("a DECLINED capture is 402 payment_declined, never captured, and frees the intent's authority", async () => {
+    const pp = sandboxPayPal({ id: "CAP-DECLINED", status: "DECLINED" });
+    const s = await orderedApp({ paypal: pp.paypal });
+    const res = await s.approve(await s.approval());
+    expect(res.statusCode).toBe(402);
+    expect(res.json()).toMatchObject({ error: "payment_declined" });
+    const order = await s.mem.db.getOrder(s.created.order_id);
+    expect(order).toMatchObject({ status: "CAPTURE_DECLINED", captureId: "CAP-DECLINED" });
+    expect(order?.capturedAt).toBeUndefined();
+    expect((await s.mem.db.activeLedger(greyJacketIntent.mandate_id, NOW)).capturedTotal).toBe(0);
+    expect((await s.approve(await s.approval())).statusCode).toBe(402); // a retry answers the same
+    expect(pp.captures()).toBe(1);
   });
 });

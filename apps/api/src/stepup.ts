@@ -40,7 +40,7 @@ export interface StepUpDeps {
 }
 
 type Failure = {
-  status: 403 | 404 | 409 | 410 | 502;
+  status: 402 | 403 | 404 | 409 | 410 | 502;
   body: { error: string; message: string; reasons?: ReasonCode[] };
 };
 export type StepUpViewResult = { status: 200; body: StepUpView } | Failure;
@@ -239,9 +239,9 @@ async function approveFound(
       await deps.db.finishStepUp(st.id, { status: "PENDING" });
       return { status: placed.status, body: placed.body };
     }
-    // PayPal refused. The order row is PAYPAL_FAILED and nothing was charged; the agent starts a new checkout.
+    // PayPal refused, or declined the wallet (#225). Nothing was charged; the agent starts a new checkout.
     await finish(deps.db, st.id, "FAILED");
-    return { status: 502, body: placed.body };
+    return { status: placed.status === 402 ? 402 : 502, body: placed.body };
   }
   const orderId = placed.body.order_id!;
   await deps.db.finishStepUp(st.id, { status: "APPROVED", orderId, approvedAt: now });
@@ -273,7 +273,8 @@ async function checkApproval(st: StoredStepUp, jws: string, now: string, db: Db)
 async function approved(db: Db, orderId: string): Promise<StepUpApproveResponse> {
   const order = await db.getOrder(orderId);
   return {
-    status: "CAPTURED",
+    // Approved by the shopper, but not paid until PayPal completes the capture (#225).
+    status: order?.status === "CAPTURE_PENDING" ? "CAPTURE_PENDING" : "CAPTURED",
     order_id: orderId,
     ...(order?.paypalOrderId ? { paypal_order_id: order.paypalOrderId } : {}),
     ...(order?.captureId ? { capture_id: order.captureId } : {}),

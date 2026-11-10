@@ -35,7 +35,7 @@ import {
   verifyMandate,
   type SigningKey,
 } from "@poi/mandates";
-import { PayPalError, type PayPalClient } from "@poi/paypal";
+import { PayPalError, captureOutcome, type PayPalClient } from "@poi/paypal";
 import { evaluate, type EvaluateInput } from "@poi/policy-engine";
 import { importJWK, type JWK } from "jose";
 
@@ -79,7 +79,8 @@ export const STEP_UP_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const stepUpTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export type CheckoutResult = { status: 200; body: CheckoutResponse } | { status: 409 | 502; body: ApiError };
+export type CheckoutResult =
+  { status: 200; body: CheckoutResponse } | { status: 402 | 409 | 502; body: ApiError };
 
 interface ApiError {
   error: string;
@@ -485,11 +486,17 @@ export async function placeOrder(
         : { error: "paypal_unavailable", message: "PayPal did not create the order; nothing was charged" },
     };
   }
+  // A vaulted CAPTURE makes its capture with the order, and the ORDER can be COMPLETED while that capture is PENDING or
+  // DECLINED. Only a COMPLETED capture is money received (#225): a pending one is CAPTURE_PENDING (still counted against
+  // the intent, settled by PayPal's webhook) and is never shown as paid; a declined one took nothing.
+  const capture = created.captureId ? captureOutcome(created.captureStatus) : undefined;
+  const status =
+    capture === "PENDING" ? "CAPTURE_PENDING" : capture === "DECLINED" ? "CAPTURE_DECLINED" : created.status;
   await deps.db.updateOrder(orderId, {
-    status: created.status,
+    status,
     paypalOrderId: created.id,
     captureId: created.captureId,
-    capturedAt: created.captureId ? now : undefined,
+    capturedAt: capture === "COMPLETED" ? now : undefined,
   });
   await deps.db.appendAudit({
     actor: "api",
@@ -498,10 +505,20 @@ export async function placeOrder(
     requestBody: {
       paypalOrderId: created.id,
       status: created.status,
+      ...(created.captureId ? { captureId: created.captureId, captureStatus: created.captureStatus } : {}),
       customId: pointer,
       intent: paypalIntent,
     },
   });
+  if (capture === "DECLINED") {
+    return {
+      status: 402,
+      body: {
+        error: "payment_declined",
+        message: "PayPal declined the payment from the saved wallet, so nothing was charged",
+      },
+    };
+  }
 
   return {
     status: 200,
@@ -512,6 +529,7 @@ export async function placeOrder(
       paypal_order_id: created.id,
       ...(created.approvalUrl ? { approval_url: created.approvalUrl } : {}),
       ...(created.captureId ? { capture_id: created.captureId } : {}),
+      ...(capture ? { capture_status: capture } : {}),
     },
   };
 }

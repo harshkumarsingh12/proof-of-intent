@@ -65,7 +65,8 @@ identifier and PayPal's `PayPal-Request-Id`:
   instead of charging again. The order then finishes as normal.
 - Any **other** cart under the same intent is refused with HTTP 409 `payment_outcome_unknown` until the unknown order
   is settled, so a possible double charge is never stacked on a second purchase.
-- A verified `PAYMENT.CAPTURE.COMPLETED` webhook whose `invoice_id` is that order also settles it.
+- A verified `PAYMENT.CAPTURE.COMPLETED` webhook whose `invoice_id` is that order also settles it, dated by the capture's
+  `create_time`; a `PAYMENT.CAPTURE.DENIED` one settles it as `CAPTURE_DECLINED` (nothing taken).
 - A step-up link whose charge ended unknown stays usable; opening it again confirms the same order.
   The order row (status `PENDING`) and its verdict are written before the PayPal call, so a crash never leaves a
   PayPal order we have no record of.
@@ -130,6 +131,25 @@ nothing there and cannot void anyone's order. In order:
    money isn't left held; with no hold, nothing was held and PayPal is not called.
 3. Authorize the PayPal order (PayPal refuses with `ORDER_NOT_APPROVED` → 409 `shopper_has_not_approved`), then
    capture → `{ status: "CAPTURED", capture_id }`.
+
+### Only a COMPLETED capture is paid (#225)
+
+PayPal can answer a capture with HTTP 201 and a capture whose status is `PENDING` (or `DECLINED` / `FAILED`). A vaulted
+agent-alone `CAPTURE` can also return an **order** that is `COMPLETED` while its **capture** is `PENDING`. Only the capture's
+status says whether money moved (`captureOutcome`, `packages/paypal`):
+
+| Capture status | Order status | Answer | Counts against the intent |
+| --- | --- | --- | --- |
+| `COMPLETED` | `CAPTURED` (shopper present) / `COMPLETED` (agent alone), with `captured_at` | `CAPTURED`, `capture_status: "COMPLETED"` | yes, captured |
+| `PENDING`, or any status we don't know, or none | `CAPTURE_PENDING`, no `captured_at` | `CAPTURE_PENDING` (approval and step-up), `capture_status: "PENDING"` (checkout) | yes: the money may still move |
+| `DECLINED`, `FAILED` | `CAPTURE_DECLINED`, no `captured_at` | 402 `payment_declined`, nothing charged | no |
+
+A retry of an approval answers the same and never captures again. A verified `PAYMENT.CAPTURE.COMPLETED` for that capture id
+(`invoice_id` = our order) settles a `CAPTURE_PENDING` order as captured, dated by the capture's `create_time`, because a
+dispute replays the rules at capture time and a pending capture can clear days later. `PAYMENT.CAPTURE.DENIED` (or
+`DECLINED`) makes it `CAPTURE_DECLINED`. The shop never says "Paid" for a pending capture: it says the payment is pending and
+that the shopper may still be charged. Not handled: a completion event that arrives before the API has recorded the pending
+capture (the two are milliseconds apart, while PayPal's pending captures clear in hours or days) is not applied.
 
 _Changed from the first design, which authorized first and voided on a failed check ("so a failed check releases the
 hold"). That let anyone who knew an order id void an approved order with a bad signature. Checking first means there
