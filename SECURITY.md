@@ -93,16 +93,14 @@ from the repository or from outside, and stay unticked until someone looks at th
 - [x] Logs contain no secrets, full addresses or mandate payloads above debug level. Found and fixed: a step-up link's token
   was written to the access log and to an explicit log line. Fixed and tested in #186 (`apps/api/src/logging.test.ts`). No
   address is ever stored (only a hash), and request bodies, headers and mandate payloads are not logged.
-- [x] Proxy logs outside this app (Dokploy, Cloudflare) can still record URL paths, tracked in #202. Checked on the server
-  November 10: Traefik logged the full `/stepup/<token>` path, so `RequestPath` and `RequestLine` are now dropped in its
-  `traefik.yml`, and after a restart the path no longer appears. Still open: Cloudflare (Free plan) records the full path
-  in Traffic analytics with no setting to redact it. Not ticked as an accepted risk: a token seen there can't approve or
-  charge anything (approval needs a signature from the intent's key, once, within 24 h; `apps/api/src/stepup.ts`), but it
-  keeps opening the cart's details (lines, total, agent, shopper key id) after approval and expiry. Closed by #257: the
-  token is now after `#` in the link (never sent to a server) and in request bodies, never in a path, and the old path
-  routes answer 410 without looking the token up (`apps/api/src/stepup.test.ts`, `apps/api/src/logging.test.ts`; checked in
-  Chrome against a local stack: no requested URL and no request log line carried the token). Tokens issued before the
-  deploy are already in Cloudflare's analytics; they can't approve or charge, and stop approving within 24 h.
+- [x] Proxy logs outside this app (Dokploy, Cloudflare) can't record a step-up token. Checked on the server November 10
+  (#202): Traefik logged the full `/stepup/<token>` path, so `RequestPath` and `RequestLine` are now dropped in its
+  `traefik.yml`, and after a restart the path no longer appears. Cloudflare (Free plan) still records full paths in its
+  analytics, but since #261 the token never appears in a path: the link carries it after `#` (never sent to a server),
+  the shop and the API take it only in request bodies, and the old path routes answer 410 without looking it up
+  (`apps/api/src/stepup.test.ts`, `apps/api/src/logging.test.ts`). Tokens recorded before #261 can't approve or charge
+  (that needs the shopper's signature), and since #265 they can't view a closed step-up either: an approved or expired
+  step-up answers 410 with no cart or order details, and the approved order's ids need the shopper's signature.
 - [x] gitleaks clean on the full history. gitleaks (default rules) scanned 176 commits: no leaks. Separately, every secret
   value in the developer's local `.env` (the same variables the server uses: the signing keys, the AI keys, the PayPal client
   secret, the operator token and the AG Studio license) was searched for in all 180 revisions: none found. The server's own
