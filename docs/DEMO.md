@@ -5,20 +5,25 @@ any change to the demo path.
 
 ## Video (target 2:30, hard limit 3:00)
 
-Recorded in `AI_MODE=replay` against the PayPal sandbox so every take is identical. 1080p, 30 fps; buyer and
-merchant browsers side by side; dashboard in its light theme; voiceover recorded separately; captions on key
-phrases so it works muted; no music; agent platforms named in speech only, **no third-party logos**.
+Recorded against the PayPal sandbox, with the read-only seeded scenes and the Studio answer in `AI_MODE=replay` so those
+takes are identical. 1080p, 30 fps; the dashboard in its light theme; voiceover recorded separately; captions on key
+phrases so it works muted; no music; agent platforms named in speech only, **no third-party logos**. The rough cut of
+November 10 follows this table exactly (2:44.5, captions burned in, no voiceover yet).
 
-| Time      | Shot                                                                                                     | Line                                                                                                                                                                           |
-| --------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0:00–0:10 | Title: one merchant decision                                                                             | "Before taking an agent's payment, can the merchant prove it is what the shopper authorized?"                                                                                  |
-| 0:10–0:30 | Shopper signs grey running jacket, USD 80 maximum; show mandate hash                                     | "The shopper signs the item and limits. The agent can propose a cart; the merchant decides whether it may be paid."                                                            |
-| 0:30–0:48 | Red USD 95 proposal; failed amount and color checks; no PayPal order                                     | "This proposal breaks both limits. We stop it before a PayPal order or charge exists."                                                                                         |
-| 0:48–1:10 | Grey USD 74 proposal; sandbox approval; Paid and capture ID                                              | "This cart fits. The shopper approves on PayPal, and only then does payment complete."                                                                                         |
-| 1:10–1:50 | Same paid order and linked fresh sandbox dispute; preview PDF; operator evidence action if allowed       | "If that purchase is disputed, the operator can inspect the signed intent, cart, capture and policy finding. The AI explains the record; the operator decides what to submit." |
-| 1:50–2:08 | Cut labelled **Historical seeded case · read-only**; local `PP-D-1002`; failed checks, no action clicked | "This separate fictional historical case shows a real overreach finding. It recommends accepting the claim. It is not the rejected cart becoming a paid order."                |
-| 2:08–2:23 | Analytics labelled **Synthetic demo dataset**; optional one read-only Studio explanation                 | "The demo dataset lets the merchant inspect recurring failures. These figures describe synthetic cases, not a measured reduction in real disputes."                            |
-| 2:23–2:35 | Integration note; public repository end card                                                             | "Our buyer and merchant exchange signed mandates. PayPal carries a reference to that record on the order. The merchant's decision stays auditable."                            |
+| Time      | Shot                                                                                                         | Line |
+| --------- | ------------------------------------------------------------------------------------------------------------ | ---- |
+| 0:00–0:12 | Title cards: "When an agent buys the wrong thing, the merchant pays."                                       | "AI agents are starting to shop for people. When an agent buys the wrong thing, the shopper disputes it, and the merchant pays. Merchants have no record of what the agent was actually allowed to do." |
+| 0:12–0:18 | Title card: Proof of Intent, built on PayPal                                                                 | "Proof of Intent gives them that record, on PayPal, before any money moves." |
+| 0:18–0:33 | Hosted shop: shopper signs grey running jacket, USD 80 maximum; mandate id and hash shown                    | "The shopper says what they want: a grey running jacket, under eighty dollars. Their browser signs it with a key that never leaves the device." |
+| 0:33–0:47 | Red USD 95 proposal; `AMOUNT_EXCEEDS_MAX`, `ATTRIBUTE_MISMATCH`; "No PayPal order was created. Nothing was charged." | "The agent proposes a red jacket for ninety-five dollars. It breaks both limits, so the merchant refuses it before a PayPal order even exists." |
+| 0:47–1:08 | Grey USD 74 proposal; PayPal Sandbox approval popup; **Paid** with the capture ID                            | "The grey jacket for seventy-four fits. The shopper approves it in PayPal, and only then is it captured. A pointer to the signed intent rides on the PayPal order." |
+| 1:08–1:25 | Wallet saved at PayPal; **Let the agent pay alone** signed; **Paid by your agent** (waits shown at 2x)        | "With the shopper's signed permission and a saved wallet, the agent can pay alone, but only for carts that pass the same checks." |
+| 1:25–1:31 | Card: **Sandbox event delay omitted**                                                                        | (pause) |
+| 1:31–1:56 | Hosted dispute for that same order (`PP-R-HKU-10197912`): signed intent, mandate diff, **Preview evidence PDF**, **Download proof package (JSON)** | "Later, the shopper disputes that order. The copilot matches it to the signed record and drafts evidence from it." |
+| 1:56–2:05 | `pnpm proof:verify` on that package: every check PASS (labels from the real run)                             | "Anyone can verify the proof package offline. No trust in us required." |
+| 2:05–2:20 | Cut labelled **Historical seeded case · read-only**; local `PP-D-1002`; failed checks, **Accept the claim** recommended, no action clicked | "When an agent really did overreach, the same record says so, and the copilot recommends the fair answer: refund the shopper. A person approves every dispute action." |
+| 2:20–2:34 | Dispute Studio on the seeded set, captioned **Synthetic demo dataset · AI replay**: a grid row drives the diff and preview; one **Ask the AI** answer | "Dispute Studio, built on AG Grid and AG Studio, shows which agent platforms overreach and what is due. The AI explains; it cannot act." |
+| 2:34–2:44 | End card: the PayPal surfaces used and the public repository                                                 | "Orders, Vault, Webhooks, Disputes and the Agent Toolkit. Prevention before capture, and a fair answer after." |
 
 The core story is one signed intent → invalid proposal blocked → valid payment completed → evidence inspected.
 The historical case is a clearly labelled comparison. Keep the hosted refund test in the separate judge path;
@@ -32,7 +37,8 @@ be checked. Prepare a fresh dispute for the filmed paid order before recording t
 **Sandbox event delay omitted** across any time cut. An older prepared case must instead be labelled
 **Separate prepared sandbox case**. Never present a historical or prepared case as a live continuation.
 
-Dry runs Nov 9 and Nov 10 with a timer. Final cut Nov 11 morning IST. Upload unlisted, test the link, then public.
+Rough cut Nov 10 (2:44.5). Record the voiceover against these times, then the final cut Nov 11 IST. Upload unlisted,
+test the link, then public.
 
 ## Judge click path
 
@@ -53,7 +59,9 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
    [Operations → Disputes](https://poi-dashboard.iotkiit.in/disputes), locate that fresh case and click
    **Preview evidence PDF**. An operator testing the action
    on that fresh case can click **Escalate to a claim** at inquiry, wait for PayPal to open the
-   claim, then click **Submit evidence to PayPal** when PayPal allows it.
+   claim, then click **Submit evidence to PayPal** when PayPal allows it. On the same page, **Download proof package
+   (JSON)** gives the record to check offline with `pnpm proof:verify <file>`
+   ([how](JUDGE_TESTING.md#hosted-checkout-and-dispute-tests)).
 5. **Hosted sandbox refund.** Buy as judge-2 and file a second fresh dispute using the same instructions.
    When PayPal allows
    the action, the operator selects **Override: accept the claim instead**, adds a note, and verifies the
@@ -68,7 +76,8 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
    and in the browser smoke test, and on the hosted sandbox shop for the wallet and the agent-alone payment; the held-cart approval and the wallet removal are mock-stack only so far.)
 9. Open **Dispute Studio** from the sidebar (or the banner on Analytics). Click a row in the disputes grid and watch the
    mandate diff and the evidence PDF follow; click a slice of the donut to filter everything; switch to **Ask the AI**
-   and try the starter prompts. The hosted data has no agent overreach, so the overreach rate reads 0% there.
+   and try the starter prompts. Picking a dispute does not change the KPI tiles, the donut or the platform cards; they
+   follow filters. The hosted data has no agent overreach, so the overreach rate reads 0% there.
 10. **The limits form (optional).** In the shop, the **Quick start** buttons load a whole example (price, item, color and
     words). **Category** and **Color** can be left on **Anything** / **Any color**, but the price cap is always set. Type a
     request such as "a grey running jacket" and press **Enter** (or click **Fill in the limits from my words**): the agent
@@ -93,12 +102,13 @@ overreach case for inspection. [Local setup](SETUP.md#1-zero-credentials-judges-
 
 - Verify the complete hosted checkout and two designated sandbox disputes (one to defend, one for the override
   refund) with the supplied test accounts.
-- Record the 1:50 historical overreach shot on the local seeded stack (`pnpm demo:seed`); the hosted sandbox has no
+- Record the 2:05 historical overreach shot on the local seeded stack (`pnpm demo:seed`); the hosted sandbox has no
   overreaching capture to dispute.
 - Copy the [judge testing steps](JUDGE_TESTING.md) into Devpost and add verified access and fresh dispute IDs
   in its testing field. Confirm both judge shopper accounts can sign in, buy and report a problem.
-- The dated full eval report and its measured numbers are in the README ([report](evals/2026-11-07.md), #43).
-- Use the analytics view at 2:08. Studio is built, checked locally with the real key and live on the hosted dashboard (#123, closed);
+- The dated eval reports and their measured numbers are in the README ([Nov 10 report](evals/2026-11-09T23-45-49-348Z-primary.md)).
+  Don't name a model in the video.
+- Use the Studio shot at 2:20. Studio is built, checked locally with the real key and live on the hosted dashboard (#123, closed);
   time the Studio shot (a grid row click, a donut click, one Ask the AI prompt: a live answer takes about 15 to 25
   seconds) against the same slot, or record it separately. Common questions (a named dispute, counts, what needs
   attention, a buyer reply) are answered by a local planner, so those takes are repeatable and about a second each; only
