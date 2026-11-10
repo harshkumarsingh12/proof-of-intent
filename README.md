@@ -20,7 +20,8 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 ## How it works
 
 1. **The shopper signs what they want.** "Grey running jacket under $80" becomes an Intent Mandate signed
-   with a key that never leaves their browser.
+   with a key that never leaves their browser. The shop then shows what that signature allows, what is left of it, and
+   a control to revoke it; after a revocation the merchant refuses anything new under it.
 2. **The merchant checks the cart before any PayPal order exists.** Deterministic rules (amount, currency,
    merchant, attributes, quantity, address, expiry, replay) decide first; an LLM check of the shopper's own
    words can only make the verdict stricter, never looser.
@@ -35,7 +36,7 @@ Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (sub
 |---|---|
 | Orders v2 | The shop authorizes then captures or voids an order after the shopper approves the exact cart |
 | Vault v3 | The shopper saves a PayPal wallet (signed proof, setup token, payment token); the agent can then pay alone from it, only for carts that pass the checks |
-| Webhooks | Signed dispute and capture events, verified, persisted, idempotent |
+| Webhooks | Signed dispute and capture events, verified, persisted, idempotent; an order counts as paid only once PayPal completes the capture |
 | Disputes API | Provide evidence, send message, escalate (operator clicks); sandbox test harness |
 | Agent Toolkit | `get_dispute` and `list_disputes` feed the dispute copilot (fresh dispute, missed-webhook catch-up); `accept_dispute_claim` and `create_shipment_tracking` run on an audited operator click |
 
@@ -63,6 +64,7 @@ has a buyer agent that chooses the cart itself and a merchant check that refuses
 git clone https://github.com/harshkumarsingh12/proof-of-intent.git
 cd proof-of-intent
 cp .env.example .env
+openssl rand -hex 32     # run it twice; paste one value after OPERATOR_TOKEN= and the other after OPERATOR_PASSWORD= in .env
 docker compose up --build
 # shop:       http://localhost:3001
 # operations: http://localhost:3002
@@ -85,6 +87,7 @@ packages/proof    exportable proof package for an order, and the offline verifie
 packages/paypal   typed PayPal client (Agent Toolkit for disputes) + mock
 packages/ai       LLM jobs, schemas, replay mode, evals
 packages/db       schema, migrations, audit log
+packages/ledger   ledger(): acceptance criteria written as tests, and the CI burndown
 docs/             project document, specs, architecture, roadmap, demo
 ```
 
