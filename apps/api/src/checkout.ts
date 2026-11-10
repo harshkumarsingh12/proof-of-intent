@@ -305,11 +305,19 @@ export async function ledgerFor(
 }
 
 /**
- * The two rules that depend on what else the intent has spent. They are what a reservation re-checks inside its lock,
- * and what approval re-checks before capture; every other rule already passed for this cart.
+ * The rules that depend on what else the intent has spent or set aside: a signed budget, a signed order count, and the
+ * default intent's one purchase (#156). They are what a reservation re-checks inside its lock, and what approval
+ * re-checks before capture; every other rule already passed for this cart. Leaving INTENT_ALREADY_USED out let two
+ * checkouts under a default intent that arrived together both pass the earlier check and both be charged.
  */
+const AGGREGATE_REASONS: readonly ReasonCode[] = [
+  "BUDGET_EXCEEDED",
+  "RECURRENCE_EXCEEDED",
+  "INTENT_ALREADY_USED",
+];
+
 export function aggregateReasons(input: EvaluateInput): ReasonCode[] {
-  return evaluate(input).reasons.filter((r) => r === "BUDGET_EXCEEDED" || r === "RECURRENCE_EXCEEDED");
+  return evaluate(input).reasons.filter((r) => AGGREGATE_REASONS.includes(r));
 }
 
 export interface OrderToPlace {
@@ -545,7 +553,8 @@ async function createStepUp(
       expiresAt: st.expiresAt,
     },
   });
-  const url = `${deps.stepUp.linkBase.replace(/\/+$/, "")}/approve/${token}`;
+  // After `#`: a browser never sends the fragment to a server, so no proxy, CDN or access log sees the token (#257).
+  const url = `${deps.stepUp.linkBase.replace(/\/+$/, "")}/approve#${token}`;
   await deps.stepUp.send({ stepUpId: id, shopperId, url, expiresAt: st.expiresAt });
 }
 

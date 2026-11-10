@@ -1,5 +1,6 @@
 /** POST /checkout (docs/specs/0003). A REJECT is a successful request: HTTP 200 with the reason codes. */
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import { z } from "zod";
 import { ApproveRequest, CheckoutRequest, StepUpListRequest } from "@poi/contracts";
 import type { AppDeps } from "../app";
 import { approveOrder } from "../approve";
@@ -49,24 +50,31 @@ export const checkoutRoutes: FastifyPluginAsync<Options> = async (app, deps) => 
   );
 
   // Step-up links (#35): the shopper opens the emailed link, sees the cart, and approves with their own key.
-  app.get<{ Params: { token: string } }>(
-    "/stepup/:token",
-    { config: { rateLimit: RATE_LIMITS.checkout } },
+  // The token travels in the request body, never in a path (#257): the link carries it after `#`, which a browser never
+  // sends to a server, and the approval page posts it here, so no proxy or CDN in front of the shop or this API sees it.
+  app.post(
+    "/stepup/view",
+    { bodyLimit: 4 * 1024, config: { rateLimit: RATE_LIMITS.checkout } },
     async (req, reply) => {
+      const parsed = StepUpViewBody.safeParse(req.body);
+      if (!parsed.success)
+        return reply.code(400).send({ error: "invalid_request", message: "Expected { token }" });
       if (!deps.db)
         return reply.code(503).send({ error: "not_configured", message: "DATABASE_URL is not set" });
-      const result = await viewStepUp(req.params.token, { db: deps.db, now: deps.now });
+      const result = await viewStepUp(parsed.data.token, { db: deps.db, now: deps.now });
       return reply.code(result.status).header("cache-control", "no-store").send(result.body);
     },
   );
 
-  app.post<{ Params: { token: string } }>(
-    "/stepup/:token/approve",
+  app.post(
+    "/stepup/approve",
     { bodyLimit: 16 * 1024, config: { rateLimit: RATE_LIMITS.checkout } },
     async (req, reply) => {
-      const parsed = ApproveRequest.safeParse(req.body);
+      const parsed = StepUpApproveBody.safeParse(req.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "invalid_request", message: "Expected { approval_jws }" });
+        return reply
+          .code(400)
+          .send({ error: "invalid_request", message: "Expected { token, approval_jws }" });
       }
       if (!deps.db || !deps.merchant) {
         return reply.code(503).send({
@@ -74,14 +82,26 @@ export const checkoutRoutes: FastifyPluginAsync<Options> = async (app, deps) => 
           message: !deps.db ? "DATABASE_URL is not set" : "No merchant signing key",
         });
       }
-      const result = await approveStepUp(req.params.token, parsed.data.approval_jws, {
+      const result = await approveStepUp(parsed.data.token, parsed.data.approval_jws, {
         ...deps,
         db: deps.db,
         merchant: deps.merchant,
       });
-      return reply.code(result.status).send(result.body);
+      return reply.code(result.status).header("cache-control", "no-store").send(result.body);
     },
   );
+
+  // The old routes took the token in the path. They answer 410 without looking the token up, so a link sent before
+  // #257 reveals nothing and approves nothing; the shopper finds the cart in the shop's own list instead. Remove later.
+  app.get("/stepup/:token", { config: { rateLimit: RATE_LIMITS.checkout } }, async (_req, reply) =>
+    moved(reply),
+  );
+  app.post(
+    "/stepup/:token/approve",
+    { bodyLimit: 16 * 1024, config: { rateLimit: RATE_LIMITS.checkout } },
+    async (_req, reply) => moved(reply),
+  );
+
   // The shop's own list of carts waiting for the shopper: a fresh signature from their key, no link needed.
   app.post(
     "/stepups/pending",
@@ -120,3 +140,17 @@ export const checkoutRoutes: FastifyPluginAsync<Options> = async (app, deps) => 
     },
   );
 };
+
+const StepUpViewBody = z.object({ token: z.string().min(1).max(256) });
+const StepUpApproveBody = ApproveRequest.extend({ token: z.string().min(1).max(256) });
+
+const moved = (reply: FastifyReply) =>
+  reply
+    .code(410)
+    .header("cache-control", "no-store")
+    .send({
+      error: "stepup_link_moved",
+      message:
+        "This approval link uses an old format and no longer works. Nothing was charged. " +
+        "Open the shop in the browser you signed with to see the carts waiting for you",
+    });

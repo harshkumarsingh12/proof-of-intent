@@ -73,14 +73,15 @@ identifier and PayPal's `PayPal-Request-Id`:
 
 ### Reservation (#155)
 
-A signed `budget_cap` or `recurrence` is an aggregate limit, so it has to hold for orders that are **pending at the same
-time**, not only for captured ones. Spending authority is reserved when the order is created, before PayPal is contacted:
+A signed `budget_cap` or `recurrence` is an aggregate limit, and so is the default intent's one purchase (#156): each has to
+hold for orders that are **pending at the same time**, not only for captured ones. Spending authority is reserved when the order is created, before PayPal is contacted:
 
 - `Db.reserveOrder` creates the order and checks the aggregate rules in one step, under a per-intent lock
   (`pg_advisory_xact_lock` on the intent id). The check sees the ledger as it is inside that step, so two carts created
   together cannot both fit under a cap that only one fits. A refusal creates no order and no PayPal call: a `REJECT`
-  verdict with `BUDGET_EXCEEDED` / `RECURRENCE_EXCEEDED`. The earlier check in step 5 only turns away the obvious case
-  sooner.
+  verdict with `BUDGET_EXCEEDED` / `RECURRENCE_EXCEEDED` / `INTENT_ALREADY_USED`. The earlier check in step 5 only turns away
+  the obvious case sooner. (`INTENT_ALREADY_USED` was first checked only there, so two checkouts under a default intent that
+  arrived together could both be created and, with nobody present, both charged; it is now re-checked in the lock too.)
 - A reservation is the order itself (`orders.reserved_until` = the cart's expiry). `Db.activeLedger` counts, for an intent:
   captured orders (committed, they never stop counting), `UNKNOWN_OUTCOME` orders (they may have charged), and
   `PENDING` / `CREATED` / `APPROVED` / `AUTHORIZED` orders until `reserved_until`. A `VOIDED` or `PAYPAL_FAILED` order is
@@ -159,8 +160,17 @@ idempotent capture request.
 ### Step-up links (agent alone), as built (#35)
 
 `apps/api/src/stepup.ts`. When checkout steps up a cart with nobody present, it records the verdict, stores the
-cart in `stepups` and sends the shopper a link to the buyer app's `/approve/<token>` page. Nothing goes to PayPal
+cart in `stepups` and sends the shopper a link to the buyer app's `/approve#<token>` page. Nothing goes to PayPal
 and the agent's response carries no link.
+
+- **The token never travels in a URL path (#257).** It sits after `#` in the link, which a browser never sends to a
+  server, so no proxy, CDN or access log in front of the shop or the API sees it (Cloudflare's Free plan records full
+  paths in its analytics with no way to redact them). The approval page reads it from `location.hash` and posts it in a
+  request body: the shop's `POST /api/stepup/view` and `POST /api/stepup/approve`, which pass only `token` (and
+  `approval_jws`) on to the API's `POST /stepup/view` and `POST /stepup/approve`. The old path routes
+  (`GET /stepup/:token`, `POST /stepup/:token/approve`) answer 410 `stepup_link_moved` without looking the token up, and the
+  shop's old `/approve/<token>` page says the link is out of date and points to the shop's own list (below). Both are to
+  be removed once no link of the old form can still be unexpired.
 
 - **The token only locates the step-up.** It is 32 random bytes, and only its SHA-256 is stored. Approving takes a
   `CartApproval` signed with **the key that signed the Intent Mandate**, naming the step-up id as `order_id` and
@@ -179,8 +189,8 @@ and the agent's response carries no link.
   because PayPal may have charged before the error reached us. The agent starts a new checkout.
 - **Delivery:** no email provider is wired, and the link carries a secret token, so by default the API logs only the
   step-up's id, shopper and expiry, not the link. `LOG_STEPUP_LINKS=1` logs the full link (`step-up approval link`) for
-  local development. The request log also redacts the token in `/stepup/<token>` paths (`apps/api/src/logging.ts`), which
-  used to put it in the access log on every view and approval. `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin (it must be the
+  local development. The request log still redacts a token in an old `/stepup/<token>` path (`apps/api/src/logging.ts`),
+  which used to put it in the access log on every view and approval; request bodies are never logged. `AppDeps.stepUp.send` is where an email sender plugs in. `BUYER_PUBLIC_URL` sets the link's origin (it must be the
   shop's public address on a hosted deploy, SETUP.md §4).
 - **In the shop, no link needed:** the shop lists the carts waiting for the shopper with `POST /stepups/pending`, a
   fresh `StepUpListProof` (`stepup.list`, 5 minutes) signed by the key that signed the intent, and approves one with
@@ -229,10 +239,11 @@ worker also runs a `list_disputes` catch-up (spec 0005 §As built). Nothing was 
 | ------ | ------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | POST   | `/checkout`                                                  | Harsh   | `{ intent_jws, payment_mandate_jws, cart }` → `{ verdict, order_id?, cart_mandate_jws?, paypal_order_id?, approval_url?, capture_id? }` (`capture_id` only for an agent-alone order, charged at creation)                      |
 | POST   | `/checkout/:id/approve`                                      | Harsh   | PayPal `onApprove` → authorize, stage 2, capture or void → `{ status }`                                                                                                                                                        |
-| GET    | `/stepup/:token`                                             | Sristee | the waiting cart for the approval page → `StepUpView`; `cache-control: no-store`                                                                                                                                               |
-| POST   | `/stepup/:token/approve`                                     | Sristee | `{ approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse`                                                                                                            |
+| POST   | `/stepup/view`                                               | Sristee | `{ token }` → the waiting cart for the approval page → `StepUpView`; `cache-control: no-store`. The token is never in a path (#257)                                                                                             |
+| POST   | `/stepup/approve`                                            | Sristee | `{ token, approval_jws }` (CartApproval, `order_id` = step-up id) → re-check, create and capture → `StepUpApproveResponse`                                                                                                     |
+| GET, POST | `/stepup/:token`, `/stepup/:token/approve`                | Sristee | the old path routes: 410 `stepup_link_moved`, the token is not looked up (#257); to be removed                                                                                                                               |
 | POST   | `/stepups/pending`                                           | Sristee | `{ proof_jws }` (`StepUpListProof`, purpose `stepup.list`) → `{ stepups: StepUpView[] }`: this shopper's own pending, unexpired carts; `cache-control: no-store`                                                               |
-| POST   | `/stepups/:id/approve`                                       | Sristee | `{ approval_jws }` (CartApproval, `order_id` = the step-up id) → as `/stepup/:token/approve`; found by id instead of link token                                                                                                |
+| POST   | `/stepups/:id/approve`                                       | Sristee | `{ approval_jws }` (CartApproval, `order_id` = the step-up id) → as `/stepup/approve`; found by id instead of link token                                                                                                |
 | GET    | `/orders/:id/proof`                                          | Harsh   | the order's proof package (spec 0001 §Proof package, #177): the three signed mandates, their public keys, the PayPal references, the policy version and an integrity manifest, as a JSON download; operator token; 404 `order_not_found`, 409 `proof_unavailable`, 503 `merchant_not_configured` |
 | GET    | `/orders`, `/verifications`                                  | Harsh   | paginated grids for the dashboard                                                                                                                                                                                              |
 | GET    | `/disputes`, `/disputes/:id/recommendation`                  | Sikruti | spec 0005                                                                                                                                                                                                                      |
