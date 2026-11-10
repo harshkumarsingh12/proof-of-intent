@@ -109,9 +109,14 @@ taken before the data existed restores cleanly and the report shows `600 newer i
 
 **On the hosted server (Nov 8):** the backup service runs on the named volume and wrote
 `poi-20261107T222438Z.sql.gz`; the administrator restored that dump by hand into a scratch database with `ON_ERROR_STOP=1`, no
-errors, `orders` 29 rows in both restore and live, scratch database dropped (only `orders` compared). Still not confirmed: a
-second scheduled dump 24 h later (that is what makes it a *schedule*), a run of `restore-drill.sh` itself on the server, and an
-off-server copy (skipped for the hackathon; see SETUP.md).
+errors, `orders` 29 rows in both restore and live, scratch database dropped (only `orders` compared).
+
+**The schedule is confirmed (Nov 10, #175).** The backup service's log in Dokploy shows three dumps exactly 24 hours apart:
+`backup ok /backups/poi-20261107T222438Z.sql.gz`, `…20261108T222438Z…` and `…20261109T222438Z…`. The same second each day means
+the container ran the 24-hour loop without a restart in between (a restart dumps at once, at a new time), so this is the schedule
+and not a redeploy. Still not confirmed: a run of `restore-drill.sh` itself on the server (the drill above compared only
+`orders`), that the dumps survive a redeploy that recreates the backup container (these three were all written by one
+container), and an off-server copy (skipped for the hackathon; see SETUP.md).
 
 ### Backups on Dokploy (#38)
 
