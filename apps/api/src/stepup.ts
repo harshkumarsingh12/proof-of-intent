@@ -64,8 +64,9 @@ async function find(db: Db, token: string): Promise<StoredStepUp | null> {
 }
 
 /**
- * What the shopper sees before approving. Once the step-up is approved or expired there is nothing left to decide, so the
- * cart is no longer shown: a token copied from an old link or a log reveals nothing about the purchase (#257, #261).
+ * What the shopper sees before approving. Once the step-up is over (approved, expired, refused or failed) there is nothing
+ * left to decide, so the cart is no longer shown: a token copied from an old link or a log reveals nothing about the
+ * purchase (#257, #261).
  */
 export async function viewStepUp(
   token: string,
@@ -77,6 +78,11 @@ export async function viewStepUp(
   if (st.status === "APPROVED") return closed("This purchase was already approved. There is nothing more to do here");
   if (st.status === "EXPIRED" || (st.status === "PENDING" && isExpired(st, now)))
     return closed("This approval link has expired. Nothing was charged");
+  // Refused at approval (the cart no longer fit, or the intent was revoked, #176): nothing was charged.
+  if (st.status === "REJECTED")
+    return closed("This cart no longer fits your signed intent, so it can't be bought. Nothing was charged");
+  // PayPal failed at approval; it may have charged before the error reached us, so this never says nothing was.
+  if (st.status === "FAILED") return closed("PayPal couldn't complete this purchase. Ask your agent to try again");
   return { status: 200, body: toView(st, now) };
 }
 

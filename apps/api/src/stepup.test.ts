@@ -271,7 +271,14 @@ describe("step-up approval links (#35)", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ error: "stepup_no_longer_valid", reasons: ["BUDGET_EXCEEDED"] });
     expect(s.createOrder).toHaveBeenCalledTimes(1); // the jacket only
-    expect((await s.view()).status).toBe("REJECTED");
+    // Refused, so it's over: the link no longer shows the cart.
+    const closedView = await s.viewResponse();
+    expect(closedView.statusCode).toBe(410);
+    expect(closedView.json()).toMatchObject({
+      error: "stepup_closed",
+      message: expect.stringMatching(/Nothing was charged/),
+    });
+    expect(JSON.stringify(closedView.json())).not.toContain(shellCart.contents.lines[0]!.sku);
   });
 
   test("without a saved wallet nothing is charged, and the link still works once there is one", async () => {
@@ -317,7 +324,10 @@ describe("step-up approval links (#35)", () => {
     const res = await s.approve(await s.sign(await s.view()));
     expect(res.statusCode).toBe(402);
     expect(res.json().error).toBe("payment_declined");
-    expect((await s.view()).status).toBe("FAILED");
+    const closedView = await s.viewResponse(); // failed, so it's over: no cart
+    expect(closedView.statusCode).toBe(410);
+    expect(closedView.json().error).toBe("stepup_closed");
+    expect(closedView.json().message).not.toMatch(/nothing was charged/i); // PayPal may have charged before failing
   });
 
   test("a token in the URL path is refused with 410: it is never looked up, and approves nothing (#257)", async () => {
