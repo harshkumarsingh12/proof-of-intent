@@ -34,6 +34,7 @@ import { stepUpApproval, stepUpListProof } from "../../src/stepup";
 import { initialVoice, voiceReducer } from "../../src/voice";
 import { removeProof, setupProof } from "../../src/wallet";
 import AuthorizationCard from "./AuthorizationCard";
+import IntentControls from "./IntentControls";
 import ChatPanel from "./ChatPanel";
 import { useSpeech } from "./useVoice";
 
@@ -187,6 +188,8 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   formRef.current = form;
   const [resetting, setResetting] = useState(false);
   const [signed, setSigned] = useState<Signed>();
+  // What the page says after the shopper revoked their intent (#176); cleared when they sign a new one.
+  const [revokedNote, setRevokedNote] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [busySku, setBusySku] = useState<string>();
   const [checkout, setCheckout] = useState<{ sku: string; res: CheckoutResponse; alone: boolean }>();
@@ -343,6 +346,7 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       const jws = await signCompact(intent, shopper.key.privateKey, shopper.kid);
       const next = { intent, jws, hash: await sha256Hex(jwsPayloadText(jws)) };
       setSigned(next);
+      setRevokedNote(undefined);
       setCheckout(undefined);
       setApproval(undefined);
       return next;
@@ -522,6 +526,20 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
       setApproving(false);
     }
   }, [shopper, checkout]);
+
+  /** The shopper revoked the signed intent (#176): the page drops it, and the merchant refuses anything new under it. */
+  const onRevoked = (revokedAt: string | null) => {
+    const id = signed?.intent.mandate_id ?? "";
+    setRevokedNote(
+      revokedAt
+        ? `You revoked intent ${id} at ${new Date(revokedAt).toLocaleString()}. The merchant will refuse anything new under it, including carts waiting for your approval; purchases already made stay as they are. Sign a new intent to shop again.`
+        : `Intent ${id} was never sent to the merchant, so dropping it here is all it takes: nothing can be bought under it. Sign a new intent to shop again.`,
+    );
+    setSigned(undefined);
+    setCheckout(undefined);
+    setApproval(undefined);
+    refreshWaiting().catch(() => {});
+  };
 
   const verdict = checkout?.res.verdict;
   const product = CATALOG.find((p) => p.line.sku === checkout?.sku);
@@ -720,6 +738,27 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             </p>
             <p className="meta">{describePermission(signed.intent)}</p>
             <AuthorizationCard intent={signed.intent} />
+            {shopper && (
+              <IntentControls
+                intent={signed.intent}
+                hash={signed.hash}
+                shopper={shopper}
+                refreshKey={[
+                  checkout?.res.order_id,
+                  checkout?.res.verdict.outcome,
+                  checkout?.res.capture_id,
+                  approval?.status,
+                  waitingPaid?.order_id,
+                ].join("|")}
+                onRevoked={onRevoked}
+              />
+            )}
+          </div>
+        )}
+        {!signed && revokedNote && (
+          <div className="verdict no">
+            <h3>Intent revoked</h3>
+            <p className="meta">{revokedNote}</p>
           </div>
         )}
       </section>

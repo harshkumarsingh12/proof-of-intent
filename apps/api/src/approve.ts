@@ -12,7 +12,7 @@
  *   3. the authority is still current (#161): the intent has started and hasn't expired and
  *        the cart hasn't expired, by the same rules checkout used, and the order's reservation
  *        still fits the intent's budget and recurrence (#155)                          → 200 VOIDED
- *        (MANDATE_NOT_YET_VALID / MANDATE_EXPIRED / CART_EXPIRED / BUDGET_EXCEEDED /
+ *        (MANDATE_REVOKED / MANDATE_NOT_YET_VALID / MANDATE_EXPIRED / CART_EXPIRED / BUDGET_EXCEEDED /
  *        RECURRENCE_EXCEEDED); any authorization we already
  *        hold is voided; with none, nothing was held and PayPal isn't called
  *   4. authorize (409 if the shopper hasn't approved at PayPal yet), then capture. Only a COMPLETED capture is CAPTURED
@@ -189,7 +189,9 @@ async function staleReasons(order: StoredOrder, deps: ApproveDeps): Promise<Reas
   const intent = IntentMandate.parse(JSON.parse(intentRow.canonical));
   const cart = CartMandate.parse(JSON.parse(cartRow.canonical));
   const now = deps.now();
-  const late = freshness({ intent, cart, now });
+  // Revoked by the shopper (spec 0013, #176): the hold is released and nothing is captured.
+  const revoked = intentRow.revokedAt !== undefined && intentRow.revokedAt <= now ? (["MANDATE_REVOKED"] as const) : [];
+  const late = [...revoked, ...freshness({ intent, cart, now })];
   if (late.length > 0) return late;
   // The reservation is still good only if the intent's other holds still leave room for this order (#155): the order's
   // own hold is left out, and what remains is what everything else under the intent has spent or set aside.

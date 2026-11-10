@@ -2,18 +2,19 @@
 
 |               |                                |
 | ------------- | ------------------------------ |
-| **Status**    | Proposed                       |
+| **Status**    | Done (as built below)          |
 | **Owner**     | @srshriv                       |
 | **Reviewers** | @harshkumarsingh12             |
-| **Milestone** | after submission (Nov 11)      |
+| **Milestone** | M4 (built Nov 10)              |
 | **Issues**    | #176                           |
 
 ## Context
 
-A shopper can see what they authorized (#176's card, #242) but can't stop it: a signed intent stays good until it expires.
-#176 asks for a revoke control. After it, the merchant must refuse anything new under that intent. That needs a new signed
-type, a reason code, an API route, stored state and a check on every path that spends an intent, so it starts here. Nothing in
-this spec is built. It extends spec 0001 (mandates and keys) and spec 0003 (checkout and verification).
+A shopper could see what they authorized (#176's card, #242) but couldn't stop it: a signed intent stayed good until it
+expired. #176 asks for a revoke control and a receipt of what authority remains. After a revocation the merchant must refuse
+anything new under that intent, which needs a new signed type, a reason code, an API route, stored state and a check on every
+path that spends an intent. Built Nov 10 (§As built). It extends spec 0001 (mandates and keys) and spec 0003 (checkout and
+verification).
 
 ## Design
 
@@ -79,29 +80,69 @@ Who would build what: the contracts and the buyer app's control, @srshriv; the r
 (`apps/api`); the migration and audit row, @harshkumarsingh12 (`packages/db`); `MANDATE_REVOKED` in the dashboard and the
 evidence PDF, @hoursgotviral-dev.
 
+## Receipt of remaining authority (#176)
+
+`POST /intents/:mandate_id/receipt { proof_jws }` → `IntentReceipt` (`packages/contracts`). The proof is an
+`IntentReceiptProof { purpose: "intent.receipt", intent_mandate_hash, issued_at }` signed by the key that signed the intent
+(in good standing, fresh, like the vault proofs). Another shopper's key, or an intent the merchant never saw, answers 404
+`intent_not_found`, so the route reveals nothing about intents that aren't the caller's. Rate-limited like `/checkout`.
+
+Every figure is the merchant's own, by the rules checkout enforces (`receiptFor`, `apps/api/src/intents.ts`):
+
+- `spent`: captured orders (`Db.mandateLedger`). `held`: what pending, unknown-outcome and pending-capture orders set aside
+  (`Db.activeLedger` minus `spent`).
+- `remaining.total`: what is left of a signed `budget_cap` against everything spent or held (`null`: no budget).
+  `remaining.purchases`: a signed `recurrence` counted over its window ending now; one by default until a purchase is
+  made or held (#156); `null` for a budget alone. `remaining.per_purchase`: `amount_max`, lowered by the budget left.
+- `state`: `REVOKED`, `EXPIRED`, `USED_UP`, `NOT_YET_VALID` or `ACTIVE`, in that order of precedence. Revoked, expired and used
+  up leave every remaining figure at zero. The shop says "in use" rather than "used up" when only a waiting order uses it.
+- `purchases`: each order under the intent with its status, total and capture time.
+
+## As built
+
+- **Contracts:** `IntentRevocation` and `IntentReceiptProof` (both in `ShopperProof`), `IntentRevokeRequest` /
+  `IntentRevokeResponse`, `IntentReceiptRequest` / `IntentReceipt`, and `ReasonCode` `MANDATE_REVOKED`.
+- **Database:** migration `0008_intent_revocation.sql` adds `mandates.revoked_at` (intent rows only, by a check constraint).
+  `Db.revokeIntent(hash, at)` sets it once under the same per-intent advisory lock `Db.reserveOrder` takes, and
+  `reserveOrder` refuses with `MANDATE_REVOKED` once it is set: a reservation and a revocation can't cross. `Db.ordersForIntent`
+  feeds the receipt. `listPendingStepUps` leaves out a revoked intent's carts.
+- **API** (`apps/api/src/intents.ts`, `routes/intents.ts`): the revoke route as designed above (rate-limited like `/vault/*`),
+  and the receipt route. Enforcement: checkout adds `MANDATE_REVOKED` to the hard-rule reasons; stage-two approval voids with it
+  (`staleReasons`); step-up approval refuses with 409 `stepup_no_longer_valid` and marks the step-up `REJECTED`. Found while
+  building this: a step-up whose reservation refused at the last moment (a budget spent, or now a revocation) was marked
+  `APPROVED` with no order. It is now `REJECTED` with the reservation's reasons.
+- **Shop** (`apps/buyer/app/shop/IntentControls.tsx`, `src/intent-controls.ts`): under the authorization card, **What's left**
+  reads the receipt after signing and after every checkout, approval and held-cart payment (only the latest answer is shown), and
+  **Revoke this intent** asks once ("You can't take this back"), signs the revocation and drops the intent from the page. An
+  intent the merchant never received is simply dropped, since nobody else holds it. The shop's proxies are
+  `POST /api/intents/:id/revoke` and `/receipt`.
+- **Reason text:** the shop (`REASON_TEXT`) and the Studio planner name `MANDATE_REVOKED`. The dashboard and the evidence PDF
+  show reason codes as they are, so no change was needed there.
+
 ## Acceptance criteria
 
-Each starts as a `ledger()` entry.
-
-1. A revocation signed by another key, or naming another intent or hash, changes nothing (403 `revocation_invalid`).
-2. A stale `issued_at` is refused.
-3. A repeat revocation answers 200 with the first `revoked_at`.
-4. Each path in the enforcement table refuses a revoked intent with `MANDATE_REVOKED`, with nothing charged.
-5. A purchase captured before the revocation is unaffected, and its proof package still verifies.
-6. A retired key can still revoke an intent it signed.
-7. The `intent.revoked` audit row holds the exact canonical bytes and signature that were verified.
+1. A revocation signed by another key, or naming another intent or hash, changes nothing (403 `revocation_invalid`, or 404
+   for a hash the merchant has no intent under). _(done: `apps/api/src/intents.test.ts`)_
+2. A stale `issued_at` is refused. _(done)_
+3. A repeat revocation answers 200 with the first `revoked_at`. _(done, also against Postgres: `packages/db/src/db.test.ts`)_
+4. Each path in the enforcement table refuses a revoked intent with `MANDATE_REVOKED`, with nothing charged: checkout, stage-two
+   approval, step-up listing and approval, and a revocation landing between checkout's check and the reservation. _(done)_
+5. A purchase captured before the revocation is unaffected, and its proof package still verifies. _(done)_
+6. A retired key can still revoke an intent it signed. _(done)_
+7. The `intent.revoked` audit row holds the exact canonical bytes and signature that were verified. _(done)_
+8. The receipt shows spent, held and remaining authority by the enforced rules, only to the intent's own key. _(done:
+   `intents.test.ts`, `apps/buyer/src/intent-controls.test.ts`; in Chrome against a local stack: unseen, active after a refusal,
+   $74 spent and none left after a purchase, $74 set aside with an order waiting, revoke and its confirmation)_
 
 ## Out of scope
 
-The receipt of remaining authority (#176's third part), which needs its own read route; un-revoking; an operator revoking a
-shopper's intent.
+Un-revoking; an operator revoking a shopper's intent.
 
-## Open questions
+## Decisions (were open questions; the proposed defaults were taken)
 
-- A revocation that arrives while a capture is in flight: the check runs right before the PayPal capture call, so a
-  capture already sent is not undone. Default: accept that, and show the order on the receipt. Owner @srshriv with
-  @harshkumarsingh12, by Nov 18.
-- An operator revoking an intent (fraud): default no. The operator retires the key as of an earlier date instead
-  (spec 0001), which already voids every intent first seen after that date. Owner @harshkumarsingh12, by Nov 18.
-- Should a proof package (spec 0001 §Proof package) for an order under a revoked intent say so? Default: yes, as a note
-  that doesn't fail any check, since the order was captured before the revocation. Owner @srshriv, by Nov 18.
+- A revocation that arrives while a capture is in flight: the check runs right before the PayPal capture call, so a capture
+  already sent is not undone. Accepted; the order shows on the receipt.
+- An operator revoking an intent (fraud): no. The operator retires the key as of an earlier date instead (spec 0001), which
+  already voids every intent first seen after that date.
+- A proof package for an order under a revoked intent: not changed yet. The order was captured before the revocation, so the
+  package still verifies; a note saying the intent was later revoked is a follow-up.

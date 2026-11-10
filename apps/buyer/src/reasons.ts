@@ -22,6 +22,7 @@ export const REASON_TEXT: Record<ReasonCode, string> = {
   INTENT_ALREADY_USED: "You allowed one purchase and it was made. Sign a new intent to buy again",
   CATALOG_MISMATCH: "The cart doesn't match what the store sells (product or price)",
   UNATTENDED_NOT_PERMITTED: "You didn't let the agent pay without you, so you approve at PayPal",
+  MANDATE_REVOKED: "You revoked this intent. Sign a new one to buy again",
   SEMANTIC_UNCERTAIN: "The merchant isn't sure it's what you meant, so you confirm",
   SEMANTIC_MISMATCH: "The merchant's check says it isn't what you described",
 };
