@@ -131,7 +131,8 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
   const shopper = shopperKey as KeyRecord | null;
   const agent = agentKey as KeyRecord | null;
   const intentHash = mandateHash(intent);
-  const firstSeen = (await deps.db.getMandate(intentHash))?.seenAt ?? now;
+  const storedIntent = await deps.db.getMandate(intentHash);
+  const firstSeen = storedIntent?.seenAt ?? now;
   if (shopper && !keyValidAt(shopper, firstSeen)) return reject(["UNKNOWN_KEY"]);
   if (agent && !keyValidAt(agent, now)) return reject(["UNKNOWN_KEY"]);
 
@@ -192,8 +193,12 @@ export async function runCheckout(input: CheckoutRequest, deps: CheckoutDeps): P
       requestBody: { cartId: cart.contents.cart_id, mismatches: misses },
     });
   }
-  if (misses.length > 0 || unattendedRefused || !rules.pass) {
+  // The shopper stopped this intent (spec 0013, #176). The reservation re-checks it inside its lock, so a revocation that lands
+  // after this check still refuses the order.
+  const revoked = storedIntent?.revokedAt !== undefined && storedIntent.revokedAt <= now;
+  if (misses.length > 0 || unattendedRefused || revoked || !rules.pass) {
     const reasons: ReasonCode[] = [
+      ...(revoked ? (["MANDATE_REVOKED"] as const) : []),
       ...(misses.length > 0 ? (["CATALOG_MISMATCH"] as const) : []),
       ...(unattendedRefused ? (["UNATTENDED_NOT_PERMITTED"] as const) : []),
       ...rules.reasons,

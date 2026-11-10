@@ -45,6 +45,8 @@ export const ReasonCode = z.enum([
   "CATALOG_MISMATCH",
   // the agent pays without the shopper present, and the shopper's signed intent didn't allow it (docs/specs/0003, #157)
   "UNATTENDED_NOT_PERMITTED",
+  // the shopper revoked the intent before this (docs/specs/0013, #176)
+  "MANDATE_REVOKED",
   // semantic (LLM, downgrade only)
   "SEMANTIC_UNCERTAIN",
   "SEMANTIC_MISMATCH",
@@ -207,8 +209,28 @@ export type VaultProof = z.infer<typeof VaultProof>;
 export const StepUpListProof = z.object({ purpose: z.literal("stepup.list"), issued_at: isoDateTime });
 export type StepUpListProof = z.infer<typeof StepUpListProof>;
 
+/**
+ * The shopper stopping an intent before it expires (docs/specs/0013, #176), signed by the key that signed it. It names the
+ * intent by id and hash, so it can't be replayed against another intent or another payload under the same id. Final.
+ */
+export const IntentRevocation = z.object({
+  purpose: z.literal("intent.revoke"),
+  mandate_id: z.string().uuid(),
+  intent_mandate_hash: sha256Hex,
+  issued_at: isoDateTime,
+});
+export type IntentRevocation = z.infer<typeof IntentRevocation>;
+
+/** The shopper asking how much of an intent's authority is left (docs/specs/0013 §Receipt, #176). */
+export const IntentReceiptProof = z.object({
+  purpose: z.literal("intent.receipt"),
+  intent_mandate_hash: sha256Hex,
+  issued_at: isoDateTime,
+});
+export type IntentReceiptProof = z.infer<typeof IntentReceiptProof>;
+
 /** Every proof a shopper's key signs for the merchant besides mandates. */
-export const ShopperProof = z.union([VaultProof, StepUpListProof]);
+export const ShopperProof = z.union([VaultProof, StepUpListProof, IntentRevocation, IntentReceiptProof]);
 export type ShopperProof = z.infer<typeof ShopperProof>;
 
 /** POST /vault/setup: `{ proof_jws }` (purpose vault.setup) → where the shopper approves the wallet with PayPal. */
@@ -270,6 +292,47 @@ export const StepUpApproveResponse = z.object({
   capture_id: z.string().optional(),
 });
 export type StepUpApproveResponse = z.infer<typeof StepUpApproveResponse>;
+
+/** POST /intents/:mandate_id/revoke: `{ revocation_jws }` (an IntentRevocation). */
+export const IntentRevokeRequest = z.object({ revocation_jws: z.string().min(1) });
+export const IntentRevokeResponse = z.object({ mandate_id: z.string(), revoked_at: isoDateTime });
+export type IntentRevokeResponse = z.infer<typeof IntentRevokeResponse>;
+
+/** POST /intents/:mandate_id/receipt: `{ proof_jws }` (an IntentReceiptProof). */
+export const IntentReceiptRequest = z.object({ proof_jws: z.string().min(1) });
+
+/**
+ * How much of a signed intent's authority is left, as the merchant enforces it (docs/specs/0013 §Receipt, #176). `null`
+ * means the intent signed no such limit. Once the intent is revoked, expired or used up, every remaining figure is zero.
+ */
+export const IntentReceipt = z.object({
+  mandate_id: z.string(),
+  intent_mandate_hash: sha256Hex,
+  state: z.enum(["ACTIVE", "NOT_YET_VALID", "USED_UP", "EXPIRED", "REVOKED"]),
+  expires_at: isoDateTime,
+  revoked_at: isoDateTime.optional(),
+  /** Captured under this intent. */
+  spent: Money,
+  /** Set aside by orders not settled yet (awaiting approval, or a PayPal result we don't have). */
+  held: Money,
+  remaining: z.object({
+    /** The most the next purchase can be: the per-purchase cap, lowered by what is left of a budget. */
+    per_purchase: Money.nullable(),
+    /** What is left of a signed budget. */
+    total: Money.nullable(),
+    /** How many more purchases are allowed. */
+    purchases: z.number().int().nonnegative().nullable(),
+  }),
+  purchases: z.array(
+    z.object({
+      order_id: z.string(),
+      status: z.string(),
+      total: Money,
+      captured_at: isoDateTime.optional(),
+    }),
+  ),
+});
+export type IntentReceipt = z.infer<typeof IntentReceipt>;
 
 export const DisputeClass = z.enum(["MANDATE_COMPLIANT", "AGENT_OVERREACH", "INTENT_MISREAD", "NO_MANDATE"]);
 export type DisputeClass = z.infer<typeof DisputeClass>;

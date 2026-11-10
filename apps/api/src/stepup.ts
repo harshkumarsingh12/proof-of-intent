@@ -187,30 +187,17 @@ async function approveFound(
     };
   }
 
-  // 4. The hard rules again: the link may be hours old and the budget spent in the meantime.
+  // 4. The hard rules again: the link may be hours old and the budget spent in the meantime. And the shopper may have
+  //    revoked the intent since (spec 0013, #176).
   const rules = evaluate({
     intent,
     cart,
     now,
     ledger: await ledgerFor(deps.db, intent.mandate_id, st.cartMandateHash, false, now),
   });
-  if (!rules.pass) {
-    await deps.db.recordVerdict({
-      intentMandateId: st.intentMandateId,
-      cartId: cart.contents.cart_id,
-      outcome: "REJECT",
-      reasons: rules.reasons,
-    });
-    await finish(deps.db, st.id, "REJECTED");
-    return {
-      status: 409,
-      body: {
-        error: "stepup_no_longer_valid",
-        message: "The cart no longer fits the signed intent; nothing was charged",
-        reasons: rules.reasons,
-      },
-    };
-  }
+  const revoked = intentRow.revokedAt !== undefined && intentRow.revokedAt <= now;
+  const refused: ReasonCode[] = [...(revoked ? (["MANDATE_REVOKED"] as const) : []), ...rules.reasons];
+  if (refused.length > 0) return noLongerValid(deps.db, st, cart, refused);
 
   const shopper = await deps.db.findKey("shopper", st.shopperKid);
   if (!shopper?.vaultId) {
@@ -237,6 +224,10 @@ async function approveFound(
     reasons: st.reasons as ReasonCode[],
     semantic: { approvedBy: "shopper", stepUpId: st.id },
   });
+  // The reservation refused it inside its lock (a budget spent, or the intent revoked, a moment ago): no order exists.
+  if (placed.status === 200 && placed.body.verdict.outcome === "REJECT") {
+    return noLongerValid(deps.db, st, cart, placed.body.verdict.reasons, false);
+  }
   if (placed.status !== 200) {
     // PayPal's answer was lost on an unattended charge: it may have been made. The link stays usable, and opening it
     // again confirms that same order with PayPal instead of creating a second one (#159).
@@ -288,6 +279,34 @@ async function approved(db: Db, orderId: string): Promise<StepUpApproveResponse>
     order_id: orderId,
     ...(order?.paypalOrderId ? { paypal_order_id: order.paypalOrderId } : {}),
     ...(order?.captureId ? { capture_id: order.captureId } : {}),
+  };
+}
+
+/** The cart no longer fits what the shopper authorized: the step-up is REJECTED and nothing was charged. */
+async function noLongerValid(
+  db: Db,
+  st: StoredStepUp,
+  cart: CartMandate,
+  reasons: ReasonCode[],
+  recordIt = true,
+): Promise<Failure> {
+  // placeOrder already recorded the verdict when its reservation refused.
+  if (recordIt) {
+    await db.recordVerdict({
+      intentMandateId: st.intentMandateId,
+      cartId: cart.contents.cart_id,
+      outcome: "REJECT",
+      reasons,
+    });
+  }
+  await finish(db, st.id, "REJECTED");
+  return {
+    status: 409,
+    body: {
+      error: "stepup_no_longer_valid",
+      message: "The cart no longer fits the signed intent; nothing was charged",
+      reasons,
+    },
   };
 }
 

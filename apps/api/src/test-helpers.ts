@@ -144,11 +144,24 @@ export function memoryDb() {
       activeLedger(intentMandateId, now, excludeOrderId),
     reserveOrder: async (o, now, check) => {
       // No await between the check and the insert, so this is as atomic as the Postgres advisory lock.
-      const reasons = check(activeLedger(o.intentMandateId, now));
+      const intent = mandates.get(o.intentMandateHash);
+      const revoked = intent?.revokedAt !== undefined && intent.revokedAt <= now;
+      const reasons = [
+        ...(revoked ? ["MANDATE_REVOKED"] : []),
+        ...check(activeLedger(o.intentMandateId, now)),
+      ];
       if (reasons.length > 0) return { ok: false, reasons };
       orders.set(o.id, { ...o, createdAt: now });
       return { ok: true };
     },
+    revokeIntent: async (hash, at) => {
+      const m = mandates.get(hash);
+      if (!m || m.kind !== "intent") return null;
+      m.revokedAt ??= at;
+      return m.revokedAt;
+    },
+    ordersForIntent: async (intentMandateId) =>
+      [...orders.values()].filter((o) => o.intentMandateId === intentMandateId).map((o) => ({ ...o })),
     recordVerdict: async (v) => void verdicts.push(v),
     createOrder: async (o) => {
       if (orders.has(o.id)) throw new Error("duplicate order id");
@@ -197,7 +210,11 @@ export function memoryDb() {
     listPendingStepUps: async (kid, now) =>
       [...stepups.values()]
         .filter(
-          (x) => x.shopperKid === kid && x.status === "PENDING" && Date.parse(x.expiresAt) > Date.parse(now),
+          (x) =>
+            x.shopperKid === kid &&
+            x.status === "PENDING" &&
+            Date.parse(x.expiresAt) > Date.parse(now) &&
+            mandates.get(x.intentMandateHash)?.revokedAt === undefined,
         )
         .reverse()
         .map((x) => ({ ...x })),
