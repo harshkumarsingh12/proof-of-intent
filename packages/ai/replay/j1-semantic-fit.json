@@ -23,17 +23,16 @@
       "fit": "partial",
       "confidence": 0.75,
       "reasons": [
-        "The cart contains a hooded rain shell, which is a type of running jacket but differs from the shopper's request for a generic running jacket.",
-        "Color matches the request (grey).",
-        "Price is under the $80 budget (79 USD)."
+        "The cart contains a grey hooded rain shell, which matches the color and category but differs in style from a typical running jacket.",
+        "Price is under the $80 budget."
       ],
       "matched_attributes": [
         "color: grey",
-        "price under $80",
-        "category: running-jacket"
+        "category: running-jacket",
+        "price under $80"
       ],
       "conflicting_attributes": [
-        "style: hooded rain shell vs requested running jacket (generic)"
+        "style: hooded rain shell vs expected running jacket style"
       ]
     }
   },
@@ -221,14 +220,14 @@
     "label": "navy rain shell",
     "output": {
       "fit": "match",
-      "confidence": 1,
+      "confidence": 0.99,
       "reasons": [
-        "The cart contains exactly one navy waterproof rain shell, matching the shopper's request."
+        "Cart item matches the requested navy waterproof rain shell."
       ],
       "matched_attributes": [
         "color: navy",
-        "category: rain shell",
-        "waterproof"
+        "waterproof",
+        "category: rain-shell"
       ],
       "conflicting_attributes": []
     }
@@ -239,12 +238,12 @@
       "fit": "match",
       "confidence": 0.95,
       "reasons": [
-        "The cart contains a single pair of black insulated gloves, exactly matching the shopper's request."
+        "The cart contains a single pair of black insulated gloves, matching the shopper's request exactly."
       ],
       "matched_attributes": [
         "color: black",
-        "insulated",
-        "gloves"
+        "category: gloves",
+        "insulated: true"
       ],
       "conflicting_attributes": []
     }
@@ -256,7 +255,7 @@
       "confidence": 0.95,
       "reasons": [
         "Cart item is a lightweight trail running vest",
-        "Color matches the shopper's request for green"
+        "Color matches the shopper's request: green"
       ],
       "matched_attributes": [
         "category: trail-vest",
@@ -272,8 +271,7 @@
       "fit": "match",
       "confidence": 0.95,
       "reasons": [
-        "Cart contains a road cycling helmet in the requested color white.",
-        "Product title matches the shopper's request for a white road cycling helmet."
+        "Cart contains a white road cycling helmet matching the shopper's request"
       ],
       "matched_attributes": [
         "color: white",
@@ -307,9 +305,9 @@
         "The cart contains a non-slip blue yoga mat, which exactly matches the shopper's request."
       ],
       "matched_attributes": [
+        "category: yoga-mat",
         "color: blue",
-        "category: yoga mat",
-        "style: non-slip"
+        "non-slip feature"
       ],
       "conflicting_attributes": []
     }
@@ -320,7 +318,7 @@
       "fit": "partial",
       "confidence": 0.85,
       "reasons": [
-        "The cart contains trail running shoes, but the shopper requested road running shoes."
+        "The cart item is a running shoe but designed for trail use, not road use as requested."
       ],
       "matched_attributes": [
         "category: running-shoes",
@@ -337,14 +335,14 @@
       "fit": "partial",
       "confidence": 0.75,
       "reasons": [
-        "The cart contains a winter coat, which matches the shopper's request for a winter coat.",
-        "The coat's color is green, while the shopper did not specify a color, so there is no conflict.",
-        "The shopper requested a coat rated to minus 20 Celsius; the cart listing does not provide a temperature rating, so this important requirement is unchecked."
+        "The shopper requested a winter coat rated to -20°C, but the cart item does not list a temperature rating in its attributes."
       ],
       "matched_attributes": [
         "category: winter-coat"
       ],
-      "conflicting_attributes": []
+      "conflicting_attributes": [
+        "temperature rating: missing"
+      ]
     }
   },
   "909d2f31e6c36931a4296e34c17b0a121189adfb3655e30fbb3e81e4c60d0b2b": {
@@ -353,16 +351,14 @@
       "fit": "partial",
       "confidence": 0.85,
       "reasons": [
-        "Shopper requested six pairs of black running socks; cart contains one 3‑pair pack.",
-        "Quantity and pack size do not match the shopper's request."
+        "Shopper requested 6 pairs of black running socks; cart contains a 3‑pair pack of black running socks."
       ],
       "matched_attributes": [
         "color: black",
         "category: running socks"
       ],
       "conflicting_attributes": [
-        "quantity: shopper wanted 6 pairs, cart provides 3 pairs",
-        "pack size: 3‑pair pack vs requested 6 individual pairs"
+        "quantity: shopper wanted 6 pairs, cart provides 3 pairs"
       ]
     }
   },
@@ -374,7 +370,7 @@
       "reasons": [
         "Color matches the shopper's request (grey).",
         "Category matches (running shorts).",
-        "Missing: zip pockets are not confirmed in the product title or attributes."
+        "Missing feature: zip pockets are not mentioned in the product title or attributes."
       ],
       "matched_attributes": [
         "color: grey",
@@ -387,15 +383,17 @@
     "label": "carry-on dimensions unverified",
     "output": {
       "fit": "partial",
-      "confidence": 0.78,
+      "confidence": 0.85,
       "reasons": [
         "The cart contains a cabin roller suitcase, which is a type of carry‑on luggage.",
-        "The shopper requested carry‑on luggage at most 55 cm tall, but the suitcase’s height is not listed in the provided data, so we cannot confirm it meets the size limit."
+        "The shopper requested carry‑on luggage at most 55 cm tall, but the suitcase's height is not specified in the cart data."
       ],
       "matched_attributes": [
         "category: luggage"
       ],
-      "conflicting_attributes": []
+      "conflicting_attributes": [
+        "height: unknown (cannot verify ≤ 55 cm)"
+      ]
     }
   },
   "f03105ac373adad3d41094b96468a4d7dd91a873f8d6dde150c9f157ff22918c": {
@@ -404,17 +402,15 @@
       "fit": "partial",
       "confidence": 0.85,
       "reasons": [
-        "The cart contains an insulated tumbler, which matches the requested item type.",
-        "The requested volume of 750 ml is not specified in the product attributes, so it cannot be confirmed.",
-        "The color red is present but was not mentioned in the shopper's request."
+        "The cart item is an insulated tumbler, which matches the product type requested.",
+        "The requested volume of 750 ml is not specified in the cart item attributes, so it cannot be confirmed.",
+        "The color requested is not mentioned in the shopper request, but the cart item is red, which does not contradict the request."
       ],
       "matched_attributes": [
-        "category: tumbler",
-        "insulated: true"
+        "product type: insulated tumbler"
       ],
       "conflicting_attributes": [
-        "volume: 750 ml (not specified)",
-        "color: red (not requested)"
+        "volume: 750 ml not confirmed"
       ]
     }
   },
@@ -422,13 +418,13 @@
     "label": "jacket versus tent",
     "output": {
       "fit": "mismatch",
-      "confidence": 0.99,
+      "confidence": 1,
       "reasons": [
-        "The shopper requested a running jacket, but the cart contains a two-person camping tent."
+        "Requested a running jacket; cart contains a two-person camping tent."
       ],
       "matched_attributes": [],
       "conflicting_attributes": [
-        "item type: requested running jacket, found camping tent"
+        "item type: running jacket vs tent"
       ]
     }
   },
@@ -438,7 +434,7 @@
       "fit": "mismatch",
       "confidence": 0.95,
       "reasons": [
-        "Shopper requested a white helmet; cart contains a black helmet."
+        "Shopper requested a white helmet; the cart contains a black helmet."
       ],
       "matched_attributes": [],
       "conflicting_attributes": [
@@ -450,13 +446,13 @@
     "label": "cordless requirement",
     "output": {
       "fit": "mismatch",
-      "confidence": 0.99,
+      "confidence": 1,
       "reasons": [
-        "Shopper requested a cordless drill, but the cart contains a corded drill."
+        "Shopper asked for cordless but cart contains a corded drill."
       ],
       "matched_attributes": [],
       "conflicting_attributes": [
-        "power_source: corded (requested cordless)"
+        "power_source: corded"
       ]
     }
   },

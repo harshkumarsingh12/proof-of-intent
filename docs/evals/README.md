@@ -29,6 +29,10 @@ Backup-only runs never rewrite canonical replay files. Return both primary and b
 JSON metrics and the primary run's replay files together. A failed or missing backup run means the
 backup is unverified; a passing primary does not validate it.
 
+A free-tier backup (Groq) answers HTTP 429 after about a dozen back-to-back cases, which measures its rate limit, not its
+answers. Add `--pace-ms=7000` to wait that long before each model call; the report's profile records the pacing. The
+Nov 10 runs (spec 0006, "Primary and backup") show both results.
+
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
 
 ## Supplemental semantic and completed-payment evaluation (#169)
