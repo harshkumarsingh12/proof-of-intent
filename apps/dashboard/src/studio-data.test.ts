@@ -150,13 +150,30 @@ describe("agent platform cards", () => {
   it("sums per platform: overreach rate and the dollars the copilot recommends conceding", () => {
     const cards = platformCards(groups);
     const wayfinder = cards.find((c) => c.platform === "Wayfinder")!;
-    expect(wayfinder).toMatchObject({ disputes: 6, overreach: 2, concededAmount: 190.01 });
+    expect(wayfinder).toMatchObject({ disputes: 6, overreach: 2, recommendedAmount: 190.01 });
     expect(wayfinder.overreachRate).toBeCloseTo(1 / 3);
     expect(cards.find((c) => c.platform === "Tote")).toMatchObject({
       overreach: 0,
       overreachRate: 0,
-      concededAmount: 0,
+      recommendedAmount: 0,
     });
+    // Not mapped (a layout saved before the field existed): no refund figure rather than a false $0.
+    expect(wayfinder.refundedAmount).toBeUndefined();
+  });
+
+  it("reports what PayPal refunded apart from the recommendation, so an operator's concession on a compliant dispute counts", () => {
+    // The hosted sandbox (Nov 10): every dispute compliant, none recommended for concession, and still $391 refunded on
+    // Northstar disputes the operator conceded by override.
+    const cards = platformCards([
+      { platform: "Northstar", disputeClass: "MANDATE_COMPLIANT", disputes: 11, amount: 835, refunded: 391 },
+      { platform: "No mandate", disputeClass: "NO_MANDATE", disputes: 3, amount: 222, refunded: 148 },
+    ]);
+    expect(cards.find((c) => c.platform === "Northstar")).toMatchObject({
+      overreach: 0,
+      recommendedAmount: 0,
+      refundedAmount: 391,
+    });
+    expect(cards.find((c) => c.platform === "No mandate")?.refundedAmount).toBe(148);
   });
 
   it("puts the worst platform first, then the busiest, then by name", () => {
@@ -387,5 +404,30 @@ describe("Studio operator tasks & workflow lifecycle (#181)", () => {
       detail: "Resolved in seller's favour",
       confirmed: true,
     });
+  });
+});
+
+describe("refunded dollars come from PayPal's outcome, not the recommendation", () => {
+  const resolved = (outcome: unknown, over: Record<string, unknown> = {}) =>
+    detail("PP-X", [], { status: "RESOLVED", disputeClass: "MANDATE_COMPLIANT", decision: "defend", outcome, ...over });
+
+  it("counts what PayPal refunded, else the disputed amount, only when resolved for the buyer", () => {
+    const [partial, full, won, open, unknown] = disputeRows([
+      resolved({ result: "BUYER_FAVOUR", code: "RESOLVED_BUYER_FAVOUR", refunded: { value: 4000, currency: "USD" } }),
+      resolved({ result: "BUYER_FAVOUR", code: "RESOLVED_BUYER_FAVOUR" }),
+      resolved({ result: "SELLER_FAVOUR", code: "RESOLVED_SELLER_FAVOUR" }),
+      detail("PP-OPEN", [], { outcome: { result: "BUYER_FAVOUR" } }),
+      resolved(undefined),
+    ]);
+    expect(partial!.refunded).toBe(40);
+    expect(full!.refunded).toBe(95.5);
+    expect(won!.refunded).toBe(0);
+    expect(open!.refunded).toBe(0);
+    expect(unknown!.refunded).toBe(0);
+  });
+
+  it("keeps the recommendation separate: an overreach still open is recommended, not refunded", () => {
+    const [row] = disputeRows([detail("PP-OVR", [])]);
+    expect([row!.conceded, row!.refunded]).toEqual([95.5, 0]);
   });
 });
