@@ -181,12 +181,12 @@ describe("what a backup can fix", () => {
 
 describe("the request that reaches the provider", () => {
   // generateObject asks for its answer as a forced tool call named "json", so the fake provider answers that way.
-  const completion = (args: string) =>
+  const completion = (args: string, model: string | null = "m") =>
     Response.json({
       id: "c1",
       object: "chat.completion",
       created: 1,
-      model: "m",
+      ...(model === null ? {} : { model }),
       choices: [
         {
           index: 0,
@@ -262,6 +262,30 @@ describe("the request that reaches the provider", () => {
   }
   const limited = () => Response.json({ error: { message: "rate limit reached" } }, { status: 429 });
 
+  test.each(["primary-model", "resolved-primary", "", "   ", null])(
+    "telemetry separates the requested alias from response model %s",
+    async (model) => {
+      const p = fakeProvider([() => completion('{"ok":true}', model)]);
+      const attempts: ProviderAttempt[] = [];
+      await expect(
+        createGenerate(
+          cfg(),
+          p.fetchImpl,
+        )({
+          system: "s",
+          prompt: "p",
+          schema: z.object({ ok: z.boolean() }),
+          timeoutMs: 5_000,
+          onAttempt: (a) => attempts.push(a),
+        }),
+      ).resolves.toEqual({ ok: true });
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0]).toMatchObject({ model: "primary-model", outcome: "success", httpRequests: 1 });
+      if (model?.trim()) expect(attempts[0]?.responseModel).toBe(model);
+      else expect(attempts[0]).not.toHaveProperty("responseModel");
+    },
+  );
+
   test("a local preflight error is not counted as a physical provider request", async () => {
     const p = fakeHosts({ "*": () => completion('{"ok":true}') });
     const attempts: ProviderAttempt[] = [];
@@ -324,6 +348,7 @@ describe("the request that reaches the provider", () => {
       {
         provider: "groq",
         model: groqBackup.model,
+        responseModel: "m",
         role: "fallback",
         outcome: "success",
         fallbackReason: "http_429",

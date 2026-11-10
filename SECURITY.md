@@ -93,14 +93,20 @@ from the repository or from outside, and stay unticked until someone looks at th
 - [x] Logs contain no secrets, full addresses or mandate payloads above debug level. Found and fixed: a step-up link's token
   was written to the access log and to an explicit log line. Fixed and tested in #186 (`apps/api/src/logging.test.ts`). No
   address is ever stored (only a hash), and request bodies, headers and mandate payloads are not logged.
-- [ ] Proxy logs outside this app (Dokploy, Cloudflare) can still record URL paths: needs the server, tracked in #202.
+- [ ] Proxy logs outside this app (Dokploy, Cloudflare) can still record URL paths, tracked in #202. Checked on the server
+  November 10: Traefik logged the full `/stepup/<token>` path, so `RequestPath` and `RequestLine` are now dropped in its
+  `traefik.yml`, and after a restart the path no longer appears. Still open: Cloudflare (Free plan) records the full path
+  in Traffic analytics with no setting to redact it. Closing it means moving the token out of the URL path.
 - [x] gitleaks clean on the full history. gitleaks (default rules) scanned 176 commits: no leaks. Separately, every secret
   value in the developer's local `.env` (the same variables the server uses: the signing keys, the AI keys, the PayPal client
   secret, the operator token and the AG Studio license) was searched for in all 180 revisions: none found. The server's own
   `.env` was not read, so a value that exists only there is not covered. `.env` is git-ignored and was never committed.
-- [ ] Postgres not reachable from outside the server; only the proxy is exposed. In `docker-compose.yml`, Postgres publishes
-  no port at all, and the api, shop and dashboard publish only to `127.0.0.1`. The server's firewall and Dokploy's
-  settings need the server, tracked in #202.
+- [x] Postgres not reachable from outside the server; only the proxy is exposed. In `docker-compose.yml`, Postgres publishes
+  no port at all, and the api, shop and dashboard publish only to `127.0.0.1`. Checked on the server November 10 (#202):
+  only `dokploy-traefik` publishes public ports (80, 443 and 8080), the POI containers bind to `127.0.0.1`, nothing maps
+  5432, `ss` shows no listener on 5432 and `nc -vz <server ip> 5432` from outside is refused. ufw is inactive and
+  DOCKER-USER is empty, since nothing else is published. Follow-up: confirm port 8080 (Traefik's dashboard) needs to be
+  public, and close it if not.
 - [x] Demo logins: viewer cannot act. On the hosted site, the operator-only API routes (dispute actions, tracking, agent
   keys, `/ai/studio`) answer 401 with no token and with a wrong one, and the dashboard's proxy answers 401 to a viewer or a
   wrong password and 404 to any POST it doesn't allow.

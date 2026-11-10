@@ -530,22 +530,33 @@ function EvidencePreview(props: AgWidgetParams<any>) {
 
 // ---------- agent platform breakdown ----------
 
+const dollars = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const PLATFORM_FIELDS = ["platform", "disputeClass", "dispute", "amount"] as const;
 
 function AgentPlatform(props: AgWidgetParams<any>) {
   const [platform, disputeClass, dispute, amount] = PLATFORM_FIELDS.map((k) => slot(props.dataMapping, k));
-  const queried = [platform!, disputeClass!, aggregated(dispute!, "count"), aggregated(amount!, "sum")];
+  // Optional, so a layout saved before the field existed still loads; it then shows only the recommendation.
+  const refunded = optionalSlot(props.dataMapping, "refunded");
+  const queried = [
+    platform!,
+    disputeClass!,
+    aggregated(dispute!, "count"),
+    aggregated(amount!, "sum"),
+    ...(refunded ? [aggregated(refunded, "sum")] : []),
+  ];
   const { rows: raw, error } = useRows(props, queried);
   if (error) return <Status>{`Couldn't load the platforms: ${error}`}</Status>;
   if (!raw) return <Status>Loading the platforms…</Status>;
   const ids = queried.map(idOf);
   const groups: PlatformGroup[] = raw.map((row: Record<string, unknown>) => {
-    const [p, c, n, a] = cells(row, ids);
+    const [p, c, n, a, r] = cells(row, ids);
     return {
       platform: String(p ?? ""),
       disputeClass: String(c ?? ""),
       disputes: Number(n ?? 0),
       amount: Number(a ?? 0),
+      ...(refunded ? { refunded: Number(r ?? 0) } : {}),
     };
   });
   if (groups.length === 0) return <NoData />;
@@ -592,9 +603,20 @@ function AgentPlatform(props: AgWidgetParams<any>) {
               <div style={{ fontSize: 12, lineHeight: "16px", color: v("textMuted") }}>
                 overreach rate ({c.overreach} of {c.disputes})
               </div>
-              <div style={{ fontSize: 13, lineHeight: "18px", marginTop: 6 }}>
-                Conceded:{" "}
-                <strong>${c.concededAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+              {c.refundedAmount !== undefined && (
+                <div style={{ fontSize: 13, lineHeight: "18px", marginTop: 6 }}>
+                  Refunded by PayPal: <strong>{dollars(c.refundedAmount)}</strong>
+                </div>
+              )}
+              <div
+                style={{
+                  fontSize: 12,
+                  lineHeight: "16px",
+                  marginTop: c.refundedAmount !== undefined ? 2 : 6,
+                  color: v("textMuted"),
+                }}
+              >
+                Recommended to concede: {dollars(c.recommendedAmount)}
               </div>
             </div>
           );
@@ -931,8 +953,9 @@ export const customWidgetDefinitions: any[] = [
       ]),
       dispute: aiField("The dispute id, counted per platform and class.", ["category"]),
       amount: aiField("The disputed amount in US dollars, summed per platform and class.", ["numeric"]),
+      refunded: aiField("Dollars PayPal confirmed it refunded to the buyer, summed per platform.", ["numeric"]),
     },
-    { platform: "Platform", disputeClass: "Class", dispute: "Dispute", amount: "Amount" },
+    { platform: "Platform", disputeClass: "Class", dispute: "Dispute", amount: "Amount", refunded: "Refunded by PayPal" },
     AgentPlatform,
     { width: 640, height: 240 },
   ),

@@ -15,7 +15,9 @@
   stubs. Callers hand the decision to a person.
 - `GenerateRequest.onAttempt` receives request-scoped physical provider/model attempts, outcomes, elapsed
   time and bounded failure/fallback categories. It excludes prompts and provider error bodies. Evaluations
-  use this to attribute answers to the actual model; see [primary and backup evaluation steps](../../docs/evals/README.md).
+  keep the requested `model` separate from the provider-reported `responseModel`. Missing response identities
+  stay unobserved, including when the SDK would substitute the requested alias. Evaluations use only the
+  reported identity for answer attribution; see [primary and backup evaluation steps](../../docs/evals/README.md).
 - J4 first runs `planStudio` (`studio-plan.ts`), a pure planner that picks the lookup and writes the answer for
   common questions (named dispute, reply draft, counts, attention, glossary, refusing actions) with no model. Other
   turns use `j4-studio.json` (keyed by the versioned turn) or live AI. `pnpm smoke:studio` checks the chat in a browser;

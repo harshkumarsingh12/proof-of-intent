@@ -27,7 +27,7 @@ export function evaluationReport(
     `- Schema validity after retries: ${result.schemaValid}/${result.schemaTotal} model cases. Local guards are excluded.`,
     `- Gate: ${result.passed ? "passed" : "failed"}.`,
     "",
-    "Attempts counts logical job attempts; provider calls counts physical requests, including backups. Each path records provider/model, outcome, latency and the bounded fallback reason. No provider error bodies or credentials are recorded. A guard has no answering model. Unobserved instrumentation is labelled explicitly.",
+    "Attempts counts logical job attempts; provider calls counts physical requests, including backups. Each path records the requested model, provider-reported response model when available, outcome, latency and the bounded fallback reason. Answer attribution uses only the provider-reported identity; an omitted identity is unobserved. No provider error bodies or credentials are recorded. A guard has no answering model.",
     "",
     "| Job | Case | Expected | Actual | Result | Attempts | Provider calls | Answered by | Provider path | Elapsed ms |",
     "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- | ---: |",
@@ -36,14 +36,14 @@ export function evaluationReport(
       const answeredBy = c.guarded
         ? "local guard"
         : successful
-          ? `${successful.provider}/${successful.model}`
+          ? `${successful.provider}/${successful.responseModel ?? "unobserved"}`
           : c.providerAttempts.length
             ? "none"
             : "unobserved";
       const path = c.providerAttempts
         .map(
           (a) =>
-            `${a.provider}/${a.model} (${a.role}, ${a.outcome}${a.failure ? `: ${a.failure}` : ""}, ${a.httpRequests} HTTP requests, ${a.elapsedMs}ms${a.fallbackReason ? `, fallback: ${a.fallbackReason}` : ""})`,
+            `${a.provider}/${a.model} (requested; response model: ${a.responseModel ?? "unobserved"}, ${a.role}, ${a.outcome}${a.failure ? `: ${a.failure}` : ""}, ${a.httpRequests} HTTP requests, ${a.elapsedMs}ms${a.fallbackReason ? `, fallback: ${a.fallbackReason}` : ""})`,
         )
         .join(" → ");
       return `| ${[c.job, c.label, c.expected, c.actual, c.passed ? "pass" : "fail", String(c.attempts), String(c.providerAttempts.reduce((count, a) => count + a.httpRequests, 0)), answeredBy, path || "—", String(c.elapsedMs)].map(cell).join(" | ")} |`;

@@ -104,6 +104,7 @@ export function StudioView({
             { id: "overdue", name: "Overdue", format: "integerFormat" },
             { id: "atStake", name: "Dollars at stake", format: "currencyFormat", formatOptions: usd },
             { id: "conceded", name: "Dollars to concede (recommended)", format: "currencyFormat", formatOptions: usd },
+            { id: "refunded", name: "Refunded by PayPal (USD)", format: "currencyFormat", formatOptions: usd },
           ],
         },
         {

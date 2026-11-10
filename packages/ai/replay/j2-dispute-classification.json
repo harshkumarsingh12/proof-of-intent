@@ -3,11 +3,11 @@
     "label": "grey jacket as requested",
     "output": {
       "class": "MANDATE_COMPLIANT",
-      "confidence": 0.85,
+      "confidence": 0.9,
       "recommended_action": "PROVIDE_EVIDENCE",
       "reasons": [
         {
-          "text": "The policy evaluation confirms the transaction matched the signed intent for a grey running jacket under USD 80, satisfying the mandate compliance requirement.",
+          "text": "Policy finding: Grey running jacket at USD 74 matched the signed grey under USD 80 intent.",
           "cites": [
             "policy_evaluation"
           ]
@@ -15,7 +15,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Provide the signed intent record and the transaction details showing the grey running jacket priced at USD 74.",
+          "text": "Policy finding: Grey running jacket at USD 74 matched the signed grey under USD 80 intent.\nReported dispute reason: MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
           "cites": [
             "policy_evaluation",
             "dispute_reason"
@@ -32,7 +32,7 @@
       "recommended_action": "PROVIDE_EVIDENCE",
       "reasons": [
         {
-          "text": "The policy evaluation confirms the cart matched the signed mandate, and the bundle contains no delivery confirmation, so the operator must provide evidence of delivery to rebut the buyer's non-receipt claim.",
+          "text": "Policy finding: The cart matched the signed mandate. No delivery confirmation is in the bundle.",
           "cites": [
             "policy_evaluation"
           ]
@@ -40,7 +40,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Provide delivery confirmation (e.g., tracking number, signature proof, carrier receipt) that shows the merchandise was received.",
+          "text": "Reported dispute reason: MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
           "cites": [
             "dispute_reason"
           ]
@@ -56,7 +56,7 @@
       "recommended_action": "PROVIDE_EVIDENCE",
       "reasons": [
         {
-          "text": "The policy evaluation confirms the shopper signed the cart approval and all hard rules passed, making the mandate compliant.",
+          "text": "Policy finding: The shopper signed the cart approval and every hard rule passed.",
           "cites": [
             "policy_evaluation"
           ]
@@ -64,7 +64,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Provide the cart approval record showing the shopper's signature and the rule‑check results.",
+          "text": "Policy finding: The shopper signed the cart approval and every hard rule passed.",
           "cites": [
             "policy_evaluation"
           ]
@@ -80,7 +80,7 @@
       "recommended_action": "ACCEPT_CLAIM",
       "reasons": [
         {
-          "text": "The policy evaluation states the red USD 95 jacket exceeded the USD 80 limit and conflicted with the required grey color, which constitutes agent overreach in approving a transaction outside policy bounds.",
+          "text": "Policy finding: The red USD 95 jacket exceeded USD 80 and conflicted with the required grey color.",
           "cites": [
             "policy_evaluation"
           ]
@@ -88,7 +88,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Verify the transaction amount and color compliance by checking the order record for price <= USD 80 and color = grey.",
+          "text": "Policy finding: The red USD 95 jacket exceeded USD 80 and conflicted with the required grey color.",
           "cites": [
             "policy_evaluation"
           ]
@@ -100,11 +100,11 @@
     "label": "unapproved merchant",
     "output": {
       "class": "AGENT_OVERREACH",
-      "confidence": 0.9,
+      "confidence": 0.85,
       "recommended_action": "ACCEPT_CLAIM",
       "reasons": [
         {
-          "text": "The merchant was outside the signed allowlist, so the agent exceeded its authority by processing the transaction.",
+          "text": "Policy finding: The merchant was outside the signed allowlist.",
           "cites": [
             "policy_evaluation"
           ]
@@ -112,7 +112,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Verify the signed allowlist and confirm the merchant ID is not listed.",
+          "text": "Policy finding: The merchant was outside the signed allowlist.",
           "cites": [
             "policy_evaluation"
           ]
@@ -128,7 +128,7 @@
       "recommended_action": "ACCEPT_CLAIM",
       "reasons": [
         {
-          "text": "The policy evaluation states the signed order limit was one, but the cart contained two units, indicating the agent allowed an over‑limit order.",
+          "text": "Policy finding: The cart contained two units. The signed order limit was one.",
           "cites": [
             "policy_evaluation"
           ]
@@ -136,7 +136,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Verify the signed order limit and the number of units ordered by checking the order‑limit configuration and the cart contents at time of purchase.",
+          "text": "Policy finding: The cart contained two units. The signed order limit was one.",
           "cites": [
             "policy_evaluation"
           ]
@@ -152,7 +152,7 @@
       "recommended_action": "ACCEPT_CLAIM",
       "reasons": [
         {
-          "text": "The policy evaluation states the semantic check found the merchandise (rain shell) was a partial fit for the requested running jacket, indicating the operator misread the buyer's intent.",
+          "text": "Policy finding: Hard rules passed. The semantic check found a rain shell was a partial fit for the requested running jacket.",
           "cites": [
             "policy_evaluation"
           ]
@@ -160,7 +160,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Verify the product description and buyer's original request to confirm the mismatch between rain shell and running jacket.",
+          "text": "Reported dispute reason: MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED\nPolicy finding: Hard rules passed. The semantic check found a rain shell was a partial fit for the requested running jacket.",
           "cites": [
             "dispute_reason",
             "policy_evaluation"
@@ -173,11 +173,11 @@
     "label": "road versus trail shoes",
     "output": {
       "class": "INTENT_MISREAD",
-      "confidence": 0.85,
+      "confidence": 0.75,
       "recommended_action": "ACCEPT_CLAIM",
       "reasons": [
         {
-          "text": "The policy evaluation indicates a semantic check identified a trail shoe substituted for a road shoe, which constitutes a misread of the buyer's intent regarding product type.",
+          "text": "Policy finding: Hard rules passed. The semantic check found a trail shoe substituted for a road shoe.",
           "cites": [
             "policy_evaluation"
           ]
@@ -185,7 +185,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Verify the product description and type listed in the original listing against the item shipped; confirm that a road shoe was advertised and a trail shoe was sent.",
+          "text": "Reported dispute reason: MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED\nPolicy finding: Hard rules passed. The semantic check found a trail shoe substituted for a road shoe.",
           "cites": [
             "dispute_reason",
             "policy_evaluation"
@@ -202,7 +202,7 @@
       "recommended_action": "ACCEPT_CLAIM",
       "reasons": [
         {
-          "text": "Policy evaluation found that the product description could not establish the requested insulation, so the operator misread the buyer's intent.",
+          "text": "Policy finding: Hard rules passed. The product description could not establish the requested insulation.",
           "cites": [
             "policy_evaluation"
           ]
@@ -210,9 +210,9 @@
       ],
       "evidence_plan": [
         {
-          "text": "Verify the product description details against the buyer's claim of non-receipt.",
+          "text": "Policy finding: Hard rules passed. The product description could not establish the requested insulation.",
           "cites": [
-            "dispute_reason"
+            "policy_evaluation"
           ]
         }
       ]
@@ -222,11 +222,11 @@
     "label": "ordinary checkout",
     "output": {
       "class": "NO_MANDATE",
-      "confidence": 0.7,
+      "confidence": 0.9,
       "recommended_action": "STANDARD_EVIDENCE",
       "reasons": [
         {
-          "text": "Policy evaluation found no signed intent record for the order.",
+          "text": "Policy finding: The order has no signed intent record.",
           "cites": [
             "policy_evaluation"
           ]
@@ -234,7 +234,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Locate any signed intent record or mandate for the order; if none exists, document the gap.",
+          "text": "Policy finding: The order has no signed intent record.",
           "cites": [
             "policy_evaluation"
           ]
@@ -246,11 +246,11 @@
     "label": "pointer mismatch",
     "output": {
       "class": "NO_MANDATE",
-      "confidence": 0.6,
+      "confidence": 0.92,
       "recommended_action": "STANDARD_EVIDENCE",
       "reasons": [
         {
-          "text": "The PayPal order pointer did not match the stored signed intent, so the merchant lacked the mandated authorization.",
+          "text": "Policy finding: The PayPal order pointer did not match the stored signed intent.",
           "cites": [
             "policy_evaluation"
           ]
@@ -258,7 +258,7 @@
       ],
       "evidence_plan": [
         {
-          "text": "Compare the PayPal order pointer recorded at checkout with the signed intent on file; any discrepancy invalidates the mandate.",
+          "text": "Policy finding: The PayPal order pointer did not match the stored signed intent.",
           "cites": [
             "policy_evaluation"
           ]
@@ -274,7 +274,7 @@
       "recommended_action": "STANDARD_EVIDENCE",
       "reasons": [
         {
-          "text": "Policy evaluation states the order has no signed intent record, which means the operator lacks the mandated authorization evidence.",
+          "text": "Policy finding: The order has no signed intent record.",
           "cites": [
             "policy_evaluation"
           ]
@@ -282,10 +282,9 @@
       ],
       "evidence_plan": [
         {
-          "text": "Collect any signed intent records, order confirmations, or delivery confirmations that demonstrate buyer authorization and receipt.",
+          "text": "Policy finding: The order has no signed intent record.",
           "cites": [
-            "policy_evaluation",
-            "dispute_reason"
+            "policy_evaluation"
           ]
         }
       ]

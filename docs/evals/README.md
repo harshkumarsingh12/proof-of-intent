@@ -1,5 +1,11 @@
 # Evals
 
+Commit source changes before each canonical run (`pnpm eval` or `pnpm eval --backup`). The command checks
+the repository containing the script, rejects staged, unstaged and untracked changes before any model call,
+and records its exact commit. Ignored local configuration is allowed. A run creates reports and may update
+recordings; commit those artifacts before the next run, including a backup run. This keeps each report's
+source attribution reproducible without silently labelling uncommitted prompts or cases as `HEAD`.
+
 Run `pnpm eval` with `AI_MODEL` and `AI_API_KEY` in the environment. Set `AI_PROVIDER` for a provider other than
 NVIDIA and `AI_BASE_URL` for a custom OpenAI-compatible endpoint. With a local `.env`, the equivalent command
 is `pnpm exec tsx --env-file=.env scripts/ai/eval.ts`.
@@ -22,6 +28,10 @@ further fallback. It requires a fully configured backup and writes a separate `*
 Backup-only runs never rewrite canonical replay files. Return both primary and backup reports, their
 JSON metrics and the primary run's replay files together. A failed or missing backup run means the
 backup is unverified; a passing primary does not validate it.
+
+A free-tier backup (Groq) answers HTTP 429 after about a dozen back-to-back cases, which measures its rate limit, not its
+answers. Add `--pace-ms=7000` to wait that long before each model call; the report's profile records the pacing. The
+Nov 10 runs (spec 0006, "Primary and backup") show both results.
 
 Targets and sets are defined in [spec 0006](../specs/0006-ai-jobs.md). Owner is @sumedhag28.
 

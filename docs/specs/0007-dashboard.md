@@ -39,7 +39,8 @@ and opens on a report with one of each, wired to two tables: `disputes` (one row
 `checks` (one row per signed limit per dispute, from each dispute's `constraintChecks`). `mandate-diff` shows one dispute
 at a time with an "only violations" toggle; `evidence-preview` embeds the attestation PDF through the dashboard proxy for
 MANDATE_COMPLIANT disputes and says why there is none for the others; `agent-platform` is a card per platform with the
-overreach rate and conceded dollars. Every widget and every data-mapping slot carries an AI description, and
+overreach rate, the dollars PayPal confirmed it refunded (from the dispute's outcome, so an operator's concession on a
+compliant dispute counts) and, separately, the dollars the copilot recommends conceding. Every widget and every data-mapping slot carries an AI description, and
 `dashboard.test.ts` checks the registration. Differences from the AG Studio docs that cost time, for the next person
 (ag-studio 3.0.0): a data-mapping slot holds the hydrated field (`{ fieldId, key, name, ... }`), not `{ id }`, and
 `getData` wants those objects back (aggregates are the same object with `type: "implicitMeasure"` and an

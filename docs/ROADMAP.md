@@ -72,7 +72,7 @@ check (#19; the `list_disputes` catch-up already covers missed webhooks), J2/J3 
 | Studio agent harness + DisputeExplainer                                  | Sumedha + Sikruti        | Harness ✅ (#105); custom widgets, theme and the opening report ✅; needs a license key on the server (#15, #51) |
 | Analytics page + agent platform widget                                   | Sikruti (Harsh backup)   | ✅ Analytics page with platform breakdown (#73), polished in #78                                                 |
 | Seed data: 300 orders, 24 disputes, two scripted disputes                | Sumedha                  | ✅ `pnpm demo:seed` (mock stack only: `PP-D-1001` compliant with its PDF, `PP-D-1002` overreach)                 |
-| Security checklist                                                       | Sristee                  | Swept Nov 8 (#42): 8 of 10 boxes ticked in SECURITY.md; open: the server checks (#202). The nightly demo reset was dropped (#203) |
+| Security checklist                                                       | Sristee                  | Swept Nov 8 (#42); server checks Nov 10 (#202): 9 of 10 boxes ticked in SECURITY.md. Open: Cloudflare still records step-up token paths, and port 8080 should be confirmed. The nightly demo reset was dropped (#203) |
 | Full evals and report                                                    | Sumedha                  | ✅ Nov 7: J1 20/20, J2 12/12, schema 31/31 ([report](evals/2026-11-07.md)); J2 prompt is now `j2-v2` (#43) |
 | Integration day: journeys A–D twice on sandbox                           | everyone (Harsh runs it) | ✅ Nov 7, see the status below                                                                                   |
 | Dashboard and buyer polish: phone layout, no fake controls, landing page | Harsh                    | ✅ Done (#78, #79)                                                                                               |
@@ -116,9 +116,9 @@ drafting and a `platform_summary` Studio tool.
 
 | Deliverable                                  | Owner    | Status  |
 | -------------------------------------------- | -------- | ------- |
-| README final, DEMO.md click path             | Sumedha  | Pending |
+| README final, DEMO.md click path             | Sumedha  | Updated Nov 10 (proof package, Studio filters, Nov 10 evals); the independent walkthrough is pending |
 | SETUP.md verified on a clean machine         | Sristee  | ✅ Nov 9 on a fresh GitHub Codespace (2 cores, 8 GB, nothing cached): §1 to a running stack in 8 min 40 s, the demo seed in 3 s, §2 in under 3 min; snags fixed in SETUP.md (#212 and this PR) |
-| Video recorded, edited, public on YouTube    | Sumedha  | Pending |
+| Video recorded, edited, public on YouTube    | Sumedha  | Rough cut Nov 10: 2:44.5, 1080p, every scene captioned, no voiceover yet. Voiceover, review and upload pending |
 | Tag `v0.1.0-hackathon`, deployed, monitored  | Harsh    | Pending |
 | Devpost submission with testing instructions | Sumedha  | Pending |
 | Prize split agreed                           | everyone | Pending |

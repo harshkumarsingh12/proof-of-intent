@@ -2,6 +2,29 @@ import { expect, test } from "vitest";
 import { getDisputeDetail } from "./dispute-details";
 import { confidenceDescription, evidenceAvailability } from "./evidence-availability";
 
+test.each(["APPROVE", "REJECT", "STEP_UP"])(
+  "a saved %s checkout finding is available without a displayed rule breakdown",
+  (checkoutVerdict) => {
+    // budget_cap/validity constraints are valid but do not produce the worker's displayed constraint checks.
+    const dispute = { ...getDisputeDetail("PP-D-1001")!, checkoutVerdict, constraintChecks: [] };
+    expect(evidenceAvailability(dispute).checks.find((c) => c.label === "Checkout finding")?.available).toBe(
+      true,
+    );
+    expect(evidenceAvailability(dispute)).toMatchObject({ available: 4, total: 4 });
+  },
+);
+
+test.each([undefined, "NONE", "", "unknown"])(
+  "a missing or unknown checkout verdict (%s) stays unavailable even with displayed checks",
+  (checkoutVerdict) => {
+    const dispute = { ...getDisputeDetail("PP-D-1001")!, checkoutVerdict };
+    expect(dispute.constraintChecks.length).toBeGreaterThan(0);
+    expect(evidenceAvailability(dispute).checks.find((c) => c.label === "Checkout finding")?.available).toBe(
+      false,
+    );
+  },
+);
+
 test("missing records and an unprepared preview are visible even for a compliant class", () => {
   const full = getDisputeDetail("PP-D-1001")!;
   const incomplete = {
@@ -38,4 +61,31 @@ test("confidence is independent of record availability and is never described as
   expect(confidenceDescription(1)).toContain("not a probability of winning");
   for (const absent of [null, undefined, NaN, Infinity, -1, 2])
     expect(confidenceDescription(absent)).toContain("unavailable");
+});
+
+// #170: nothing the dashboard shows as evidence, a buyer reply or a shopper note may assert delivery, cardholder
+// authorization or a completed refund that the records don't establish.
+test("no sample dispute asserts delivery, authorization or a refund the records don't establish (#170)", async () => {
+  const { SEED_DISPUTES } = await import("./seed-disputes");
+  const unsupported = [
+    /deliver(y|ed)\s+(was\s+)?confirmed/i,
+    /confirms?\s+delivery/i,
+    /authori[sz]ed\s+by\s+the\s+cardholder/i,
+    /refund\s+(was\s+)?(issued|completed)/i,
+  ];
+  for (const { id } of SEED_DISPUTES) {
+    const d = getDisputeDetail(id)!;
+    const shown = [
+      d.shopperNotes ?? "",
+      d.evidenceDraftInfo?.coverNote ?? "",
+      d.evidenceDraftInfo?.buyerMessage ?? "",
+      ...(d.evidenceDraftInfo?.attestationSections ?? []).map((s) => s.body),
+      ...d.classificationInfo.reasons.map((r) => r.text),
+      ...d.classificationInfo.evidencePlan,
+    ].join("\n");
+    for (const re of unsupported) {
+      if (re.source.includes("deliver") && d.deliveryEvidence === "CONFIRMED") continue;
+      expect(shown, `${id}: ${re}`).not.toMatch(re);
+    }
+  }
 });
