@@ -365,7 +365,14 @@ service writes to the named volume `proofofintent-proofofintent-hrpvnt_backups`,
 `backup ok /backups/poi-20261107T222438Z.sql.gz`. The drill (step 3) was run by hand by the server's administrator with the
 restore commands above: that 144,645-byte dump restored into a scratch database `poi_drill` with `ON_ERROR_STOP=1` and no
 errors, `orders` held 29 rows in both the restore and the live `poi`, and `poi_drill` was dropped. Only `orders` was compared;
-`restore-drill.sh` compares every table. Not done for the hackathon: step 4 (the dumps live on the same disk as the database,
-so losing the server loses them too) and step 5.
+`restore-drill.sh` compares every table.
+
+**The schedule (Nov 10).** The `backup` service's log in Dokploy shows `backup ok` for `poi-20261107T222438Z.sql.gz`,
+`poi-20261108T222438Z.sql.gz` and `poi-20261109T222438Z.sql.gz`: one dump every 24 hours, to the second, so the loop runs and the
+container was not restarted in between. To check it again, open the compose app's **Logs** in Dokploy, pick `backup`, and look for
+one `backup ok` line a day and no `backup FAILED`.
+
+Not done for the hackathon: step 4 (the dumps live on the same disk as the database, so losing the server loses them too) and
+step 5 (the three dumps above came from one container, so surviving a redeploy that recreates it is not yet shown).
 
 `audit_log` is append-only by trigger, so a demo reset means dropping and recreating the database, not deleting rows.
