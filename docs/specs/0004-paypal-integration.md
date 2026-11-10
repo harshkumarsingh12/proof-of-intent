@@ -19,7 +19,9 @@ the team must be able to work before the sandbox is wired, hence a mock with the
 - `PAYPAL_MODE=mock` returns fixture payloads with realistic ids and statuses; `sandbox` makes real calls.
 - **Orders:** human present uses `intent: AUTHORIZE` → authorize → capture or void. Agent alone uses
   `intent: CAPTURE` with `payment_source.paypal.vault_id`. `custom_id` = mandate pointer, `invoice_id` = our order
-  id, item-level `items[]`. `PayPal-Request-Id` = our order id for idempotency. An unattended order whose answer is lost keeps that id for the retry (spec 0003, #159).
+  id, item-level `items[]`. `PayPal-Request-Id` = our order id for idempotency. An unattended order whose answer is lost keeps that id for the retry (spec 0003, #159). A capture is paid only when PayPal's
+  capture status is `COMPLETED`; `captureAuthorization` and `createOrder` report it, and `PENDING` / `DECLINED` captures are
+  handled as in spec 0003, "Only a COMPLETED capture is paid" (#225).
 - **Vault v3 (as built, #17):** `createVaultSetupToken` (`POST /v3/vault/setup-tokens`, `usage_type: MERCHANT`,
   return and cancel URLs) → the shopper approves on PayPal, which sends them back with `approval_token_id` →
   `createVaultPaymentToken` (`POST /v3/vault/payment-tokens` from that setup token, one use) → the payment token's id is

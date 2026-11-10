@@ -30,7 +30,7 @@ interface OrderResponse {
   status: string;
   links?: Link[];
   purchase_units?: {
-    payments?: { authorizations?: { id: string }[]; captures?: { id: string }[] };
+    payments?: { authorizations?: { id: string }[]; captures?: { id: string; status?: string }[] };
   }[];
 }
 
@@ -103,6 +103,7 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
         status: order.status,
         approvalUrl: order.links?.find((l) => l.rel === "payer-action" || l.rel === "approve")?.href,
         captureId: order.purchase_units?.[0]?.payments?.captures?.[0]?.id,
+        captureStatus: order.purchase_units?.[0]?.payments?.captures?.[0]?.status,
       };
     },
 
@@ -150,12 +151,13 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
     },
 
     async captureAuthorization(authorizationId) {
-      const capture = await call<{ id: string }>(
+      const capture = await call<{ id: string; status?: string }>(
         "POST",
         `/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/capture`,
         { body: JSON.stringify({ final_capture: true }), requestId: `${authorizationId}-capture` },
       );
-      return { captureId: capture.id };
+      // The status is kept: a 201 can carry a PENDING or DECLINED capture, and only COMPLETED is money received (#225).
+      return { captureId: capture.id, status: capture.status };
     },
 
     async voidAuthorization(authorizationId) {

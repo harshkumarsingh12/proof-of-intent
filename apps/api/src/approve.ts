@@ -15,12 +15,14 @@
  *        (MANDATE_NOT_YET_VALID / MANDATE_EXPIRED / CART_EXPIRED / BUDGET_EXCEEDED /
  *        RECURRENCE_EXCEEDED); any authorization we already
  *        hold is voided; with none, nothing was held and PayPal isn't called
- *   4. authorize (409 if the shopper hasn't approved at PayPal yet), then capture
+ *   4. authorize (409 if the shopper hasn't approved at PayPal yet), then capture. Only a COMPLETED capture is CAPTURED
+ *      (#225): a PENDING one is CAPTURE_PENDING until PayPal's webhook settles it, and a DECLINED or FAILED one is
+ *      CAPTURE_DECLINED (402 payment_declined)
  */
 import { CartApproval, CartMandate, IntentMandate, type ApproveResponse, type ReasonCode } from "@poi/contracts";
 import type { Db, StoredOrder } from "@poi/db";
 import { keyValidAt, verifyMandate } from "@poi/mandates";
-import { PayPalError, type PayPalClient } from "@poi/paypal";
+import { PayPalError, captureOutcome, type PayPalClient } from "@poi/paypal";
 import { freshness } from "@poi/policy-engine";
 import { aggregateReasons } from "./checkout";
 import { importJWK, type JWK } from "jose";
@@ -34,7 +36,16 @@ export interface ApproveDeps {
 export type ApproveResult =
   | { status: 200; body: ApproveResponse }
   | { status: 403; body: { error: string; message: string; reasons: ReasonCode[] } }
-  | { status: 404 | 409 | 502; body: { error: string; message: string } };
+  | { status: 402 | 404 | 409 | 502; body: { error: string; message: string } };
+
+/** PayPal declined the capture: nothing was taken. A retry answers the same; the shopper starts a new checkout. */
+const declined: ApproveResult = {
+  status: 402,
+  body: {
+    error: "payment_declined",
+    message: "PayPal declined the payment, so nothing was charged. Try again with another payment method",
+  },
+};
 
 const AWAITING = new Set(["CREATED", "APPROVED", "AUTHORIZED"]);
 
@@ -54,6 +65,9 @@ export async function approveOrder(
   // A retry after we already finished answers with the same outcome; nothing is charged twice.
   if (order.status === "CAPTURED")
     return { status: 200, body: { status: "CAPTURED", capture_id: order.captureId } };
+  if (order.status === "CAPTURE_PENDING")
+    return { status: 200, body: { status: "CAPTURE_PENDING", capture_id: order.captureId } };
+  if (order.status === "CAPTURE_DECLINED") return declined;
   if (order.status === "VOIDED") return { status: 200, body: { status: "VOIDED" } };
   if (!AWAITING.has(order.status)) {
     return {
@@ -102,7 +116,23 @@ export async function approveOrder(
     });
   }
   try {
-    const { captureId } = await deps.paypal.captureAuthorization(authorizationId);
+    const { captureId, status: paypalStatus } = await deps.paypal.captureAuthorization(authorizationId);
+    const outcome = captureOutcome(paypalStatus);
+    if (outcome !== "COMPLETED") {
+      // PayPal answered, but the money hasn't moved (PENDING) or won't (DECLINED): never recorded as captured (#225).
+      // A pending capture keeps the order's reservation and is settled by PAYMENT.CAPTURE.COMPLETED or DENIED.
+      const status = outcome === "PENDING" ? "CAPTURE_PENDING" : "CAPTURE_DECLINED";
+      await deps.db.updateOrder(order.id, { status, captureId });
+      await deps.db.appendAudit({
+        actor: "api",
+        action: outcome === "PENDING" ? "paypal.capture.pending" : "paypal.capture.declined",
+        subjectId: order.id,
+        requestBody: { authorizationId, captureId, paypalStatus, approvalJws },
+      });
+      return outcome === "PENDING"
+        ? { status: 200, body: { status: "CAPTURE_PENDING", capture_id: captureId } }
+        : declined;
+    }
     const capturedAt = deps.now();
     await deps.db.updateOrder(order.id, { status: "CAPTURED", captureId, capturedAt });
     await deps.db.appendAudit({

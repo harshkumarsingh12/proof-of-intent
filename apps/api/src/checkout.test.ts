@@ -892,6 +892,59 @@ describe("POST /checkout: a lost PayPal answer on an unattended charge (#159)", 
   });
 });
 
+describe("POST /checkout: an agent-alone charge is paid only when PayPal completes the capture (#225)", () => {
+  /** A vaulted CAPTURE whose ORDER completes but whose capture has the given status. */
+  const capturing = (status: string): PayPalClient => {
+    const mock = createMockClient();
+    return {
+      ...mock,
+      createOrder: async (input) => ({
+        ...(await mock.createOrder(input)),
+        captureId: `CAP-${status}`,
+        captureStatus: status,
+      }),
+    };
+  };
+  const unattended = (n = 1) =>
+    signedCheckout({
+      shopper,
+      agent,
+      humanPresent: false,
+      cart: { ...compliantCart, contents: { ...compliantCart.contents, cart_id: `cart-${n}` } },
+    });
+
+  test("a COMPLETED order with a PENDING capture is CAPTURE_PENDING and says so; it still uses the intent", async () => {
+    const s = setup({ vaultId: "VAULT-1", paypal: capturing("PENDING") });
+    const res = await s.checkout((await unattended()).body);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ capture_id: "CAP-PENDING", capture_status: "PENDING" });
+    const [order] = [...s.mem.orders.values()];
+    expect(order).toMatchObject({ status: "CAPTURE_PENDING", captureId: "CAP-PENDING" });
+    expect(order?.capturedAt).toBeUndefined();
+    // The money may still move, so a second purchase under this default intent is refused.
+    const second = await s.checkout((await unattended(2)).body);
+    expect(second.json().verdict.reasons).toEqual(["INTENT_ALREADY_USED"]);
+  });
+
+  test("a COMPLETED capture is paid, as before", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    const res = await s.checkout((await unattended()).body);
+    expect(res.json()).toMatchObject({ capture_status: "COMPLETED", capture_id: expect.any(String) });
+    expect([...s.mem.orders.values()][0]).toMatchObject({ status: "COMPLETED", capturedAt: NOW });
+  });
+
+  test("a DECLINED capture is 402 payment_declined, never paid, and the intent can still buy", async () => {
+    const s = setup({ vaultId: "VAULT-1", paypal: capturing("DECLINED") });
+    const res = await s.checkout((await unattended()).body);
+    expect(res.statusCode).toBe(402);
+    expect(res.json()).toMatchObject({ error: "payment_declined" });
+    const [order] = [...s.mem.orders.values()];
+    expect(order).toMatchObject({ status: "CAPTURE_DECLINED" });
+    expect(order?.capturedAt).toBeUndefined();
+    expect((await s.mem.db.activeLedger(greyJacketIntent.mandate_id, NOW)).capturedTotal).toBe(0);
+  });
+});
+
 describe("POST /checkout: spending authority is reserved while orders are pending (#155)", () => {
   const capped = {
     ...greyJacketIntent,

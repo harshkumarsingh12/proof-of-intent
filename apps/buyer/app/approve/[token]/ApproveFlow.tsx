@@ -144,7 +144,14 @@ export default function ApproveFlow({ token }: { token: string }) {
         </p>
         <Reasons reasons={view.reasons} />
 
-        {done ? (
+        {result?.status === "CAPTURE_PENDING" ? (
+          <div className="verdict warn">
+            <p>
+              Approved. PayPal accepted the payment but hasn&apos;t completed it yet, so you may still be
+              charged. It counts as paid only once PayPal confirms it. Order <code>{result.order_id}</code>.
+            </p>
+          </div>
+        ) : done ? (
           <div className="verdict ok">
             <p>
               Approved and paid with your saved PayPal wallet. Order <code>{done.order_id}</code>.

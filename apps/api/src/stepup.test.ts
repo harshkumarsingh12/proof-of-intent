@@ -248,6 +248,36 @@ describe("step-up approval links (#35)", () => {
     expect(s.createOrder).toHaveBeenCalledWith(expect.objectContaining({ vaultId: "VAULT-2" }));
   });
 
+  test("approving when PayPal's capture is PENDING answers CAPTURE_PENDING, not CAPTURED (#225)", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    s.createOrder.mockResolvedValueOnce({
+      id: "ORDER-1",
+      status: "COMPLETED",
+      captureId: "CAP-PENDING",
+      captureStatus: "PENDING",
+    });
+    const res = await s.approve(await s.sign(await s.view()));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "CAPTURE_PENDING", capture_id: "CAP-PENDING" });
+    expect([...s.mem.orders.values()][0]).toMatchObject({ status: "CAPTURE_PENDING" });
+  });
+
+  test("a declined wallet at approval is 402, the step-up is FAILED and nothing was paid (#225)", async () => {
+    const s = setup({ vaultId: "VAULT-1" });
+    await s.stepUp();
+    s.createOrder.mockResolvedValueOnce({
+      id: "ORDER-1",
+      status: "COMPLETED",
+      captureId: "CAP-DECLINED",
+      captureStatus: "DECLINED",
+    });
+    const res = await s.approve(await s.sign(await s.view()));
+    expect(res.statusCode).toBe(402);
+    expect(res.json().error).toBe("payment_declined");
+    expect((await s.view()).status).toBe("FAILED");
+  });
+
   test("an unknown or malformed token is a 404; a human-present step-up sends no link", async () => {
     const s = setup({ vaultId: "VAULT-1" });
     expect((await s.app.inject("/stepup/unknown-token-0123456789abcdef")).statusCode).toBe(404);

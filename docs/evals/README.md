@@ -56,9 +56,11 @@ included when the #171 transport hook is available and otherwise remain explicit
 rewrite canonical replay files or change the scored 20 J1 / 12 J2 sets. Return primary and backup artifacts for
 review before publishing new figures. A system-only pass is local safety evidence, not a live or hosted result.
 
-Known separate gap: [#225](https://github.com/harshkumarsingh12/proof-of-intent/issues/225) reproduces a pending
-capture being marked completed by the sandbox adapter. The ten scenarios above use the mock payment provider;
-their pass does not validate provider settlement-state handling. Keep that limitation with any published result.
+[#225](https://github.com/harshkumarsingh12/proof-of-intent/issues/225) (a pending capture marked completed by the
+sandbox adapter) is fixed: only a `COMPLETED` capture is recorded as captured (spec 0003, "Only a COMPLETED capture is
+paid"), tested through the real sandbox adapter against a fake PayPal. The ten scenarios above still use the mock payment
+provider, so their pass does not validate settlement against the live sandbox. Keep that limitation with any published
+result; reports dated before the fix describe the gap as it was.
 
 ## Studio starter recordings
 

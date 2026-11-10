@@ -70,7 +70,7 @@ export function createMockClient(): MockPayPalClient {
       let created: CreatedOrder;
       if (input.vaultId && deletedVaults.has(input.vaultId)) throw unprocessable("INVALID_RESOURCE_ID");
       if (input.intent === "CAPTURE" && input.vaultId) {
-        created = { id, status: "COMPLETED", captureId: paypalId() };
+        created = { id, status: "COMPLETED", captureId: paypalId(), captureStatus: "COMPLETED" };
       } else {
         created = {
           id,
@@ -121,7 +121,7 @@ export function createMockClient(): MockPayPalClient {
       if (state === "CAPTURED") throw unprocessable("AUTHORIZATION_ALREADY_CAPTURED");
       if (state === "VOIDED") throw unprocessable("AUTHORIZATION_VOIDED");
       authorizations.set(authorizationId, "CAPTURED");
-      return { captureId: paypalId() };
+      return { captureId: paypalId(), status: "COMPLETED" };
     },
 
     async voidAuthorization(authorizationId) {

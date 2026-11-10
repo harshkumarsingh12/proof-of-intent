@@ -168,6 +168,11 @@ export const CheckoutResponse = z.object({
   approval_url: z.string().url().optional(),
   /** Agent alone: the vaulted wallet was charged at once, so the capture already exists. */
   capture_id: z.string().optional(),
+  /**
+   * With `capture_id`: COMPLETED is money received; PENDING means PayPal accepted the capture but has not completed it, so
+   * the shopper may still be charged and nothing should say "paid" yet (#225).
+   */
+  capture_status: z.enum(["COMPLETED", "PENDING"]).optional(),
 });
 export type CheckoutResponse = z.infer<typeof CheckoutResponse>;
 
@@ -226,7 +231,8 @@ export const ApproveRequest = z.object({ approval_jws: z.string().min(1) });
 export type ApproveRequest = z.infer<typeof ApproveRequest>;
 
 export const ApproveResponse = z.object({
-  status: z.enum(["CAPTURED", "VOIDED"]),
+  /** CAPTURE_PENDING: PayPal accepted the capture but has not completed it; not paid yet (#225). */
+  status: z.enum(["CAPTURED", "CAPTURE_PENDING", "VOIDED"]),
   capture_id: z.string().optional(),
   /** Why the authorization was voided. */
   reasons: z.array(ReasonCode).optional(),
@@ -257,7 +263,8 @@ export type StepUpView = z.infer<typeof StepUpView>;
 export const StepUpListRequest = z.object({ proof_jws: z.string().min(1) });
 
 export const StepUpApproveResponse = z.object({
-  status: z.literal("CAPTURED"),
+  /** CAPTURE_PENDING: PayPal accepted the capture but has not completed it; not paid yet (#225). */
+  status: z.enum(["CAPTURED", "CAPTURE_PENDING"]),
   order_id: z.string(),
   paypal_order_id: z.string().optional(),
   capture_id: z.string().optional(),

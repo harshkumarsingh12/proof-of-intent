@@ -68,7 +68,9 @@ interface Signed {
   hash: string;
 }
 
-type Approval = { status: "CAPTURED"; capture_id?: string } | { status: "VOIDED"; reasons?: ReasonCode[] };
+type Approval =
+  | { status: "CAPTURED" | "CAPTURE_PENDING"; capture_id?: string }
+  | { status: "VOIDED"; reasons?: ReasonCode[] };
 
 interface ApiError {
   error: string;
@@ -524,6 +526,8 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
   const verdict = checkout?.res.verdict;
   const product = CATALOG.find((p) => p.line.sku === checkout?.sku);
   const paidAlone = Boolean(checkout?.alone && verdict?.outcome === "APPROVE" && checkout.res.order_id);
+  // PayPal accepted the agent's payment but hasn't completed it: never shown as paid (#225).
+  const pendingAlone = paidAlone && checkout?.res.capture_status === "PENDING";
   // A human-present order waits for the shopper at PayPal; an agent-alone one was charged when it was created.
   const hasOrder = Boolean(checkout?.res.paypal_order_id) && !checkout?.alone;
   const set = <K extends keyof IntentForm>(k: K, v: IntentForm[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -744,7 +748,9 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
               <button className="btn btn-ghost btn-small" disabled={resetting} onClick={newKey}>
                 Use a new key
               </button>
-              <h3 className="group" style={{ marginTop: 20 }}>PayPal wallet (optional)</h3>
+              <h3 className="group" style={{ marginTop: 20 }}>
+                PayPal wallet (optional)
+              </h3>
               <p className="sub">
                 Save a PayPal wallet and your agent can pay without you at the PayPal step. The merchant still
                 checks every cart against your signed limits first, and asks you when it isn&apos;t sure.
@@ -837,9 +843,11 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
                 ? `Refused: ${product.line.title}, ${product.line.attributes.color}, ${money(product.line.unit_price.value)}`
                 : verdict.outcome === "STEP_UP"
                   ? "Fits your limits, but please confirm it's what you meant"
-                  : paidAlone
-                    ? "Fits what you signed, so your agent paid"
-                    : "Fits what you signed"}
+                  : pendingAlone
+                    ? "Fits what you signed, so your agent started the payment"
+                    : paidAlone
+                      ? "Fits what you signed, so your agent paid"
+                      : "Fits what you signed"}
             </h3>
             {verdict.outcome === "REJECT" && <p>No PayPal order was created. Nothing was charged.</p>}
             {verdict.outcome === "STEP_UP" && checkout?.alone && (
@@ -913,7 +921,17 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             </div>
           ))}
           {waitingError && <p className="error">{waitingError}</p>}
-          {waitingPaid && (
+          {waitingPaid?.status === "CAPTURE_PENDING" && (
+            <div className="verdict warn">
+              <h3>Approved, payment pending</h3>
+              <p className="meta">
+                PayPal accepted the payment but hasn&apos;t completed it yet, so you may still be charged. It
+                counts as paid only once PayPal confirms it. Capture{" "}
+                <code>{waitingPaid.capture_id ?? "pending"}</code>.
+              </p>
+            </div>
+          )}
+          {waitingPaid?.status === "CAPTURED" && (
             <div className="verdict ok">
               <h3>Paid</h3>
               <p className="meta">
@@ -927,14 +945,25 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
 
       <section className={`panel${(hasOrder && !approval) || paidAlone ? "" : " muted"}`}>
         <h2>
-          <span className="num">3</span> {paidAlone ? "Paid by your agent" : "Pay with PayPal"}
+          <span className="num">3</span>{" "}
+          {pendingAlone ? "Payment pending at PayPal" : paidAlone ? "Paid by your agent" : "Pay with PayPal"}
         </h2>
         <p className="sub">
           {paidAlone
             ? "You weren't asked at PayPal: the merchant charged the wallet you saved, because this cart fits what you signed."
             : "PayPal holds the money first. The merchant captures only after your browser signs this exact cart."}
         </p>
-        {paidAlone && checkout && (
+        {pendingAlone && checkout && (
+          <div className="verdict warn">
+            <h3>Payment pending</h3>
+            <p className="meta">
+              PayPal accepted the payment but hasn&apos;t completed it yet, so you may still be charged. It
+              counts as paid only once PayPal confirms it. Capture{" "}
+              <code>{checkout.res.capture_id ?? "pending"}</code>.
+            </p>
+          </div>
+        )}
+        {paidAlone && !pendingAlone && checkout && (
           <div className="verdict ok">
             <h3>Paid</h3>
             <p className="meta">
@@ -954,6 +983,16 @@ export default function ShopFlow({ config }: { config: ShopConfig }) {
             <p className="meta">
               Capture <code>{approval.capture_id}</code>. The signed intent, cart and your approval are on
               record for any dispute.
+            </p>
+          </div>
+        )}
+        {approval?.status === "CAPTURE_PENDING" && (
+          <div className="verdict warn">
+            <h3>Payment pending</h3>
+            <p className="meta">
+              PayPal accepted the payment but hasn&apos;t completed it yet, so you may still be charged. It
+              counts as paid only once PayPal confirms it. Capture{" "}
+              <code>{approval.capture_id ?? "pending"}</code>.
             </p>
           </div>
         )}

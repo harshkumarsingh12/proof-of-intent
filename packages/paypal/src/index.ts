@@ -32,8 +32,31 @@ export interface CreatedOrder {
   status: string;
   /** Where the shopper approves a human-present order. Absent once the order is completed. */
   approvalUrl?: string;
-  /** Present when a CAPTURE order completed at creation. */
+  /** Present when a CAPTURE order made a capture at creation. */
   captureId?: string;
+  /**
+   * PayPal's status for that capture (COMPLETED, PENDING, DECLINED, FAILED). The ORDER can be COMPLETED while its capture
+   * is still PENDING, so this, not `status`, says whether money moved (#225). Read it with `captureOutcome`.
+   */
+  captureStatus?: string;
+}
+
+/** A capture as PayPal reported it: its id and PayPal's capture status. */
+export interface CaptureResult {
+  captureId: string;
+  /** COMPLETED, PENDING, DECLINED, FAILED, ... Read it with `captureOutcome`. */
+  status?: string;
+}
+
+/**
+ * What a capture status means for the order (#225). Only COMPLETED is money received. DECLINED and FAILED mean nothing was
+ * taken. Anything else, PENDING or a status we don't know or none at all, is unconfirmed: the money may still move, so it
+ * is never shown as paid and it keeps counting against the intent until PayPal's webhook settles it.
+ */
+export function captureOutcome(status: string | undefined): "COMPLETED" | "PENDING" | "DECLINED" {
+  if (status === "COMPLETED") return "COMPLETED";
+  if (status === "DECLINED" || status === "FAILED") return "DECLINED";
+  return "PENDING";
 }
 
 export interface WebhookHeaders {
@@ -134,7 +157,7 @@ export interface PayPalClient {
   createVaultPaymentToken(setupTokenId: string): Promise<{ vaultId: string }>;
   /** Authorizes an order the shopper approved. */
   authorizeOrder(orderId: string): Promise<{ authorizationId: string }>;
-  captureAuthorization(authorizationId: string): Promise<{ captureId: string }>;
+  captureAuthorization(authorizationId: string): Promise<CaptureResult>;
   voidAuthorization(authorizationId: string): Promise<void>;
   /** False for a delivery PayPal didn't sign. Throws only when PayPal can't be reached, so the caller answers 5xx and PayPal retries. */
   verifyWebhook(headers: WebhookHeaders, rawBody: string): Promise<boolean>;

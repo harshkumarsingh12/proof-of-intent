@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
+  captureOutcome,
   createMockClient,
   createPayPalClient,
   evidenceTypeFor,
@@ -168,6 +169,37 @@ describe("sandbox client against recorded sandbox responses", () => {
       ["/v2/payments/authorizations/AUTH-1/capture", "AUTH-1-capture"],
       ["/v2/payments/authorizations/AUTH-2/void", "AUTH-2-void"],
     ]);
+  });
+
+  test("a capture reports PayPal's status, so a PENDING or DECLINED one is never taken for money received (#225)", async () => {
+    const recorded = fakePayPal({ "/capture": fixture("capture-authorization") });
+    expect(await recorded.client.captureAuthorization("AUTH-1")).toEqual({
+      captureId: "2KY15744B4631653C",
+      status: "COMPLETED",
+    });
+    for (const status of ["PENDING", "DECLINED"]) {
+      const { client } = fakePayPal({ "/capture": { status: 201, body: { id: `CAP-${status}`, status } } });
+      expect(await client.captureAuthorization("AUTH-1")).toEqual({ captureId: `CAP-${status}`, status });
+    }
+    // A vaulted CAPTURE: the ORDER is COMPLETED while its capture is PENDING.
+    const { client } = fakePayPal({
+      "/v2/checkout/orders": {
+        status: 201,
+        body: { id: "ORDER-1", status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: "CAP-1", status: "PENDING" }] } }] },
+      },
+    });
+    expect(await client.createOrder({ ...order, intent: "CAPTURE", vaultId: "VAULT-1" })).toMatchObject({
+      status: "COMPLETED",
+      captureId: "CAP-1",
+      captureStatus: "PENDING",
+    });
+  });
+
+  test("only COMPLETED is money received; DECLINED and FAILED took nothing; anything else is unconfirmed", () => {
+    expect(captureOutcome("COMPLETED")).toBe("COMPLETED");
+    expect(captureOutcome("DECLINED")).toBe("DECLINED");
+    expect(captureOutcome("FAILED")).toBe("DECLINED");
+    for (const s of ["PENDING", "SOMETHING_NEW", undefined]) expect(captureOutcome(s)).toBe("PENDING");
   });
 
   test("a PayPal refusal becomes a PayPalError with the issue and debug id", async () => {
