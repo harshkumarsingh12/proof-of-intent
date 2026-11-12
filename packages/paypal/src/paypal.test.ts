@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   captureOutcome,
   createMockClient,
@@ -185,7 +185,11 @@ describe("sandbox client against recorded sandbox responses", () => {
     const { client } = fakePayPal({
       "/v2/checkout/orders": {
         status: 201,
-        body: { id: "ORDER-1", status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: "CAP-1", status: "PENDING" }] } }] },
+        body: {
+          id: "ORDER-1",
+          status: "COMPLETED",
+          purchase_units: [{ payments: { captures: [{ id: "CAP-1", status: "PENDING" }] } }],
+        },
       },
     });
     expect(await client.createOrder({ ...order, intent: "CAPTURE", vaultId: "VAULT-1" })).toMatchObject({
@@ -609,6 +613,135 @@ describe("Agent Toolkit transport (sandbox disputes and tracking)", () => {
     await expect(toolkitDisputes({}).getDispute("PP-D-1")).rejects.toThrow("not enabled");
   });
 
+  // The Agent Toolkit caches its first access token forever and never retries a 401, so a long-running process went dark after
+  // PayPal's ~9 hour token life (hosted API and worker, Nov 11 to 12: every dispute read failed, one webhook was quarantined).
+  describe("an expired toolkit token", () => {
+    afterEach(() => vi.useRealTimers());
+
+    /** A toolkit whose token is "good" until `expire()` is called, as the real one is until PayPal expires it. */
+    function expiringToolkits() {
+      const made: { expired: boolean; reads: number }[] = [];
+      const createToolkit = () => {
+        const state = { expired: false, reads: 0 };
+        made.push(state);
+        return toolkitDisputes({
+          get_dispute: {
+            execute: (async () => {
+              state.reads++;
+              return JSON.stringify(
+                state.expired
+                  ? {
+                      ok: false,
+                      status: 401,
+                      code: "PAYPAL_API_HTTP_ERROR",
+                      message: "Token signature verification failed",
+                    }
+                  : { dispute_id: "PP-D-1", status: "WAITING_FOR_SELLER_RESPONSE" },
+              );
+            }) as ToolkitTool["execute"],
+          },
+          accept_dispute_claim: {
+            execute: (async () => {
+              state.reads++;
+              return JSON.stringify(
+                state.expired
+                  ? { ok: false, status: 401, message: "Token signature verification failed" }
+                  : { links: [] },
+              );
+            }) as ToolkitTool["execute"],
+          },
+        });
+      };
+      const client = createPayPalClient("sandbox", {
+        clientId: "id",
+        clientSecret: "secret",
+        webhookId: "WH-1",
+        fetch: async () => new Response("no fetch expected", { status: 599 }),
+        createToolkit,
+      });
+      return { client, made };
+    }
+
+    test("a 401 gets a new toolkit (and so a new token) and the call is answered, once", async () => {
+      const { client, made } = expiringToolkits();
+      await client.getDispute("PP-D-1");
+      made[0]!.expired = true; // PayPal expires the token the first toolkit cached
+      expect(await client.getDispute("PP-D-1")).toMatchObject({ status: "WAITING_FOR_SELLER_RESPONSE" });
+      expect(made).toHaveLength(2);
+      await client.getDispute("PP-D-1"); // later calls keep using the new toolkit
+      expect(made).toHaveLength(2);
+      expect(made[1]!.reads).toBe(2);
+    });
+
+    test("an action rejected with a 401 is run once, on the new toolkit, never twice", async () => {
+      const { client, made } = expiringToolkits();
+      await client.acceptClaim("PP-D-1", "n");
+      made[0]!.expired = true;
+      await client.acceptClaim("PP-D-1", "n");
+      expect(made[0]!.reads).toBe(2); // the refused attempt, counted as a read only because the fake counts every call
+      expect(made[1]!.reads).toBe(1);
+    });
+
+    test("a second 401 is a real credentials problem and surfaces", async () => {
+      const createToolkit = () =>
+        toolkitDisputes({
+          get_dispute: {
+            execute: (async () =>
+              JSON.stringify({
+                ok: false,
+                status: 401,
+                message: "Client Authentication failed",
+              })) as ToolkitTool["execute"],
+          },
+        });
+      const client = createPayPalClient("sandbox", {
+        clientId: "id",
+        clientSecret: "wrong",
+        webhookId: "WH-1",
+        fetch: async () => new Response("no fetch expected", { status: 599 }),
+        createToolkit,
+      });
+      await expect(client.getDispute("PP-D-1")).rejects.toMatchObject({ status: 401 });
+    });
+
+    test("other PayPal refusals are not retried with a new toolkit", async () => {
+      let made = 0;
+      const client = createPayPalClient("sandbox", {
+        clientId: "id",
+        clientSecret: "secret",
+        webhookId: "WH-1",
+        fetch: async () => new Response("no fetch expected", { status: 599 }),
+        createToolkit: () => {
+          made++;
+          return toolkitDisputes({
+            get_dispute: {
+              execute: (async () =>
+                JSON.stringify({
+                  ok: false,
+                  status: 404,
+                  message: "RESOURCE_NOT_FOUND",
+                })) as ToolkitTool["execute"],
+            },
+          });
+        },
+      });
+      await expect(client.getDispute("PP-D-X")).rejects.toMatchObject({ status: 404 });
+      expect(made).toBe(1);
+    });
+
+    test("the toolkit is replaced as it ages, before PayPal's token can expire", async () => {
+      vi.useFakeTimers();
+      const { client, made } = expiringToolkits();
+      await client.getDispute("PP-D-1");
+      vi.advanceTimersByTime(59 * 60 * 1000);
+      await client.getDispute("PP-D-1");
+      expect(made).toHaveLength(1);
+      vi.advanceTimersByTime(2 * 60 * 1000);
+      await client.getDispute("PP-D-1");
+      expect(made).toHaveLength(2);
+    });
+  });
+
   // #234: the toolkit's list_disputes pages by `page` (from 1, 50 to a page), not by a next link, so a caller reads past the first 50
   // by asking for page 2, 3, ... The page number goes through as the tool's own `page` argument, and PayPal's page count comes back.
   test("list_disputes is read page by page through the tool's own page argument, with PayPal's page count", async () => {
@@ -626,7 +759,8 @@ describe("Agent Toolkit transport (sandbox disputes and tracking)", () => {
   test("a page answer with no page count, or no items, is still a page; a bad page number never reaches PayPal", async () => {
     const { disputes, calls } = fakeToolkit({ list_disputes: {} });
     expect(await disputes.listDisputesPage(1)).toEqual({ items: [], page: 1 });
-    for (const bad of [0, -1, 1.5, Number.NaN]) await expect(disputes.listDisputesPage(bad)).rejects.toThrow(RangeError);
+    for (const bad of [0, -1, 1.5, Number.NaN])
+      await expect(disputes.listDisputesPage(bad)).rejects.toThrow(RangeError);
     expect(calls).toHaveLength(1); // only the good call went out
   });
 

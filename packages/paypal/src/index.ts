@@ -230,6 +230,7 @@ export function createPayPalClient(mode: PayPalMode, config: Partial<SandboxConf
     baseUrl: config.baseUrl ?? SANDBOX_BASE_URL,
     fetch: config.fetch ?? fetch,
     toolkit: config.toolkit,
+    createToolkit: config.createToolkit,
   });
 }
 
