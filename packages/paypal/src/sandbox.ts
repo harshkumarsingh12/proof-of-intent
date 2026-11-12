@@ -19,10 +19,19 @@ export interface SandboxConfig {
   fetch: typeof fetch;
   /** Dispute reads, accept-claim and tracking go through the PayPal Agent Toolkit; tests inject a fake. */
   toolkit?: ToolkitDisputes;
+  /** Builds the toolkit when none was injected, and again when it has to be replaced. Tests only; defaults to the real one. */
+  createToolkit?: (clientId: string, clientSecret: string) => ToolkitDisputes;
 }
 
 /** Refresh this long before PayPal's expiry so a request never goes out with a token that dies in flight. */
 const TOKEN_SLACK_MS = 60_000;
+
+/**
+ * The Agent Toolkit (1.11.0) fetches one access token and keeps it for the life of the object: it never refreshes it and does
+ * not retry a 401. PayPal's tokens last about nine hours, so a long-running API or worker would answer every dispute read with
+ * 401 until it was restarted. We replace the toolkit before that (this age) and once more if a call still comes back 401.
+ */
+const TOOLKIT_MAX_AGE_MS = 60 * 60 * 1000;
 
 type Link = { rel: string; href: string };
 interface OrderResponse {
@@ -35,8 +44,31 @@ interface OrderResponse {
 }
 
 export function createSandboxClient(config: SandboxConfig): PayPalClient {
-  let toolkit = config.toolkit;
-  const agent = () => (toolkit ??= createToolkit(config.clientId, config.clientSecret));
+  // An injected toolkit is the caller's to manage (tests); one we built is replaced as it ages or when PayPal says 401.
+  let built: { toolkit: ToolkitDisputes; builtAt: number } | undefined;
+  const agent = (): ToolkitDisputes => {
+    if (config.toolkit) return config.toolkit;
+    if (!built || Date.now() - built.builtAt >= TOOLKIT_MAX_AGE_MS) {
+      built = {
+        toolkit: (config.createToolkit ?? createToolkit)(config.clientId, config.clientSecret),
+        builtAt: Date.now(),
+      };
+    }
+    return built.toolkit;
+  };
+  /**
+   * A 401 means PayPal refused the toolkit's cached token before doing anything, so asking again with a new toolkit (and so a
+   * new token) cannot run an action twice. Only once: a second 401 is a real credentials problem and surfaces.
+   */
+  async function viaToolkit<T>(use: (toolkit: ToolkitDisputes) => Promise<T>): Promise<T> {
+    try {
+      return await use(agent());
+    } catch (err) {
+      if (config.toolkit || !(err instanceof PayPalError) || err.status !== 401) throw err;
+      built = undefined;
+      return use(agent());
+    }
+  }
   let token: { value: string; expiresAt: number } | undefined;
   let pending: Promise<string> | undefined;
 
@@ -210,11 +242,11 @@ export function createSandboxClient(config: SandboxConfig): PayPalClient {
       });
     },
 
-    acceptClaim: (disputeId, note) => agent().acceptClaim(disputeId, note),
-    getDispute: (disputeId) => agent().getDispute(disputeId),
-    listDisputes: () => agent().listDisputes(),
-    listDisputesPage: (page) => agent().listDisputesPage(page),
-    addTracking: (input) => agent().addTracking(input),
+    acceptClaim: (disputeId, note) => viaToolkit((t) => t.acceptClaim(disputeId, note)),
+    getDispute: (disputeId) => viaToolkit((t) => t.getDispute(disputeId)),
+    listDisputes: () => viaToolkit((t) => t.listDisputes()),
+    listDisputesPage: (page) => viaToolkit((t) => t.listDisputesPage(page)),
+    addTracking: (input) => viaToolkit((t) => t.addTracking(input)),
   };
 }
 
